@@ -1,0 +1,80 @@
+@import "tailwindcss";
+
+@theme {
+  /* Colors */
+  --color-surface: #f8f9fa;
+  --color-surface-dim: #d9dadb;
+  --color-surface-bright: #f8f9fa;
+  --color-surface-container-lowest: #ffffff;
+  --color-surface-container-low: #f3f4f5;
+  --color-surface-container: #edeeef;
+  --color-surface-container-high: #e7e8e9;
+  --color-surface-container-highest: #e1e3e4;
+  --color-on-surface: #191c1d;
+  --color-on-surface-variant: #44474d;
+  --color-inverse-surface: #2e3132;
+  --color-inverse-on-surface: #f0f1f2;
+  --color-outline: #75777e;
+  --color-outline-variant: #c5c6cd;
+  --color-surface-tint: #515f78;
+  --color-primary: #000000;
+  --color-on-primary: #ffffff;
+  --color-primary-container: #0d1c32;
+  --color-on-primary-container: #76849f;
+  --color-inverse-primary: #b9c7e4;
+  --color-secondary: #006c4a;
+  --color-on-secondary: #ffffff;
+  --color-secondary-container: #82f5c1;
+  --color-on-secondary-container: #00714e;
+  --color-tertiary: #735c00;
+  --color-on-tertiary: #ffffff;
+  --color-tertiary-container: #cba72f;
+  --color-on-tertiary-container: #4e3d00;
+  --color-error: #ba1a1a;
+  --color-on-error: #ffffff;
+  --color-error-container: #ffdad6;
+  --color-on-error-container: #93000a;
+  --color-background: #f8f9fa;
+  --color-on-background: #191c1d;
+  --color-surface-variant: #e1e3e4;
+
+  /* Spacing & Sizes */
+  --spacing-margin-desktop: 48px;
+  --spacing-section-gap: 64px;
+  --spacing-stack-sm: 4px;
+  --spacing-stack-md: 12px;
+  --spacing-stack-lg: 24px;
+  
+  --max-width-container: 1280px;
+
+  /* Typography */
+  --font-sans: "Inter", system-ui, sans-serif;
+}
+
+:root {
+  font-family: var(--font-sans);
+  line-height: 1.5;
+  font-weight: 400;
+
+  color-scheme: light;
+  color: var(--color-on-surface);
+  background-color: var(--color-surface);
+
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+}
+
+#root {
+  min-height: 100vh;
+}
