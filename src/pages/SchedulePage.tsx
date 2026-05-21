@@ -1,4 +1,4 @@
-import { Calendar, MapPin, Clock, Filter } from 'lucide-react';
+import { Calendar, MapPin, Filter } from 'lucide-react';
 
 const schedules = [
   {
