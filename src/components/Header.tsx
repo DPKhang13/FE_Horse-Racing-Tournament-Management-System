@@ -36,6 +36,14 @@ const Header = () => {
           >
             Results
           </NavLink>
+          <NavLink 
+            to="/horses" 
+            className={({ isActive }) => 
+              `text-body-sm font-semibold transition-colors pb-1 border-b-2 ${isActive ? 'text-primary border-primary' : 'text-on-surface-variant border-transparent hover:text-primary'}`
+            }
+          >
+            Horses
+          </NavLink>
         </nav>
 
         {/* Search Bar */}
