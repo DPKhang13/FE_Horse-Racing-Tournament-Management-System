@@ -29,12 +29,28 @@ const Header = () => {
             Schedule
           </NavLink>
           <NavLink 
+            to="/prediction" 
+            className={({ isActive }) => 
+              `text-body-sm font-semibold transition-colors pb-1 border-b-2 ${isActive ? 'text-primary border-primary' : 'text-on-surface-variant border-transparent hover:text-primary'}`
+            }
+          >
+            Prediction
+          </NavLink>
+          <NavLink 
             to="/results" 
             className={({ isActive }) => 
               `text-body-sm font-semibold transition-colors pb-1 border-b-2 ${isActive ? 'text-primary border-primary' : 'text-on-surface-variant border-transparent hover:text-primary'}`
             }
           >
             Results
+          </NavLink>
+          <NavLink 
+            to="/tracking" 
+            className={({ isActive }) => 
+              `text-body-sm font-semibold transition-colors pb-1 border-b-2 ${isActive ? 'text-primary border-primary' : 'text-on-surface-variant border-transparent hover:text-primary'}`
+            }
+          >
+            Tracking
           </NavLink>
         </nav>
 
