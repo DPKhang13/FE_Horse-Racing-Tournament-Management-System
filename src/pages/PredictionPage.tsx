@@ -7,9 +7,7 @@ const PredictionPage = () => {
       <div className="max-w-container mx-auto px-4 md:px-margin-desktop">
         <div className="flex flex-col gap-8 lg:flex-row lg:items-end lg:justify-between mb-10">
           <div className="space-y-3">
-            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-secondary">Prediction Center</p>
-            <h1 className="text-headline-lg font-bold text-primary">Create prediction interface</h1>
-            <p className="max-w-2xl text-body-md text-on-surface-variant">Place your predictions, track open betting windows, and manage active stakes with clarity before the prediction deadline.</p>
+            <p className="text-headline-lg font-bold text-primary mb-2">Prediction Center</p>
           </div>
           <button className="inline-flex items-center gap-2 rounded-md bg-secondary px-6 py-3 text-sm font-semibold text-white transition hover:bg-secondary-container/90">
             New Prediction
