@@ -79,9 +79,9 @@ const Header = () => {
           <button className="text-on-surface-variant hover:text-primary transition-colors">
             <Bell className="w-5 h-5" />
           </button>
-          <button className="text-on-surface-variant hover:text-primary transition-colors">
+          <Link to="/profile" className="text-on-surface-variant hover:text-primary transition-colors">
             <User className="w-5 h-5" />
-          </button>
+          </Link>
           <div className="w-px h-6 bg-outline-variant mx-2 hidden sm:block" />
           <Link 
             to="/login" 

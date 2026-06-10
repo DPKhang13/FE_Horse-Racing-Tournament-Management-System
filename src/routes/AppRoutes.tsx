@@ -10,6 +10,7 @@ import AuthPage from '../pages/AuthPage';
 import HorseManagementPage from '../pages/HorseManagementPage';
 import MainLayout from '../components/MainLayout';
 import SpectatorDashboard from '../pages/SpectatorDashboard/SpectatorDashboard';
+import UserProfilePage from '../pages/UserProfilePage';
 
 const AppRoutes = () => {
   return (
@@ -27,6 +28,7 @@ const AppRoutes = () => {
       <Route path="/spectator-dashboard" element={<MainLayout><SpectatorDashboard /></MainLayout>} />
       <Route path="/prediction" element={<MainLayout><PredictionPage /></MainLayout>} />
       <Route path="/tracking" element={<MainLayout><ResultTrackingPage /></MainLayout>} />
+      <Route path="/profile" element={<MainLayout><UserProfilePage /></MainLayout>} />
     </Routes>
   );
 };
