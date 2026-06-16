@@ -62,10 +62,11 @@ export const getDefaultRouteForRole = (roleType: UserRoleType | undefined) => {
     case 'spectator':
       return '/spectator-dashboard';
     case 'admin':
+      return '/admin-ops';
     case 'race_referee':
-      return '/results';
+      return '/race-control';
     case 'jockey':
-      return '/profile';
+      return '/jockey-assignments';
     default:
       return '/login';
   }
@@ -81,9 +82,15 @@ export type NavigationItem = {
 export const navigationItems: NavigationItem[] = [
   { label: 'Home', to: '/' },
   { label: 'Dashboard', to: '/spectator-dashboard', allowedRoles: ['spectator'], requiresAuth: true },
+  { label: 'Admin Ops', to: '/admin-ops', allowedRoles: ['admin'], requiresAuth: true },
+  { label: 'Race Control', to: '/race-control', allowedRoles: ['admin', 'race_referee'], requiresAuth: true },
   { label: 'Schedule', to: '/schedule', allowedRoles: ['horse_owner'], requiresAuth: true },
+  { label: 'Registrations', to: '/registrations', allowedRoles: ['horse_owner', 'admin', 'race_referee'], requiresAuth: true },
+  { label: 'Invitations', to: '/jockey-assignments', allowedRoles: ['horse_owner', 'jockey'], requiresAuth: true },
   { label: 'Prediction', to: '/prediction', allowedRoles: ['spectator'], requiresAuth: true },
+  { label: 'Wallet', to: '/wallet', allowedRoles: ['spectator'], requiresAuth: true },
   { label: 'Results', to: '/results', allowedRoles: AUTHENTICATED_ROLES, requiresAuth: true },
   { label: 'Horses', to: '/horses', allowedRoles: ['horse_owner'], requiresAuth: true },
   { label: 'Tracking', to: '/tracking', allowedRoles: ['spectator'], requiresAuth: true },
+  { label: 'Notifications', to: '/notifications', allowedRoles: AUTHENTICATED_ROLES, requiresAuth: true },
 ];

@@ -1,9 +1,9 @@
 import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
 import { ArrowRight, Lock, Mail, Phone, Shield, User } from 'lucide-react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { getApiErrorMessage } from '../services/apiClient';
-import { authService, type RegisterRequest } from '../services/authService';
-import { getDefaultRouteForRole } from '../utils/permissions';
+import { getApiErrorMessage } from '../../services/apiClient';
+import { authService, type RegisterRequest } from '../../services/authService';
+import { getDefaultRouteForRole } from '../../utils/permissions';
 
 type SignupRole = RegisterRequest['roleType'];
 type AuthMode = 'login' | 'signup' | 'verify';

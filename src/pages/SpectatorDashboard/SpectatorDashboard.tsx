@@ -41,7 +41,7 @@ const SpectatorDashboard: React.FC = () => {
       setErrorMessage('');
 
       try {
-        const [races, bets, results, notificationList] = await Promise.all([
+        const [races, bets, results, notificationList] = await Promise.allSettled([
           scheduleService.getRaceSchedule(),
           betService.getBets(),
           raceResultService.getRaceResultList(),
@@ -49,10 +49,10 @@ const SpectatorDashboard: React.FC = () => {
         ]);
 
         if (isMounted) {
-          setUpcomingRaces(races.filter((race) => new Date(race.scheduledAt).getTime() >= Date.now()).slice(0, 6));
-          setMyPredictions(bets.slice(0, 5));
-          setLatestResults(results.slice(0, 5));
-          setNotifications(notificationList.slice(0, 5));
+          setUpcomingRaces(races.status === 'fulfilled' ? races.value.filter((race) => new Date(race.scheduledAt).getTime() >= Date.now()).slice(0, 6) : []);
+          setMyPredictions(bets.status === 'fulfilled' ? bets.value.slice(0, 5) : []);
+          setLatestResults(results.status === 'fulfilled' ? results.value.slice(0, 5) : []);
+          setNotifications(notificationList.status === 'fulfilled' ? notificationList.value.slice(0, 5) : []);
         }
       } catch (error) {
         if (isMounted) {

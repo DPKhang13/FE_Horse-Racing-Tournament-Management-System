@@ -11,6 +11,15 @@ export type NotificationItem = {
   readAt?: string;
 };
 
+export type NotificationFormData = {
+  title: string;
+  message: string;
+  type: string;
+  refId?: number;
+  refType?: string;
+  isRead: boolean;
+};
+
 type RawNotification = Record<string, unknown>;
 
 const asString = (value: unknown, fallback = '') => {
@@ -41,5 +50,39 @@ export const notificationService = {
   async getNotifications(): Promise<NotificationItem[]> {
     const response = await apiClient.get('/api/notifications/get-all');
     return unwrapApiList<RawNotification>(response).map(mapNotification);
+  },
+
+  async createNotification(data: NotificationFormData): Promise<NotificationItem> {
+    const response = await apiClient.post('/api/notifications/create', {
+      title: data.title.trim(),
+      message: data.message.trim(),
+      type: data.type.trim(),
+      refId: data.refId ? Number(data.refId) : undefined,
+      refType: data.refType?.trim() || undefined,
+      isRead: data.isRead,
+      createdAt: new Date().toISOString(),
+    });
+    return mapNotification(response.data?.data ?? response.data);
+  },
+
+  async updateNotification(id: number | string, data: NotificationFormData): Promise<NotificationItem> {
+    const response = await apiClient.put(`/api/notifications/update/${id}`, {
+      title: data.title.trim(),
+      message: data.message.trim(),
+      type: data.type.trim(),
+      refId: data.refId ? Number(data.refId) : undefined,
+      refType: data.refType?.trim() || undefined,
+      isRead: data.isRead,
+    });
+    return mapNotification(response.data?.data ?? response.data);
+  },
+
+  async markAsRead(id: number | string): Promise<NotificationItem> {
+    const response = await apiClient.put(`/api/notifications/mark-read/${id}`);
+    return mapNotification(response.data?.data ?? response.data);
+  },
+
+  async deleteNotification(id: number | string): Promise<void> {
+    await apiClient.delete(`/api/notifications/delete/${id}`);
   },
 };

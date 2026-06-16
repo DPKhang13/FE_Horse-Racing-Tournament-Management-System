@@ -1,6 +1,6 @@
-import Hero from '../components/Hero';
-import TrendingRaces from '../components/TrendingRaces';
-import StatsSection from '../components/StatsSection';
+import Hero from '../../components/Hero';
+import TrendingRaces from '../../components/TrendingRaces';
+import StatsSection from '../../components/StatsSection';
 
 const LandingPage = () => {
   return (

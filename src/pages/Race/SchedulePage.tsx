@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Calendar, Filter, MapPin } from 'lucide-react';
-import { getApiErrorMessage } from '../services/apiClient';
-import { scheduleService, type RaceScheduleItem } from '../services/scheduleService';
+import { getApiErrorMessage } from '../../services/apiClient';
+import { scheduleService, type RaceScheduleItem } from '../../services/scheduleService';
 
 const formatDate = (value: string) => new Intl.DateTimeFormat('en-US', {
   month: 'short',

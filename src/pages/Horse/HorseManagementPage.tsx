@@ -1,8 +1,8 @@
 import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
 import { Eye, Filter, Pencil, Plus, Search, Trash2, X } from 'lucide-react';
-import { getApiErrorMessage } from '../services/apiClient';
-import { HorseService } from '../services/HorseService';
-import type { Horse, HorseFormData } from '../types/horse';
+import { getApiErrorMessage } from '../../services/apiClient';
+import { HorseService } from '../../services/HorseService';
+import type { Horse, HorseFormData } from '../../types/horse';
 
 type HorseFormErrors = Partial<Record<keyof HorseFormData, string>>;
 

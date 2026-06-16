@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { BarChart3, CheckCircle2, Clock3 } from 'lucide-react';
-import { getApiErrorMessage } from '../services/apiClient';
-import { betService, type BetItem } from '../services/betService';
+import { getApiErrorMessage } from '../../services/apiClient';
+import { betService, type BetItem } from '../../services/betService';
 
 const formatPoints = (value: number) => new Intl.NumberFormat('en-US', {
   maximumFractionDigits: 0,

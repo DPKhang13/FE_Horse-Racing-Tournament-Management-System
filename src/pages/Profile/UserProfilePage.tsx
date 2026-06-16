@@ -15,9 +15,9 @@ import {
   Plus
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
-import { getAccessToken } from '../services/apiClient';
-import { authService } from '../services/authService';
-import type { UserProfile } from '../types/user';
+import { getAccessToken } from '../../services/apiClient';
+import { authService } from '../../services/authService';
+import type { UserProfile } from '../../types/user';
 
 const guestUser: UserProfile = {
   id: 'guest',
