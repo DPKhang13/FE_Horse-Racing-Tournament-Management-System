@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { 
   User, 
   Wallet, 
@@ -15,26 +15,83 @@ import {
   Plus
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
-import { mockUser, guestUser } from '../mocks/user';
+import { getAccessToken } from '../services/apiClient';
+import { authService } from '../services/authService';
 import type { UserProfile } from '../types/user';
 
+const guestUser: UserProfile = {
+  id: 'guest',
+  fullName: 'Guest',
+  email: '',
+  role: 'Guest',
+  joinedDate: new Date().toISOString(),
+  status: 'Active',
+};
+
 const UserProfilePage = () => {
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const user: UserProfile = isLoggedIn ? mockUser : guestUser;
+  const [user, setUser] = useState<UserProfile>(guestUser);
+  const [isLoading, setIsLoading] = useState(Boolean(getAccessToken()));
+  const [errorMessage, setErrorMessage] = useState('');
+  const isLoggedIn = user.role !== 'Guest';
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const loadProfile = async () => {
+      if (!getAccessToken()) {
+        setUser(guestUser);
+        setIsLoading(false);
+        return;
+      }
+
+      setIsLoading(true);
+      setErrorMessage('');
+
+      try {
+        const profile = await authService.getCurrentUser();
+
+        if (isMounted) {
+          setUser(profile);
+        }
+      } catch (error) {
+        if (isMounted) {
+          setUser(guestUser);
+          setErrorMessage(error instanceof Error ? error.message : 'Unable to load profile.');
+        }
+      } finally {
+        if (isMounted) {
+          setIsLoading(false);
+        }
+      }
+    };
+
+    void loadProfile();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  const handleLogout = async () => {
+    await authService.logout();
+    setUser(guestUser);
+  };
 
   return (
     <div className="min-h-screen bg-surface py-12">
       <div className="max-w-container mx-auto px-4 md:px-margin-desktop">
         
-        {/* Demo Toggle - Only for development */}
-        <div className="mb-8 flex justify-end">
-          <button 
-            onClick={() => setIsLoggedIn(!isLoggedIn)}
-            className="bg-primary-container text-white px-4 py-2 rounded-md text-label-sm font-bold hover:bg-opacity-90 transition-all flex items-center gap-2"
-          >
-            {isLoggedIn ? 'Switch to Guest View' : 'Switch to Logged In View'}
-          </button>
-        </div>
+        {errorMessage && (
+          <div className="mb-8 rounded-md border border-error/30 bg-error-container/20 px-4 py-3 text-body-sm font-semibold text-error">
+            {errorMessage}
+          </div>
+        )}
+
+        {isLoading && (
+          <div className="mb-8 rounded-md border border-outline-variant bg-white px-4 py-3 text-body-sm font-semibold text-on-surface-variant">
+            Loading profile...
+          </div>
+        )}
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           
@@ -124,7 +181,11 @@ const UserProfilePage = () => {
                       <span>Payment Methods</span>
                     </div>
                   </button>
-                  <button className="w-full flex items-center justify-between p-3 rounded-md hover:bg-error-container/10 transition-colors text-body-sm font-semibold text-error">
+                  <button
+                    type="button"
+                    onClick={handleLogout}
+                    className="w-full flex items-center justify-between p-3 rounded-md hover:bg-error-container/10 transition-colors text-body-sm font-semibold text-error"
+                  >
                     <div className="flex items-center gap-3">
                       <LogOut className="w-4 h-4" />
                       <span>Log Out</span>

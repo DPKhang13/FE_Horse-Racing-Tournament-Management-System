@@ -1,7 +1,48 @@
+import { useEffect, useState } from 'react';
 import { Search, Bell, User } from 'lucide-react';
 import { Link, NavLink } from 'react-router-dom';
+import { getAccessToken } from '../services/apiClient';
+import { authService } from '../services/authService';
+import { canAccessRole, navigationItems } from '../utils/permissions';
+import type { UserProfile } from '../types/user';
 
 const Header = () => {
+  const [isAuthenticated, setIsAuthenticated] = useState(Boolean(getAccessToken()));
+  const [profile, setProfile] = useState<UserProfile | undefined>(() => authService.getStoredUserProfile());
+
+  useEffect(() => {
+    const syncAuthState = () => {
+      setIsAuthenticated(Boolean(getAccessToken()));
+      setProfile(authService.getStoredUserProfile());
+    };
+
+    window.addEventListener('auth-changed', syncAuthState);
+    window.addEventListener('storage', syncAuthState);
+
+    if (getAccessToken() && !authService.getStoredUserProfile()) {
+      void authService.getCurrentUser().then(setProfile).catch(() => setProfile(undefined));
+    }
+
+    return () => {
+      window.removeEventListener('auth-changed', syncAuthState);
+      window.removeEventListener('storage', syncAuthState);
+    };
+  }, []);
+
+  const handleLogout = async () => {
+    await authService.logout();
+    setIsAuthenticated(false);
+    setProfile(undefined);
+  };
+
+  const visibleNavigationItems = navigationItems.filter((item) => {
+    if (!item.requiresAuth) {
+      return true;
+    }
+
+    return isAuthenticated && canAccessRole(profile?.roleType, item.allowedRoles);
+  });
+
   return (
     <header className="sticky top-0 z-50 w-full bg-white border-b border-outline-variant">
       <div className="max-w-container mx-auto px-4 md:px-margin-desktop h-20 flex items-center justify-between gap-8">
@@ -12,54 +53,17 @@ const Header = () => {
 
         {/* Navigation */}
         <nav className="hidden md:flex items-center gap-8">
-          <NavLink 
-            to="/" 
-            className={({ isActive }) => 
-              `text-body-sm font-semibold transition-colors pb-1 border-b-2 ${isActive ? 'text-primary border-primary' : 'text-on-surface-variant border-transparent hover:text-primary'}`
-            }
-          >
-            Home
-          </NavLink>
-          <NavLink 
-            to="/schedule" 
-            className={({ isActive }) => 
-              `text-body-sm font-semibold transition-colors pb-1 border-b-2 ${isActive ? 'text-primary border-primary' : 'text-on-surface-variant border-transparent hover:text-primary'}`
-            }
-          >
-            Schedule
-          </NavLink>
-          <NavLink 
-            to="/prediction" 
-            className={({ isActive }) => 
-              `text-body-sm font-semibold transition-colors pb-1 border-b-2 ${isActive ? 'text-primary border-primary' : 'text-on-surface-variant border-transparent hover:text-primary'}`
-            }
-          >
-            Prediction
-          </NavLink>
-          <NavLink 
-            to="/results" 
-            className={({ isActive }) => 
-              `text-body-sm font-semibold transition-colors pb-1 border-b-2 ${isActive ? 'text-primary border-primary' : 'text-on-surface-variant border-transparent hover:text-primary'}`
-            }
-          >
-            Results
-          </NavLink>
-          <NavLink 
-            to="/horses" 
-            className={({ isActive }) => 
-              `text-body-sm font-semibold transition-colors pb-1 border-b-2 ${isActive ? 'text-primary border-primary' : 'text-on-surface-variant border-transparent hover:text-primary'}`
-            }
-          >
-            Horses
-          </NavLink>
-          <NavLink 
-            to="/tracking" 
-            className={({ isActive }) => 
-              `text-body-sm font-semibold transition-colors pb-1 border-b-2 ${isActive ? 'text-primary border-primary' : 'text-on-surface-variant border-transparent hover:text-primary'}`
-            }
-          >
-            Tracking
-          </NavLink>
+          {visibleNavigationItems.map((item) => (
+            <NavLink
+              key={item.to}
+              to={item.to}
+              className={({ isActive }) =>
+                `text-body-sm font-semibold transition-colors pb-1 border-b-2 ${isActive ? 'text-primary border-primary' : 'text-on-surface-variant border-transparent hover:text-primary'}`
+              }
+            >
+              {item.label}
+            </NavLink>
+          ))}
         </nav>
 
         {/* Search Bar */}
@@ -83,20 +87,32 @@ const Header = () => {
             <User className="w-5 h-5" />
           </Link>
           <div className="w-px h-6 bg-outline-variant mx-2 hidden sm:block" />
-          <Link 
-            to="/login" 
-            state={{ mode: 'login' }}
-            className="text-body-sm font-semibold text-on-surface-variant hover:text-primary transition-colors"
-          >
-            Log In
-          </Link>
-          <Link 
-            to="/login" 
-            state={{ mode: 'signup' }}
-            className="bg-primary text-on-primary px-6 py-2 rounded-md text-body-sm font-semibold hover:bg-opacity-90 transition-all"
-          >
-            Sign Up
-          </Link>
+          {isAuthenticated ? (
+            <button
+              type="button"
+              onClick={handleLogout}
+              className="text-body-sm font-semibold text-on-surface-variant hover:text-primary transition-colors"
+            >
+              Log Out
+            </button>
+          ) : (
+            <>
+              <Link
+                to="/login"
+                state={{ mode: 'login' }}
+                className="text-body-sm font-semibold text-on-surface-variant hover:text-primary transition-colors"
+              >
+                Log In
+              </Link>
+              <Link
+                to="/login"
+                state={{ mode: 'signup' }}
+                className="bg-primary text-on-primary px-6 py-2 rounded-md text-body-sm font-semibold hover:bg-opacity-90 transition-all"
+              >
+                Sign Up
+              </Link>
+            </>
+          )}
         </div>
       </div>
     </header>

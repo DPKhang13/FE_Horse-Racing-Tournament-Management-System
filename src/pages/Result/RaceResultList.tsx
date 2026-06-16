@@ -1,7 +1,7 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Filter, Search, Trophy } from 'lucide-react';
 import { raceResultService } from '../../services/raceResultService';
-import type { RaceResultStatus } from '../../types/raceResult';
+import type { RaceResultListItem, RaceResultStatus } from '../../types/raceResult';
 import RaceResultCard from './components/RaceResultCard';
 import ResultNav from './components/ResultNav';
 
@@ -18,13 +18,66 @@ const RaceResultList = () => {
   const [search, setSearch] = useState('');
   const [status, setStatus] = useState<StatusFilter>('all');
   const [tournament, setTournament] = useState('All Tournaments');
+  const [allResults, setAllResults] = useState<RaceResultListItem[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [errorMessage, setErrorMessage] = useState('');
 
-  const tournamentOptions = raceResultService.getTournamentFilterOptions();
+  useEffect(() => {
+    let isMounted = true;
 
-  const results = useMemo(
-    () => raceResultService.getRaceResultList({ search, status, tournament }),
-    [search, status, tournament],
+    const loadResults = async () => {
+      setIsLoading(true);
+      setErrorMessage('');
+
+      try {
+        const resultList = await raceResultService.getRaceResultList();
+
+        if (isMounted) {
+          setAllResults(resultList);
+        }
+      } catch (error) {
+        if (isMounted) {
+          setErrorMessage(error instanceof Error ? error.message : 'Unable to load race results.');
+        }
+      } finally {
+        if (isMounted) {
+          setIsLoading(false);
+        }
+      }
+    };
+
+    void loadResults();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  const tournamentOptions = useMemo(
+    () => raceResultService.getTournamentFilterOptions(allResults),
+    [allResults],
   );
+
+  const results = useMemo(() => {
+    const query = search.trim().toLowerCase();
+
+    return allResults.filter((item) => {
+      const matchesSearch =
+        !query ||
+        item.raceName.toLowerCase().includes(query) ||
+        item.tournamentName.toLowerCase().includes(query) ||
+        item.track.toLowerCase().includes(query) ||
+        item.topFinishers.some(
+          (finisher) =>
+            finisher.horseName.toLowerCase().includes(query) ||
+            finisher.jockeyName.toLowerCase().includes(query),
+        );
+      const matchesStatus = status === 'all' || item.status === status;
+      const matchesTournament = tournament === 'All Tournaments' || item.tournamentName === tournament;
+
+      return matchesSearch && matchesStatus && matchesTournament;
+    });
+  }, [allResults, search, status, tournament]);
 
   const publishedCount = results.filter((item) => item.status === 'published').length;
 
@@ -59,6 +112,12 @@ const RaceResultList = () => {
             ))}
           </div>
         </div>
+
+        {errorMessage && (
+          <div className="mb-6 rounded-md border border-error/30 bg-error-container/20 px-4 py-3 text-body-sm font-semibold text-error">
+            {errorMessage}
+          </div>
+        )}
 
         <div className="flex flex-col lg:flex-row lg:items-center gap-4 mb-8">
           <div className="relative flex-1 max-w-md">
@@ -102,7 +161,13 @@ const RaceResultList = () => {
           </div>
         </div>
 
-        {results.length === 0 ? (
+        {isLoading ? (
+          <div className="rounded-lg border border-outline-variant bg-white p-12 text-center">
+            <Trophy className="w-10 h-10 text-outline mx-auto mb-4" />
+            <h2 className="text-headline-md font-bold text-primary mb-2">Loading results</h2>
+            <p className="text-body-md text-on-surface-variant">Fetching race results from the server.</p>
+          </div>
+        ) : results.length === 0 ? (
           <div className="rounded-lg border border-outline-variant bg-white p-12 text-center">
             <Trophy className="w-10 h-10 text-outline mx-auto mb-4" />
             <h2 className="text-headline-md font-bold text-primary mb-2">No results found</h2>

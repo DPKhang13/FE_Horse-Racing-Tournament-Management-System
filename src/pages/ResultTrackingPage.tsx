@@ -1,7 +1,83 @@
+import { useEffect, useMemo, useState } from 'react';
 import { BarChart3, CheckCircle2, Clock3 } from 'lucide-react';
-import { trackedResults } from '../mocks/predictionMocks';
+import { getApiErrorMessage } from '../services/apiClient';
+import { betService, type BetItem } from '../services/betService';
+
+const formatPoints = (value: number) => new Intl.NumberFormat('en-US', {
+  maximumFractionDigits: 0,
+}).format(value);
+
+const statusClassName = (status: string) => {
+  const normalizedStatus = status.toLowerCase();
+
+  if (normalizedStatus === 'won') {
+    return 'bg-[#85f8c4] text-[#005137]';
+  }
+
+  if (normalizedStatus === 'lost' || normalizedStatus === 'cancelled') {
+    return 'bg-[#ffdad6] text-[#93000a]';
+  }
+
+  return 'bg-[#ffe088] text-[#574500]';
+};
 
 const ResultTrackingPage = () => {
+  const [trackedResults, setTrackedResults] = useState<BetItem[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [errorMessage, setErrorMessage] = useState('');
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const loadResults = async () => {
+      setIsLoading(true);
+      setErrorMessage('');
+
+      try {
+        const data = await betService.getBets();
+
+        if (isMounted) {
+          setTrackedResults(data);
+        }
+      } catch (error) {
+        if (isMounted) {
+          setErrorMessage(getApiErrorMessage(error, 'Unable to load prediction results.'));
+        }
+      } finally {
+        if (isMounted) {
+          setIsLoading(false);
+        }
+      }
+    };
+
+    void loadResults();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  const stats = useMemo(() => {
+    const settled = trackedResults.filter((item) => item.status.toLowerCase() !== 'pending').length;
+    const won = trackedResults.filter((item) => item.status.toLowerCase() === 'won').length;
+    const lost = trackedResults.filter((item) => ['lost', 'cancelled'].includes(item.status.toLowerCase())).length;
+    const netGain = trackedResults.reduce((total, item) => {
+      if (item.status.toLowerCase() === 'won') {
+        return total + item.potentialPayout - item.amount;
+      }
+
+      if (['lost', 'cancelled'].includes(item.status.toLowerCase())) {
+        return total - item.amount;
+      }
+
+      return total;
+    }, 0);
+
+    return { settled, won, lost, netGain };
+  }, [trackedResults]);
+
+  const winRatio = stats.settled ? Math.round((stats.won / stats.settled) * 100) : 0;
+
   return (
     <div className="bg-surface min-h-screen py-12">
       <div className="max-w-container mx-auto px-4 md:px-margin-desktop">
@@ -16,6 +92,12 @@ const ResultTrackingPage = () => {
           </button>
         </div>
 
+        {errorMessage && (
+          <div className="mb-8 rounded-md border border-error/30 bg-error-container/20 px-4 py-3 text-body-sm font-semibold text-error">
+            {errorMessage}
+          </div>
+        )}
+
         <div className="grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
           <section className="space-y-6">
             <div className="rounded-3xl border border-outline-variant bg-white p-6 shadow-sm">
@@ -25,15 +107,17 @@ const ResultTrackingPage = () => {
                   <h2 className="mt-2 text-2xl font-bold text-primary">Prediction earnings</h2>
                 </div>
                 <div className="flex items-center gap-4">
-                  <div className="rounded-2xl bg-secondary-container px-4 py-3 text-sm font-semibold text-secondary">Total score 4.8/5</div>
-                  <div className="rounded-2xl bg-surface-container px-4 py-3 text-sm font-semibold text-on-surface-variant">Net gain +520 pts</div>
+                  <div className="rounded-2xl bg-secondary-container px-4 py-3 text-sm font-semibold text-secondary">Win ratio {winRatio}%</div>
+                  <div className="rounded-2xl bg-surface-container px-4 py-3 text-sm font-semibold text-on-surface-variant">
+                    Net gain {stats.netGain >= 0 ? '+' : ''}{formatPoints(stats.netGain)} pts
+                  </div>
                 </div>
               </div>
               <div className="grid gap-4 sm:grid-cols-3 mt-6">
                 {[
-                  { label: 'Settled', value: '18', accent: 'bg-[#d6e3ff] text-[#0d1c32]' },
-                  { label: 'Won', value: '12', accent: 'bg-[#85f8c4] text-[#005137]' },
-                  { label: 'Lost', value: '6', accent: 'bg-[#ffdad6] text-[#93000a]' }
+                  { label: 'Settled', value: stats.settled, accent: 'bg-[#d6e3ff] text-[#0d1c32]' },
+                  { label: 'Won', value: stats.won, accent: 'bg-[#85f8c4] text-[#005137]' },
+                  { label: 'Lost', value: stats.lost, accent: 'bg-[#ffdad6] text-[#93000a]' },
                 ].map((stat) => (
                   <div key={stat.label} className="rounded-2xl border border-outline-variant bg-surface-container p-5">
                     <p className="text-xs font-semibold uppercase tracking-[0.18em] text-on-surface-variant">{stat.label}</p>
@@ -58,26 +142,42 @@ const ResultTrackingPage = () => {
                   <thead className="bg-surface-container border-b border-outline-variant">
                     <tr>
                       <th className="px-6 py-4 text-label-sm text-outline uppercase tracking-wider">Race</th>
-                      <th className="px-6 py-4 text-label-sm text-outline uppercase tracking-wider">Winner</th>
-                      <th className="px-6 py-4 text-label-sm text-outline uppercase tracking-wider text-right">Time</th>
-                      <th className="px-6 py-4 text-label-sm text-outline uppercase tracking-wider text-right">Prize</th>
+                      <th className="px-6 py-4 text-label-sm text-outline uppercase tracking-wider">Selection</th>
+                      <th className="px-6 py-4 text-label-sm text-outline uppercase tracking-wider text-right">Odds</th>
+                      <th className="px-6 py-4 text-label-sm text-outline uppercase tracking-wider text-right">Payout</th>
                       <th className="px-6 py-4 text-label-sm text-outline uppercase tracking-wider text-right">Prediction</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-outline-variant">
-                    {trackedResults.map((item) => (
-                      <tr key={item.id} className="hover:bg-surface-container-lowest transition-colors">
+                    {isLoading && (
+                      <tr>
+                        <td colSpan={5} className="px-6 py-8 text-center text-body-sm font-semibold text-on-surface-variant">
+                          Loading prediction results...
+                        </td>
+                      </tr>
+                    )}
+
+                    {!isLoading && trackedResults.map((item) => (
+                      <tr key={item.betId} className="hover:bg-surface-container-lowest transition-colors">
                         <td className="px-6 py-4 text-body-sm font-semibold text-primary">{item.raceName}</td>
-                        <td className="px-6 py-4 text-body-sm text-on-surface-variant">{item.winner}</td>
-                        <td className="px-6 py-4 text-right text-body-sm font-mono text-on-surface-variant">{item.finishTime}</td>
-                        <td className="px-6 py-4 text-right text-body-sm font-semibold text-secondary">{item.prize}</td>
+                        <td className="px-6 py-4 text-body-sm text-on-surface-variant">{item.horseName}</td>
+                        <td className="px-6 py-4 text-right text-body-sm font-mono text-on-surface-variant">{item.odds || '-'}</td>
+                        <td className="px-6 py-4 text-right text-body-sm font-semibold text-secondary">{formatPoints(item.potentialPayout)} pts</td>
                         <td className="px-6 py-4 text-right">
-                          <span className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] ${item.predictionStatus === 'Won' ? 'bg-[#85f8c4] text-[#005137]' : item.predictionStatus === 'Lost' ? 'bg-[#ffdad6] text-[#93000a]' : 'bg-[#ffe088] text-[#574500]'}`}>
-                            {item.predictionStatus}
+                          <span className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] ${statusClassName(item.status)}`}>
+                            {item.status}
                           </span>
                         </td>
                       </tr>
                     ))}
+
+                    {!isLoading && trackedResults.length === 0 && (
+                      <tr>
+                        <td colSpan={5} className="px-6 py-8 text-center text-body-sm font-semibold text-on-surface-variant">
+                          No prediction results found.
+                        </td>
+                      </tr>
+                    )}
                   </tbody>
                 </table>
               </div>
@@ -95,16 +195,18 @@ const ResultTrackingPage = () => {
               </div>
               <div className="space-y-5">
                 <div className="rounded-2xl bg-surface-container p-4">
-                  <p className="text-sm text-on-surface-variant">Average odds accuracy</p>
-                  <p className="mt-2 text-2xl font-bold text-primary">68%</p>
+                  <p className="text-sm text-on-surface-variant">Settled predictions</p>
+                  <p className="mt-2 text-2xl font-bold text-primary">{stats.settled}</p>
                 </div>
                 <div className="rounded-2xl bg-surface-container p-4">
                   <p className="text-sm text-on-surface-variant">Win ratio</p>
-                  <p className="mt-2 text-2xl font-bold text-primary">67%</p>
+                  <p className="mt-2 text-2xl font-bold text-primary">{winRatio}%</p>
                 </div>
                 <div className="rounded-2xl bg-surface-container p-4">
                   <p className="text-sm text-on-surface-variant">Latest settled prediction</p>
-                  <p className="mt-2 text-body-lg font-semibold text-primary">Silver Arrow • 1st place</p>
+                  <p className="mt-2 text-body-lg font-semibold text-primary">
+                    {trackedResults.find((item) => item.status.toLowerCase() !== 'pending')?.horseName ?? 'No settled prediction yet'}
+                  </p>
                 </div>
               </div>
             </section>
@@ -115,7 +217,7 @@ const ResultTrackingPage = () => {
                 <h3 className="text-lg font-bold text-primary">Settlement rules</h3>
               </div>
               <ul className="space-y-3 text-sm text-on-surface-variant">
-                <li className="rounded-2xl bg-surface-container p-4">Only predictions placed before `prediction_closes_at` are eligible.</li>
+                <li className="rounded-2xl bg-surface-container p-4">Only predictions placed before prediction_closes_at are eligible.</li>
                 <li className="rounded-2xl bg-surface-container p-4">Points are updated once RaceResults are published.</li>
                 <li className="rounded-2xl bg-surface-container p-4">Lost predictions are still recorded for performance tracking.</li>
               </ul>
