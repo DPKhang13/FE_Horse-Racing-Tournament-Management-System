@@ -11,14 +11,14 @@ const statusClassName = (status: string) => {
   const normalizedStatus = status.toLowerCase();
 
   if (normalizedStatus === 'won') {
-    return 'bg-[#85f8c4] text-[#005137]';
+    return 'bg-secondary-container/50 text-on-secondary-container';
   }
 
   if (normalizedStatus === 'lost' || normalizedStatus === 'cancelled') {
-    return 'bg-[#ffdad6] text-[#93000a]';
+    return 'bg-error-container/30 text-error';
   }
 
-  return 'bg-[#ffe088] text-[#574500]';
+  return 'bg-primary/15 text-primary';
 };
 
 const PredictionPage = () => {
@@ -97,8 +97,8 @@ const PredictionPage = () => {
               <div className="grid gap-4 sm:grid-cols-3">
                 {[
                   { label: 'Open predictions', value: String(stats.pending).padStart(2, '0'), color: 'bg-surface-container-highest text-primary' },
-                  { label: 'Pending', value: String(stats.pending).padStart(2, '0'), color: 'bg-[#ffe088] text-[#574500]' },
-                  { label: 'Settled', value: String(stats.settled).padStart(2, '0'), color: 'bg-[#d6e3ff] text-[#0d1c32]' },
+                  { label: 'Pending', value: String(stats.pending).padStart(2, '0'), color: 'text-primary' },
+                  { label: 'Settled', value: String(stats.settled).padStart(2, '0'), color: 'text-secondary' },
                 ].map((item) => (
                   <div key={item.label} className="rounded-2xl border border-outline-variant bg-surface-container p-4">
                     <p className="text-xs font-semibold uppercase tracking-[0.18em] text-on-surface-variant">{item.label}</p>

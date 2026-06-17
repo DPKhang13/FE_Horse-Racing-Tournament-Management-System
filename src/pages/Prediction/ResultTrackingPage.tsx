@@ -11,14 +11,14 @@ const statusClassName = (status: string) => {
   const normalizedStatus = status.toLowerCase();
 
   if (normalizedStatus === 'won') {
-    return 'bg-[#85f8c4] text-[#005137]';
+    return 'bg-secondary-container/50 text-on-secondary-container';
   }
 
   if (normalizedStatus === 'lost' || normalizedStatus === 'cancelled') {
-    return 'bg-[#ffdad6] text-[#93000a]';
+    return 'bg-error-container/30 text-error';
   }
 
-  return 'bg-[#ffe088] text-[#574500]';
+  return 'bg-primary/15 text-primary';
 };
 
 const ResultTrackingPage = () => {
@@ -87,7 +87,7 @@ const ResultTrackingPage = () => {
             <h1 className="text-headline-lg font-bold text-primary">Track prediction results</h1>
             <p className="max-w-2xl text-body-md text-on-surface-variant">Review finished races, settlement status, and score your prediction performance in one clear dashboard.</p>
           </div>
-          <button className="inline-flex items-center gap-2 rounded-md bg-primary px-6 py-3 text-sm font-semibold text-white transition hover:bg-[#111111]">
+          <button className="gold-gradient inline-flex items-center gap-2 rounded-md px-6 py-3 text-sm font-bold text-on-primary transition">
             View full leaderboard
           </button>
         </div>
@@ -115,9 +115,9 @@ const ResultTrackingPage = () => {
               </div>
               <div className="grid gap-4 sm:grid-cols-3 mt-6">
                 {[
-                  { label: 'Settled', value: stats.settled, accent: 'bg-[#d6e3ff] text-[#0d1c32]' },
-                  { label: 'Won', value: stats.won, accent: 'bg-[#85f8c4] text-[#005137]' },
-                  { label: 'Lost', value: stats.lost, accent: 'bg-[#ffdad6] text-[#93000a]' },
+                  { label: 'Settled', value: stats.settled, accent: 'text-primary' },
+                  { label: 'Won', value: stats.won, accent: 'text-secondary' },
+                  { label: 'Lost', value: stats.lost, accent: 'text-error' },
                 ].map((stat) => (
                   <div key={stat.label} className="rounded-2xl border border-outline-variant bg-surface-container p-5">
                     <p className="text-xs font-semibold uppercase tracking-[0.18em] text-on-surface-variant">{stat.label}</p>

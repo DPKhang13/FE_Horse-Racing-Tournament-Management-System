@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
-import { Eye, Filter, Pencil, Plus, Search, Trash2, X } from 'lucide-react';
+import { Activity, Eye, Filter, Gauge, Pencil, Plus, Search, Trash2, Trophy, X } from 'lucide-react';
 import { getApiErrorMessage } from '../../services/apiClient';
 import { HorseService } from '../../services/HorseService';
 import type { Horse, HorseFormData } from '../../types/horse';
@@ -126,6 +126,9 @@ const HorseManagementPage = () => {
 
     return matchesSearch && matchesStatus;
   });
+  const activeHorseCount = horses.filter((horse) => horse.status.toLowerCase() === 'active').length;
+  const totalWins = horses.reduce((total, horse) => total + Number(horse.totalWins || 0), 0);
+  const topRating = horses.reduce((max, horse) => Math.max(max, Number(horse.rankingPoints || 0)), 0);
 
   const openCreateModal = () => {
     setSelectedHorse(null);
@@ -222,23 +225,62 @@ const HorseManagementPage = () => {
   };
 
   return (
-    <div className="bg-surface min-h-screen py-12">
-      <div className="max-w-container mx-auto px-4 md:px-margin-desktop">
-        <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-6 mb-10">
-          <div>
-            <p className="text-label-sm text-outline uppercase tracking-widest font-bold mb-3">Horse Registry</p>
-            <h1 className="text-headline-lg font-bold text-primary mb-2">Horse Management</h1>
-            <p className="text-body-md text-on-surface-variant">
-              Manage horse records using fields stored in the database.
-            </p>
-          </div>
+    <div className="min-h-screen bg-surface py-8">
+      <div className="mx-auto max-w-[1440px] px-4 md:px-8">
+        <div className="glass-panel mb-6 rounded-2xl p-6">
+          <div className="flex flex-col gap-6 xl:flex-row xl:items-end xl:justify-between">
+            <div>
+              <p className="mb-3 text-label-sm font-bold uppercase tracking-[0.18em] text-secondary">Horse Owner Dashboard</p>
+              <h1 className="font-display mb-2 text-headline-lg font-extrabold text-primary">Stable command center</h1>
+              <p className="max-w-2xl text-body-md text-on-surface-variant">
+                Manage horse records using fields stored in the database.
+              </p>
+            </div>
 
+            <div className="grid min-w-full gap-3 sm:grid-cols-2 xl:min-w-[560px] xl:grid-cols-4">
+              <MetricCard icon={<Activity className="h-4 w-4" />} label="Total" value={String(horses.length).padStart(2, '0')} />
+              <MetricCard icon={<Gauge className="h-4 w-4" />} label="Active" value={String(activeHorseCount).padStart(2, '0')} />
+              <MetricCard icon={<Trophy className="h-4 w-4" />} label="Wins" value={String(totalWins)} />
+              <MetricCard icon={<Filter className="h-4 w-4" />} label="Top points" value={String(topRating)} />
+            </div>
+          </div>
+        </div>
+
+        <div className="mb-6 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+          <div className="glass-panel flex-1 rounded-xl p-4">
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-[1fr_240px]">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-outline" />
+                <input
+                  type="text"
+                  value={searchTerm}
+                  onChange={(event) => setSearchTerm(event.target.value)}
+                  placeholder="Search by horse, breed, owner, stable..."
+                  className="w-full rounded-lg border border-outline-variant bg-surface-container-low px-4 py-3 pl-10 text-body-sm transition-colors focus:border-primary focus:outline-none"
+                />
+              </div>
+
+              <div className="relative">
+                <Filter className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-outline" />
+                <select
+                  value={statusFilter}
+                  onChange={(event) => setStatusFilter(event.target.value)}
+                  className="w-full appearance-none rounded-lg border border-outline-variant bg-surface-container-low px-4 py-3 pl-10 text-body-sm transition-colors focus:border-primary focus:outline-none"
+                >
+                  <option value="All">All statuses</option>
+                  {statusOptions.map((status) => (
+                    <option key={status} value={status}>{status}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+          </div>
           <button
             type="button"
             onClick={openCreateModal}
-            className="inline-flex items-center justify-center gap-2 bg-primary text-on-primary px-6 py-3 rounded-md text-body-sm font-semibold hover:bg-opacity-90 transition-all"
+            className="gold-gradient inline-flex items-center justify-center gap-2 rounded-xl px-6 py-4 text-body-sm font-extrabold text-on-primary transition-all"
           >
-            <Plus className="w-4 h-4" />
+            <Plus className="h-4 w-4" />
             Register Horse
           </button>
         </div>
@@ -249,36 +291,7 @@ const HorseManagementPage = () => {
           </div>
         )}
 
-        <div className="bg-white border border-outline-variant rounded-lg p-4 md:p-6 mb-6">
-          <div className="grid grid-cols-1 md:grid-cols-[1fr_240px] gap-4">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-outline" />
-              <input
-                type="text"
-                value={searchTerm}
-                onChange={(event) => setSearchTerm(event.target.value)}
-                placeholder="Search by horse, breed, owner, stable..."
-                className="w-full bg-surface-container-low border border-outline-variant rounded-md py-3 pl-10 pr-4 text-body-sm focus:outline-none focus:border-primary transition-colors"
-              />
-            </div>
-
-            <div className="relative">
-              <Filter className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-outline" />
-              <select
-                value={statusFilter}
-                onChange={(event) => setStatusFilter(event.target.value)}
-                className="w-full appearance-none bg-surface-container-low border border-outline-variant rounded-md py-3 pl-10 pr-4 text-body-sm focus:outline-none focus:border-primary transition-colors"
-              >
-                <option value="All">All statuses</option>
-                {statusOptions.map((status) => (
-                  <option key={status} value={status}>{status}</option>
-                ))}
-              </select>
-            </div>
-          </div>
-        </div>
-
-        <div className="bg-white border border-outline-variant rounded-lg overflow-hidden shadow-sm">
+        <div className="glass-panel overflow-hidden rounded-xl">
           <div className="overflow-x-auto">
             <table className="w-full min-w-[1120px] text-left">
               <thead className="bg-surface-container border-b border-outline-variant">
@@ -424,6 +437,16 @@ const HorseManagementPage = () => {
 
 const inputClassName =
   'w-full bg-surface-container-low border border-outline-variant rounded-md py-3 px-4 text-body-sm focus:outline-none focus:border-primary transition-colors';
+
+const MetricCard = ({ icon, label, value }: { icon: ReactNode; label: string; value: string }) => (
+  <div className="rounded-xl border border-outline-variant/40 bg-surface-container-lowest/70 p-4">
+    <div className="mb-3 flex items-center justify-between text-on-surface-variant">
+      <span className="text-[10px] font-bold uppercase tracking-[0.16em]">{label}</span>
+      <span className="text-primary">{icon}</span>
+    </div>
+    <p className="font-display truncate text-2xl font-extrabold text-on-surface">{value}</p>
+  </div>
+);
 
 const IconButton = ({ label, onClick, children }: { label: string; onClick: () => void; children: ReactNode }) => (
   <button

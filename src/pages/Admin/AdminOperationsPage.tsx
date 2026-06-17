@@ -1,5 +1,5 @@
-import { useEffect, useState, type FormEvent } from 'react';
-import { Award, CalendarDays, ShieldCheck } from 'lucide-react';
+import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
+import { Award, CalendarDays, Flag, ShieldCheck, Trophy } from 'lucide-react';
 import { getApiErrorMessage } from '../../services/apiClient';
 import { tournamentService, type PrizeItem, type TournamentFormData } from '../../services/tournamentService';
 import type { TournamentApiItem } from '../../services/scheduleService';
@@ -106,23 +106,38 @@ const AdminOperationsPage = () => {
     }
   };
 
+  const activeTournaments = tournaments.filter((item) => String(item.status ?? '').toLowerCase() !== 'cancelled').length;
+
   return (
-    <div className="min-h-screen bg-surface py-12">
-      <div className="mx-auto max-w-container px-4 md:px-margin-desktop">
-        <div className="mb-10">
-          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-secondary">Admin Operations</p>
-          <h1 className="mt-2 text-headline-lg font-bold text-primary">Tournament control room</h1>
+    <div className="min-h-screen bg-surface py-8">
+      <div className="mx-auto max-w-[1440px] px-4 md:px-8">
+        <div className="glass-panel mb-6 rounded-2xl p-6">
+          <div className="flex flex-col gap-6 xl:flex-row xl:items-end xl:justify-between">
+            <div>
+              <p className="text-xs font-bold uppercase tracking-[0.2em] text-secondary">Admin Operations</p>
+              <h1 className="font-display mt-2 text-headline-lg font-extrabold text-primary">Tournament control room</h1>
+              <p className="mt-2 max-w-2xl text-body-sm text-on-surface-variant">
+                Create tournaments, configure prizes, and assign referees from one horizontal command surface.
+              </p>
+            </div>
+            <div className="grid min-w-full gap-3 sm:grid-cols-2 xl:min-w-[560px] xl:grid-cols-4">
+              <MetricCard icon={<Trophy className="h-4 w-4" />} label="Tournaments" value={String(tournaments.length).padStart(2, '0')} />
+              <MetricCard icon={<Flag className="h-4 w-4" />} label="Active" value={String(activeTournaments).padStart(2, '0')} />
+              <MetricCard icon={<Award className="h-4 w-4" />} label="Prize tiers" value={String(prizes.length).padStart(2, '0')} />
+              <MetricCard icon={<ShieldCheck className="h-4 w-4" />} label="Selected" value={selectedTournamentId || '-'} />
+            </div>
+          </div>
         </div>
 
         {message && <StatusBanner tone="success" text={message} />}
         {errorMessage && <StatusBanner tone="error" text={errorMessage} />}
 
-        <div className="grid gap-8 xl:grid-cols-[0.85fr_1.15fr]">
-          <div className="space-y-6">
-            <section className="rounded-xl border border-outline-variant bg-white p-6 shadow-sm">
+        <div className="space-y-6">
+          <section className="grid gap-6 xl:grid-cols-3">
+            <article className="glass-panel rounded-xl p-6">
               <div className="mb-5 flex items-center gap-3">
                 <CalendarDays className="h-5 w-5 text-secondary" />
-                <h2 className="text-title-large font-bold text-primary">Create tournament</h2>
+                <h2 className="font-display text-title-large font-bold text-primary">Create tournament</h2>
               </div>
               <form onSubmit={handleCreateTournament} className="grid gap-4">
                 <TextInput label="Name" value={tournamentForm.name} onChange={(value) => setTournamentForm((form) => ({ ...form, name: value }))} required />
@@ -135,14 +150,14 @@ const AdminOperationsPage = () => {
                   <TextInput label="Prize pool" type="number" value={String(tournamentForm.prizePool)} onChange={(value) => setTournamentForm((form) => ({ ...form, prizePool: Number(value) }))} />
                   <TextInput label="Status" value={tournamentForm.status} onChange={(value) => setTournamentForm((form) => ({ ...form, status: value }))} />
                 </div>
-                <button className="rounded-md bg-secondary px-5 py-3 text-body-sm font-bold text-white hover:bg-opacity-90">Create Tournament</button>
+                <button className="rounded-lg bg-secondary px-5 py-3 text-body-sm font-bold text-on-secondary hover:bg-opacity-90">Create Tournament</button>
               </form>
-            </section>
+            </article>
 
-            <section className="rounded-xl border border-outline-variant bg-white p-6 shadow-sm">
+            <article className="glass-panel rounded-xl p-6">
               <div className="mb-5 flex items-center gap-3">
                 <Award className="h-5 w-5 text-secondary" />
-                <h2 className="text-title-large font-bold text-primary">Prize setup</h2>
+                <h2 className="font-display text-title-large font-bold text-primary">Prize setup</h2>
               </div>
               <form onSubmit={handleCreatePrizes} className="grid gap-4">
                 <SelectInput label="Tournament" value={selectedTournamentId} onChange={setSelectedTournamentId}>
@@ -159,26 +174,26 @@ const AdminOperationsPage = () => {
                     <TextInput label="Note" value={prize.note ?? ''} onChange={(value) => setPrizes((items) => items.map((item, itemIndex) => itemIndex === index ? { ...item, note: value } : item))} />
                   </div>
                 ))}
-                <button className="rounded-md bg-primary px-5 py-3 text-body-sm font-bold text-on-primary hover:bg-opacity-90">Save Prizes</button>
+                <button className="gold-gradient rounded-lg px-5 py-3 text-body-sm font-bold text-on-primary">Save Prizes</button>
               </form>
-            </section>
+            </article>
 
-            <section className="rounded-xl border border-outline-variant bg-white p-6 shadow-sm">
+            <article className="glass-panel rounded-xl p-6">
               <div className="mb-5 flex items-center gap-3">
                 <ShieldCheck className="h-5 w-5 text-secondary" />
-                <h2 className="text-title-large font-bold text-primary">Assign referee</h2>
+                <h2 className="font-display text-title-large font-bold text-primary">Assign referee</h2>
               </div>
               <form onSubmit={handleAssignReferee} className="grid gap-4">
                 <TextInput label="Race ID" type="number" value={raceId} onChange={setRaceId} required />
                 <TextInput label="Referee ID" type="number" value={refereeId} onChange={setRefereeId} required />
                 <TextInput label="Referee role" value={refereeRole} onChange={setRefereeRole} required />
-                <button className="rounded-md bg-primary px-5 py-3 text-body-sm font-bold text-on-primary hover:bg-opacity-90">Assign Referee</button>
+                <button className="gold-gradient rounded-lg px-5 py-3 text-body-sm font-bold text-on-primary">Assign Referee</button>
               </form>
-            </section>
-          </div>
+            </article>
+          </section>
 
-          <section className="rounded-xl border border-outline-variant bg-white p-6 shadow-sm">
-            <h2 className="mb-5 text-title-large font-bold text-primary">Tournament list</h2>
+          <section className="glass-panel rounded-xl p-6">
+            <h2 className="font-display mb-5 text-title-large font-bold text-primary">Tournament list</h2>
             <div className="overflow-x-auto">
               <table className="w-full text-left">
                 <thead className="border-b border-outline-variant bg-surface-container">
@@ -216,6 +231,16 @@ const AdminOperationsPage = () => {
     </div>
   );
 };
+
+const MetricCard = ({ icon, label, value }: { icon: ReactNode; label: string; value: string }) => (
+  <div className="rounded-xl border border-outline-variant/40 bg-surface-container-lowest/70 p-4">
+    <div className="mb-3 flex items-center justify-between text-on-surface-variant">
+      <span className="text-[10px] font-bold uppercase tracking-[0.16em]">{label}</span>
+      <span className="text-primary">{icon}</span>
+    </div>
+    <p className="font-display truncate text-2xl font-extrabold text-on-surface">{value}</p>
+  </div>
+);
 
 const StatusBanner = ({ tone, text }: { tone: 'success' | 'error'; text: string }) => (
   <div className={`mb-6 rounded-md border px-4 py-3 text-body-sm font-semibold ${tone === 'success' ? 'border-secondary/30 bg-secondary-container/30 text-secondary' : 'border-error/30 bg-error-container/20 text-error'}`}>

@@ -117,40 +117,43 @@ const AuthPage = () => {
   };
 
   return (
-    <div className="flex min-h-screen bg-white">
-      <div className="hidden lg:flex lg:w-1/2 relative overflow-hidden bg-primary-container p-16 flex-col justify-between">
-        <div
-          className="absolute inset-0 opacity-20"
-          style={{
-            backgroundImage: 'radial-gradient(circle at 2px 2px, white 1px, transparent 0)',
-            backgroundSize: '32px 32px',
-          }}
-        />
+    <div className="racing-grid flex min-h-screen bg-surface text-on-surface">
+      <div className="relative hidden overflow-hidden border-r border-outline-variant/30 bg-surface-container-low p-16 lg:flex lg:w-1/2 lg:flex-col lg:justify-between">
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(242,202,80,0.14),transparent_34rem)]" />
 
         <div className="relative z-10">
-          <Link to="/" className="text-2xl font-bold text-white tracking-tight mb-16 block">
-            Horace
+          <Link to="/" className="font-display mb-16 block text-2xl font-extrabold tracking-tight text-primary">
+            HTMS
           </Link>
-          <h1 className="text-white text-headline-xl font-bold max-w-md leading-tight mb-6">
-            Precision Intelligence for the Sporting Elite
+          <p className="mb-3 text-label-md font-bold uppercase tracking-[0.18em] text-secondary">Premium Management</p>
+          <h1 className="font-display mb-6 max-w-md text-headline-xl font-extrabold leading-tight text-on-surface">
+            Tournament System Access
           </h1>
-          <p className="text-on-primary-container text-body-lg max-w-sm">
-            Access institutional-grade racing data and advanced performance analytics in one secure environment.
+          <p className="max-w-sm text-body-lg text-on-surface-variant">
+            High-stakes horse racing management with verified roles, race operations, and real-time tournament data.
           </p>
+          <div className="mt-8 grid max-w-sm grid-cols-2 gap-4">
+            <div className="glass-panel rounded-xl p-4">
+              <p className="font-display text-headline-md text-primary">24/7</p>
+              <p className="text-label-md text-on-surface-variant">Race Monitoring</p>
+            </div>
+            <div className="glass-panel rounded-xl p-4">
+              <p className="font-display text-headline-md text-primary">1.2ms</p>
+              <p className="text-label-md text-on-surface-variant">Data Latency</p>
+            </div>
+          </div>
         </div>
 
         <div className="relative z-10">
-          <p className="text-white/60 text-label-sm uppercase tracking-widest mb-6">
-            Trusted by industry leaders
-          </p>
-          <div className="flex items-center gap-8 opacity-50 grayscale brightness-200">
+          <p className="mb-6 text-label-sm uppercase tracking-widest text-on-surface-variant">Trusted circuits</p>
+          <div className="flex items-center gap-8 text-on-surface-variant/70">
             <span className="font-bold text-xl">ASCOT</span>
             <span className="font-bold text-xl">CHURCHILL</span>
             <span className="font-bold text-xl">MEYDAN</span>
           </div>
         </div>
 
-        <div className="absolute bottom-0 right-0 w-full h-1/2 overflow-hidden opacity-30 pointer-events-none">
+        <div className="pointer-events-none absolute bottom-0 right-0 h-1/2 w-full overflow-hidden opacity-25">
           <img
             src="https://images.unsplash.com/photo-1599408162165-8b753ca992aa?auto=format&fit=crop&q=80&w=1000"
             alt="Racing background"
@@ -159,11 +162,12 @@ const AuthPage = () => {
         </div>
       </div>
 
-      <div className="w-full lg:w-1/2 flex flex-col justify-center items-center p-8 md:p-16">
-        <div className="w-full max-w-md">
+      <div className="flex w-full flex-col items-center justify-center p-6 md:p-12 lg:w-1/2">
+        <div className="glass-panel relative w-full max-w-md overflow-hidden rounded-2xl p-7 shadow-2xl md:p-10">
+          <div className="absolute left-0 right-0 top-0 h-1 bg-gradient-to-r from-transparent via-primary to-transparent" />
           <div className="mb-10">
-            <h2 className="text-headline-lg font-bold text-primary mb-2">
-              {activeTab === 'login' ? 'Welcome Back' : activeTab === 'signup' ? 'Join the Elite' : 'Verify Account'}
+            <h2 className="font-display mb-2 text-headline-lg font-extrabold text-on-surface">
+              {activeTab === 'login' ? 'Welcome Back' : activeTab === 'signup' ? 'Create Account' : 'Verify Account'}
             </h2>
             <p className="text-body-sm text-on-surface-variant">
               {activeTab === 'login'
@@ -174,14 +178,14 @@ const AuthPage = () => {
             </p>
           </div>
 
-          <div className="flex border-b border-outline-variant mb-8">
+          <div className="mb-8 flex border-b border-outline-variant/40">
             <button
               type="button"
               onClick={() => switchTab('login')}
-              className={`pb-4 px-6 text-body-sm font-bold transition-all border-b-2 ${
+              className={`px-6 pb-4 text-body-sm font-bold transition-all border-b-2 ${
                 activeTab === 'login'
                   ? 'border-primary text-primary'
-                  : 'border-transparent text-outline hover:text-primary'
+                  : 'border-transparent text-on-surface-variant hover:text-primary'
               }`}
             >
               Log In
@@ -189,10 +193,10 @@ const AuthPage = () => {
             <button
               type="button"
               onClick={() => switchTab('signup')}
-              className={`pb-4 px-6 text-body-sm font-bold transition-all border-b-2 ${
+              className={`px-6 pb-4 text-body-sm font-bold transition-all border-b-2 ${
                 activeTab === 'signup'
                   ? 'border-primary text-primary'
-                  : 'border-transparent text-outline hover:text-primary'
+                  : 'border-transparent text-on-surface-variant hover:text-primary'
               }`}
             >
               Create Account
@@ -200,13 +204,13 @@ const AuthPage = () => {
           </div>
 
           {errorMessage && (
-            <div className="mb-6 rounded-md border border-error/30 bg-error-container/20 px-4 py-3 text-body-sm font-semibold text-error">
+            <div className="mb-6 rounded-lg border border-error/40 bg-error-container/25 px-4 py-3 text-body-sm font-semibold text-error">
               {errorMessage}
             </div>
           )}
 
           {successMessage && (
-            <div className="mb-6 rounded-md border border-secondary/30 bg-secondary-container/30 px-4 py-3 text-body-sm font-semibold text-secondary">
+            <div className="mb-6 rounded-lg border border-secondary/40 bg-secondary-container/25 px-4 py-3 text-body-sm font-semibold text-secondary">
               {successMessage}
             </div>
           )}
@@ -251,7 +255,7 @@ const AuthPage = () => {
                   type="button"
                   onClick={handleResendOtp}
                   disabled={isSubmitting || !(verificationEmail || email)}
-                  className="w-full border border-outline-variant text-primary py-3 rounded-md font-bold hover:bg-surface-container transition-all disabled:opacity-60 disabled:cursor-not-allowed"
+                  className="w-full rounded-xl border border-outline-variant/60 py-3 font-bold text-on-surface transition-all hover:border-primary hover:text-primary disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   Resend verification code
                 </button>
@@ -327,7 +331,7 @@ const AuthPage = () => {
                     <select
                       value={roleType}
                       onChange={(event) => setRoleType(event.target.value as SignupRole)}
-                      className="w-full bg-surface-container-low border border-outline-variant rounded-md py-3 px-4 text-body-sm focus:outline-none focus:border-primary transition-all"
+                      className="w-full rounded-lg border border-outline-variant/50 bg-surface-container-lowest px-4 py-3 text-body-sm text-on-surface transition-all focus:border-primary focus:outline-none"
                     >
                       <option value="spectator">Spectator</option>
                       <option value="horse_owner">Horse Owner</option>
@@ -345,12 +349,12 @@ const AuthPage = () => {
             )}
           </form>
 
-          <div className="mt-12 pt-8 border-t border-outline-variant flex flex-col items-center gap-6">
+          <div className="mt-12 flex flex-col items-center gap-6 border-t border-outline-variant/40 pt-8">
             <div className="flex items-center gap-2 text-secondary text-label-sm font-bold">
               <Shield className="w-4 h-4" />
               <span className="uppercase tracking-widest">256-bit AES Encrypted Data</span>
             </div>
-            <p className="text-[10px] text-outline text-center leading-relaxed">
+            <p className="text-center text-[10px] leading-relaxed text-outline">
               By accessing this terminal, you agree to our{' '}
               <a href="#" className="underline">Professional Terms of Service</a> and{' '}
               <a href="#" className="underline">Institutional Privacy Protocol</a>.
@@ -362,11 +366,11 @@ const AuthPage = () => {
   );
 };
 
-const iconClassName = 'absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-outline';
+const iconClassName = 'absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-on-surface-variant/70';
 const inputClassName =
-  'w-full bg-surface-container-low border border-outline-variant rounded-md py-3 pl-10 pr-4 text-body-sm focus:outline-none focus:border-primary transition-all';
+  'w-full bg-surface-container-lowest border border-outline-variant/50 rounded-lg py-3 pl-10 pr-4 text-body-sm text-on-surface focus:outline-none focus:border-primary transition-all';
 const primaryButtonClassName =
-  'w-full bg-secondary text-white py-4 rounded-md font-bold flex items-center justify-center gap-2 hover:bg-opacity-90 transition-all shadow-lg shadow-secondary/20 disabled:opacity-70 disabled:cursor-not-allowed';
+  'gold-gradient w-full py-4 rounded-xl font-extrabold text-on-primary flex items-center justify-center gap-2 transition-all shadow-lg shadow-primary/10 disabled:opacity-70 disabled:cursor-not-allowed';
 
 const AuthField = ({
   label,
@@ -378,7 +382,7 @@ const AuthField = ({
   children: ReactNode;
 }) => (
   <label className="space-y-2 block">
-    <span className="text-label-sm text-outline uppercase tracking-wider font-bold">{label}</span>
+    <span className="text-label-sm font-bold uppercase tracking-[0.12em] text-on-surface-variant">{label}</span>
     <div className="relative">
       {icon}
       {children}

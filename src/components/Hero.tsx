@@ -1,43 +1,66 @@
-import { ArrowRight } from 'lucide-react';
+import { Shield, Trophy, Users } from 'lucide-react';
+import { Link } from 'react-router-dom';
+
+const highlights = [
+  {
+    title: 'Tournament Operations',
+    description: 'Create tournaments, manage race schedules, assign referees, and publish certified results.',
+    icon: Trophy,
+  },
+  {
+    title: 'Role-Based Workspace',
+    description: 'Admin, horse owner, jockey, referee, and spectator each see only the tools for their role.',
+    icon: Users,
+  },
+  {
+    title: 'Secure Account Flow',
+    description: 'Sign up, verify email, sign in, and continue directly to the matching dashboard.',
+    icon: Shield,
+  },
+];
 
 const Hero = () => {
   return (
-    <section className="relative w-full h-[600px] overflow-hidden">
-      {/* Background Image Placeholder */}
-      <div 
-        className="absolute inset-0 bg-cover bg-center"
-        style={{ 
-          backgroundImage: 'linear-gradient(rgba(0,0,0,0.4), rgba(0,0,0,0.4)), url("https://images.unsplash.com/photo-1599408162165-8b753ca992aa?auto=format&fit=crop&q=80&w=2000")' 
-        }}
-      />
-      
-      <div className="relative max-w-container mx-auto h-full px-4 md:px-margin-desktop flex flex-col justify-center items-start gap-6">
-        {/* Live Badge */}
-        <div className="flex items-center gap-2 bg-secondary/90 backdrop-blur-sm px-3 py-1 rounded-full">
-          <span className="w-2 h-2 bg-white rounded-full animate-pulse" />
-          <span className="text-[10px] font-bold text-white uppercase tracking-widest">Live: Kentucky Derby Qualifiers</span>
+    <main className="racing-grid min-h-[calc(100vh-73px)] bg-surface">
+      <section className="mx-auto flex min-h-[calc(100vh-73px)] max-w-[1440px] flex-col justify-center gap-10 px-4 py-16 md:px-8">
+        <div className="max-w-4xl">
+          <p className="mb-4 text-xs font-bold uppercase tracking-[0.22em] text-secondary">Horse Tournament Management System</p>
+          <h1 className="font-display text-5xl font-extrabold leading-tight text-primary md:text-7xl">
+            Manage horse racing tournaments in one secure dashboard.
+          </h1>
+          <p className="mt-6 max-w-2xl text-lg leading-8 text-on-surface-variant">
+            HTMS helps organizers, horse owners, jockeys, referees, and spectators follow the same tournament data from registration to final result.
+          </p>
+
+          <div className="mt-8 flex flex-col gap-3 sm:flex-row">
+            <Link
+              to="/login"
+              state={{ mode: 'login' }}
+              className="inline-flex items-center justify-center rounded-xl border border-outline-variant/60 bg-surface-container-low/70 px-7 py-4 text-sm font-extrabold text-on-surface transition-colors hover:border-primary hover:text-primary"
+            >
+              Login
+            </Link>
+            <Link
+              to="/login"
+              state={{ mode: 'signup' }}
+              className="gold-gradient inline-flex items-center justify-center rounded-xl px-7 py-4 text-sm font-extrabold text-on-primary transition-all"
+            >
+              Sign Up
+            </Link>
+          </div>
         </div>
 
-        {/* Content */}
-        <h1 className="text-white max-w-2xl font-bold text-headline-xl leading-tight">
-          Precision Racing for the Elite Spectator
-        </h1>
-        <p className="text-white/80 max-w-lg text-body-lg">
-          Experience the pinnacle of equine sports with real-time analytics, high-stakes insights, and world-class coverage of every major track.
-        </p>
-
-        {/* Buttons */}
-        <div className="flex items-center gap-4 mt-4">
-          <button className="bg-secondary text-white px-8 py-4 rounded-md font-semibold flex items-center gap-2 hover:bg-opacity-90 transition-all">
-            View Live Matches
-            <ArrowRight className="w-4 h-4" />
-          </button>
-          <button className="bg-white/10 backdrop-blur-md text-white border border-white/20 px-8 py-4 rounded-md font-semibold hover:bg-white/20 transition-all">
-            Historical Data
-          </button>
+        <div className="grid gap-5 lg:grid-cols-3">
+          {highlights.map((item) => (
+            <article key={item.title} className="glass-panel rounded-2xl p-6">
+              <item.icon className="mb-5 h-7 w-7 text-primary" />
+              <h2 className="font-display text-xl font-bold text-on-surface">{item.title}</h2>
+              <p className="mt-3 text-sm leading-6 text-on-surface-variant">{item.description}</p>
+            </article>
+          ))}
         </div>
-      </div>
-    </section>
+      </section>
+    </main>
   );
 };
 

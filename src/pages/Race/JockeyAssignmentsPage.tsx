@@ -1,5 +1,5 @@
-import { useEffect, useState, type FormEvent } from 'react';
-import { Send, UserCheck } from 'lucide-react';
+import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
+import { Clock3, Send, UserCheck, Users } from 'lucide-react';
 import { getApiErrorMessage } from '../../services/apiClient';
 import { authService } from '../../services/authService';
 import { jockeyAssignmentService, type JockeyAssignmentItem, type JockeyInvitationFormData } from '../../services/jockeyAssignmentService';
@@ -96,23 +96,37 @@ const JockeyAssignmentsPage = () => {
     }
   };
 
+  const pendingAssignments = assignments.filter((item) => String(item.status ?? '').toLowerCase() === 'pending').length;
+
   return (
-    <div className="min-h-screen bg-surface py-12">
-      <div className="mx-auto max-w-container px-4 md:px-margin-desktop">
-        <div className="mb-10">
-          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-secondary">Jockey Assignments</p>
-          <h1 className="mt-2 text-headline-lg font-bold text-primary">Invitation workspace</h1>
+    <div className="min-h-screen bg-surface py-8">
+      <div className="mx-auto max-w-[1440px] px-4 md:px-8">
+        <div className="glass-panel mb-6 rounded-2xl p-6">
+          <div className="flex flex-col gap-6 xl:flex-row xl:items-end xl:justify-between">
+            <div>
+              <p className="text-xs font-bold uppercase tracking-[0.2em] text-secondary">Jockey Dashboard</p>
+              <h1 className="font-display mt-2 text-headline-lg font-extrabold text-primary">Invitation workspace</h1>
+              <p className="mt-2 max-w-2xl text-body-sm text-on-surface-variant">
+                Send, review, accept, and reject jockey invitations in a wide queue layout.
+              </p>
+            </div>
+            <div className="grid min-w-full gap-3 sm:grid-cols-3 xl:min-w-[480px]">
+              <MetricCard icon={<UserCheck className="h-4 w-4" />} label="Invitations" value={String(assignments.length).padStart(2, '0')} />
+              <MetricCard icon={<Clock3 className="h-4 w-4" />} label="Pending" value={String(pendingAssignments).padStart(2, '0')} />
+              <MetricCard icon={<Users className="h-4 w-4" />} label="Jockeys" value={String(jockeys.length).padStart(2, '0')} />
+            </div>
+          </div>
         </div>
 
         {message && <StatusBanner tone="success" text={message} />}
         {errorMessage && <StatusBanner tone="error" text={errorMessage} />}
 
-        <div className="grid gap-8 xl:grid-cols-[0.75fr_1.25fr]">
+        <div className="grid gap-6 xl:grid-cols-[0.7fr_1.3fr]">
           {isOwner && (
-            <section className="rounded-xl border border-outline-variant bg-white p-6 shadow-sm">
+            <section className="glass-panel rounded-xl p-6">
               <div className="mb-5 flex items-center gap-3">
                 <Send className="h-5 w-5 text-secondary" />
-                <h2 className="text-title-large font-bold text-primary">Invite jockey</h2>
+                <h2 className="font-display text-title-large font-bold text-primary">Invite jockey</h2>
               </div>
               <form onSubmit={handleCreate} className="grid gap-4">
                 <NumberInput label="Registration ID" value={form.registrationId} onChange={(value) => setForm((current) => ({ ...current, registrationId: value }))} required />
@@ -130,15 +144,15 @@ const JockeyAssignmentsPage = () => {
                 </label>
                 <NumberInput label="Gate number" value={form.gateNumber ?? 0} onChange={(value) => setForm((current) => ({ ...current, gateNumber: value || undefined }))} />
                 <TextInput label="Status" value={form.status} onChange={(value) => setForm((current) => ({ ...current, status: value }))} />
-                <button className="rounded-md bg-secondary px-5 py-3 text-body-sm font-bold text-white hover:bg-opacity-90">Send Invitation</button>
+                <button className="rounded-lg bg-secondary px-5 py-3 text-body-sm font-bold text-on-secondary hover:bg-opacity-90">Send Invitation</button>
               </form>
             </section>
           )}
 
-          <section className={`rounded-xl border border-outline-variant bg-white p-6 shadow-sm ${isOwner ? '' : 'xl:col-span-2'}`}>
+          <section className={`glass-panel rounded-xl p-6 ${isOwner ? '' : 'xl:col-span-2'}`}>
             <div className="mb-5 flex items-center gap-3">
               <UserCheck className="h-5 w-5 text-secondary" />
-              <h2 className="text-title-large font-bold text-primary">{isJockey ? 'My invitations' : 'Sent invitations'}</h2>
+              <h2 className="font-display text-title-large font-bold text-primary">{isJockey ? 'My invitations' : 'Sent invitations'}</h2>
             </div>
             <div className="overflow-x-auto">
               <table className="w-full text-left">
@@ -166,7 +180,7 @@ const JockeyAssignmentsPage = () => {
                           <div className="flex justify-end gap-2">
                             {isJockey && (
                               <>
-                                <button type="button" onClick={() => handleRespond(id, 'accepted')} className="rounded-md bg-secondary px-3 py-2 text-label-sm font-bold text-white">Accept</button>
+                                <button type="button" onClick={() => handleRespond(id, 'accepted')} className="rounded-md bg-secondary px-3 py-2 text-label-sm font-bold text-on-secondary">Accept</button>
                                 <button type="button" onClick={() => handleRespond(id, 'rejected')} className="rounded-md border border-error/40 px-3 py-2 text-label-sm font-bold text-error">Reject</button>
                               </>
                             )}
@@ -190,6 +204,16 @@ const JockeyAssignmentsPage = () => {
     </div>
   );
 };
+
+const MetricCard = ({ icon, label, value }: { icon: ReactNode; label: string; value: string }) => (
+  <div className="rounded-xl border border-outline-variant/40 bg-surface-container-lowest/70 p-4">
+    <div className="mb-3 flex items-center justify-between text-on-surface-variant">
+      <span className="text-[10px] font-bold uppercase tracking-[0.16em]">{label}</span>
+      <span className="text-primary">{icon}</span>
+    </div>
+    <p className="font-display truncate text-2xl font-extrabold text-on-surface">{value}</p>
+  </div>
+);
 
 const StatusBanner = ({ tone, text }: { tone: 'success' | 'error'; text: string }) => (
   <div className={`mb-6 rounded-md border px-4 py-3 text-body-sm font-semibold ${tone === 'success' ? 'border-secondary/30 bg-secondary-container/30 text-secondary' : 'border-error/30 bg-error-container/20 text-error'}`}>
