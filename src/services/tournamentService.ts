@@ -514,24 +514,48 @@ const cancelMockTournament = (tournamentId: number | string): TournamentApiItem 
 
 export const tournamentService = {
   async getTournaments(status?: string): Promise<TournamentApiItem[]> {
-    const response = await apiClient.get('/api/tournaments/getAll', {
+    const response = await apiClient.get('/api/tournaments/get-tournament-list', {
       params: status ? { status } : undefined,
     });
     return unwrapApiList<TournamentApiItem>(response);
   },
 
-  async getAllTournaments(): Promise<Tournament[]> {
+  async getAllTournaments(useMockFallback = true): Promise<Tournament[]> {
     try {
-      const response = await apiClient.get('/api/tournaments/getAll');
-      return unwrapApiList<RawTournament>(response).map((item, index) => mapApiTournament(item, index));
-    } catch {
+      const response = await apiClient.get('/api/tournaments/get-tournament-list');
+      const tournaments = unwrapApiList<RawTournament>(response);
+
+      return Promise.all(
+        tournaments.map(async (item, index) => {
+          const tournamentId = item.tournamentId ?? item.id;
+
+          if (!tournamentId) {
+            return mapApiTournament(item, index);
+          }
+
+          try {
+            const detailResponse = await apiClient.get(`/api/tournaments/get-tournament/${tournamentId}`);
+            return mapApiTournament({
+              ...item,
+              ...unwrapApiData<RawTournament>(detailResponse),
+            }, index);
+          } catch {
+            return mapApiTournament(item, index);
+          }
+        }),
+      );
+    } catch (error) {
+      if (!useMockFallback) {
+        throw error;
+      }
+
       return getMockTournaments();
     }
   },
 
   async getTournamentById(tournamentId: number | string): Promise<Tournament> {
     try {
-      const response = await apiClient.get(`/api/tournaments/getId/${tournamentId}`);
+      const response = await apiClient.get(`/api/tournaments/get-tournament/${tournamentId}`);
       return mapApiTournament(unwrapApiData<RawTournament>(response), 0);
     } catch {
       return getMockTournamentById(tournamentId);
@@ -540,7 +564,7 @@ export const tournamentService = {
 
   async createTournament(data: TournamentPayloadData): Promise<Tournament> {
     try {
-      const response = await apiClient.post('/api/tournaments/create', cleanTournamentPayload(data));
+      const response = await apiClient.post('/api/tournaments/create-tournament', cleanTournamentPayload(data));
       const apiTournament = mapApiTournament(unwrapApiData<RawTournament>(response), 0);
       return buildTournamentFromData(data, apiTournament.tournamentId, apiTournament);
     } catch {
@@ -550,7 +574,7 @@ export const tournamentService = {
 
   async updateTournament(tournamentId: number | string, data: TournamentPayloadData): Promise<Tournament> {
     try {
-      const response = await apiClient.put(`/api/tournaments/update/${tournamentId}`, cleanTournamentPayload(data));
+      const response = await apiClient.put(`/api/tournaments/update-tournament/${tournamentId}`, cleanTournamentPayload(data));
       const apiTournament = mapApiTournament(unwrapApiData<RawTournament>(response), 0);
       return buildTournamentFromData(data, apiTournament.tournamentId, apiTournament);
     } catch {
@@ -559,22 +583,19 @@ export const tournamentService = {
   },
 
   async deleteTournament(tournamentId: number | string): Promise<void> {
-    try {
-      await apiClient.delete(`/api/tournaments/delete/${tournamentId}`);
-    } catch {
-      const index = findMockTournamentIndex(tournamentId);
+    const index = findMockTournamentIndex(tournamentId);
 
-      if (index === -1) {
-        throw new Error('Tournament not found.');
-      }
-
+    if (index !== -1) {
       mockTournaments = mockTournaments.filter((_, itemIndex) => itemIndex !== index);
+      return;
     }
+
+    throw new Error('Delete tournament API is not available in the backend.');
   },
 
   async cancelTournament(tournamentId: number | string): Promise<TournamentApiItem> {
     try {
-      const response = await apiClient.patch(`/api/tournaments/cancel/${tournamentId}`);
+      const response = await apiClient.patch(`/api/tournaments/cancel-tournament/${tournamentId}`);
       return unwrapApiData<TournamentApiItem>(response);
     } catch {
       return cancelMockTournament(tournamentId);
@@ -583,7 +604,7 @@ export const tournamentService = {
 
   async getTournamentSchedule(tournamentId: number | string): Promise<TournamentMatch[]> {
     try {
-      const response = await apiClient.get(`/api/races/get-by-tournament/${tournamentId}`);
+      const response = await apiClient.get(`/api/v1/admin/tournaments/${tournamentId}/get-schedule-list`);
       return unwrapApiList<RawRecord>(response).map((item, index) => mapApiMatch(item, index));
     } catch {
       return getMockTournamentById(tournamentId).schedule;
