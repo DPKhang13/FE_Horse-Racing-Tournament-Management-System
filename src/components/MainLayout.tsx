@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
-import { Bell, LogOut, Shield, Trophy, User } from 'lucide-react';
+import { Bell, LogIn, LogOut, Trophy, User } from 'lucide-react';
 import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { getAccessToken } from '../services/apiClient';
 import { authService } from '../services/authService';
@@ -149,7 +149,12 @@ const MainLayout = ({ children }: { children: ReactNode }) => {
   );
 };
 
-const landingNavItems = ['Home', 'Schedules', 'Live Odds', 'Rankings'];
+const landingNavItems = [
+  { label: 'Home', to: '#home' },
+  { label: 'Tournaments', to: '#tournaments' },
+  { label: 'Live Odds', to: '#live-odds' },
+  { label: 'Rankings', to: '#rankings' },
+];
 
 const LandingTopBar = ({
   isAuthenticated,
@@ -158,28 +163,49 @@ const LandingTopBar = ({
   isAuthenticated: boolean;
   profile?: UserProfile;
 }) => {
+  const [isScrolled, setIsScrolled] = useState(false);
   const dashboardRoute = profile?.roleType === 'spectator'
     ? '/spectator-dashboard'
     : getDefaultRouteForRole(profile?.roleType);
 
-  return (
-    <header className="sticky top-0 z-50 border-b border-outline-variant/40 bg-surface-container-low/80 px-4 py-4 shadow-lg shadow-black/10 backdrop-blur-xl md:px-8">
-      <div className="mx-auto flex max-w-[1440px] items-center justify-between gap-4">
-        <Link to="/" className="flex items-center gap-3">
-          <span className="gold-gradient flex h-9 w-9 items-center justify-center rounded-lg shadow-lg shadow-primary/10">
-            <Trophy className="h-5 w-5 text-on-primary" />
-          </span>
-          <span className="font-display text-xl font-extrabold text-primary">HTMS</span>
-        </Link>
+  useEffect(() => {
+    const handleScroll = () => {
+      setIsScrolled(window.scrollY > 80);
+    };
 
-        <nav className="hidden items-center gap-8 md:flex">
+    handleScroll();
+    window.addEventListener('scroll', handleScroll, { passive: true });
+
+    return () => {
+      window.removeEventListener('scroll', handleScroll);
+    };
+  }, []);
+
+  return (
+    <header
+      className={`fixed z-50 transition-all duration-500 ease-out ${
+        isScrolled
+          ? 'left-1/2 top-4 h-14 w-[calc(100%-2rem)] max-w-5xl -translate-x-1/2 rounded-full border border-outline-variant/40 bg-surface-container-low/75 px-5 shadow-2xl shadow-black/30 backdrop-blur-2xl md:px-7'
+          : 'left-0 top-0 h-16 w-full border-b border-outline-variant/30 bg-surface-container-low/80 px-8 shadow-sm backdrop-blur-md md:px-32'
+      }`}
+    >
+      <div className="flex h-full items-center justify-between gap-4">
+        <a href="#home" className={`font-display font-bold text-primary transition-all ${isScrolled ? 'text-lg' : 'text-xl'}`}>
+          HTMS
+        </a>
+
+        <nav className={`hidden items-center transition-all md:flex ${isScrolled ? 'space-x-5' : 'space-x-8'}`}>
           {landingNavItems.map((item) => (
             <a
-              key={item}
-              href="#"
-              className="text-xs font-bold uppercase tracking-[0.14em] text-on-surface-variant transition-colors hover:text-primary"
+              key={item.label}
+              href={item.to}
+              className={`text-label-md font-semibold transition-colors ${
+                item.label === 'Home'
+                  ? 'border-b-2 border-primary pb-1 text-primary'
+                  : 'text-on-surface-variant hover:text-on-surface'
+              }`}
             >
-              {item}
+              {item.label}
             </a>
           ))}
         </nav>
@@ -187,15 +213,13 @@ const LandingTopBar = ({
         <div className="flex items-center gap-3">
           {isAuthenticated ? (
             <>
-              <span className="hidden rounded-full border border-secondary/40 bg-secondary-container/20 px-3 py-1 text-xs font-bold uppercase tracking-[0.14em] text-secondary sm:inline-flex">
-                Logged in
-              </span>
+              <Bell className="h-5 w-5 text-on-surface-variant" />
               <Link
                 to={dashboardRoute}
-                className="flex h-10 w-10 items-center justify-center rounded-full border border-outline-variant/50 text-on-surface-variant transition-colors hover:border-primary hover:text-primary"
+                className="gold-gradient rounded-lg px-6 py-2 text-label-md font-bold text-on-primary transition-transform active:scale-95"
                 aria-label="Open dashboard"
               >
-                <User className="h-5 w-5" />
+                Join the Race
               </Link>
             </>
           ) : (
@@ -203,17 +227,22 @@ const LandingTopBar = ({
               <Link
                 to="/login"
                 state={{ mode: 'login' }}
-                className="rounded-lg border border-outline-variant/50 px-5 py-2 text-sm font-bold text-on-surface-variant transition-colors hover:border-primary hover:text-primary"
+                className={`inline-flex items-center justify-center rounded-lg font-bold text-on-surface-variant transition-all hover:bg-surface-container-highest/50 hover:text-primary ${
+                  isScrolled ? 'h-10 w-10 rounded-full p-0' : 'px-5 py-2 text-sm'
+                }`}
+                aria-label="Login"
+                title="Login"
               >
-                Login
+                {isScrolled ? <LogIn className="h-5 w-5" /> : 'Login'}
               </Link>
               <Link
                 to="/login"
                 state={{ mode: 'signup' }}
-                className="gold-gradient inline-flex items-center gap-2 rounded-lg px-5 py-2 text-sm font-extrabold text-on-primary transition-all"
+                className={`gold-gradient rounded-lg text-label-md font-bold text-on-primary transition-all active:scale-95 ${
+                  isScrolled ? 'px-4 py-2' : 'px-6 py-2'
+                }`}
               >
-                <Shield className="h-4 w-4" />
-                Sign Up
+                Join the Race
               </Link>
             </>
           )}

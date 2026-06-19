@@ -1,0 +1,568 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>HTMS Admin Dashboard | System Control</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700;800&amp;family=Inter:wght@400;500;600&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "outline": "#99907c",
+                        "on-secondary": "#003909",
+                        "background": "#0b1326",
+                        "surface": "#0b1326",
+                        "on-tertiary-fixed-variant": "#93000e",
+                        "inverse-surface": "#dae2fd",
+                        "on-secondary-fixed": "#002204",
+                        "on-primary-fixed": "#241a00",
+                        "surface-dim": "#0b1326",
+                        "surface-container-high": "#222a3d",
+                        "on-primary-fixed-variant": "#574500",
+                        "secondary": "#88d982",
+                        "tertiary-container": "#ff968c",
+                        "surface-container-lowest": "#060e20",
+                        "tertiary-fixed-dim": "#ffb4ac",
+                        "surface-container-highest": "#2d3449",
+                        "surface-container-low": "#131b2e",
+                        "surface-tint": "#e9c349",
+                        "surface-bright": "#31394d",
+                        "error-container": "#93000a",
+                        "error": "#ffb4ab",
+                        "on-surface-variant": "#d0c5af",
+                        "on-error-container": "#ffdad6",
+                        "tertiary": "#ffbfb8",
+                        "surface-variant": "#2d3449",
+                        "inverse-primary": "#735c00",
+                        "on-tertiary": "#690007",
+                        "outline-variant": "#4d4635",
+                        "inverse-on-surface": "#283044",
+                        "primary-fixed": "#ffe088",
+                        "secondary-container": "#005b14",
+                        "on-primary": "#3c2f00",
+                        "primary-container": "#d4af37",
+                        "on-surface": "#dae2fd",
+                        "on-background": "#dae2fd",
+                        "primary-fixed-dim": "#e9c349",
+                        "primary": "#f2ca50",
+                        "on-primary-container": "#554300",
+                        "on-secondary-fixed-variant": "#005312",
+                        "on-tertiary-container": "#90000e",
+                        "tertiary-fixed": "#ffdad6",
+                        "surface-container": "#171f33",
+                        "secondary-fixed-dim": "#88d982",
+                        "on-error": "#690005",
+                        "on-tertiary-fixed": "#410003",
+                        "on-secondary-container": "#81d27c",
+                        "secondary-fixed": "#a3f69c"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    "spacing": {
+                        "unit": "4px",
+                        "margin-mobile": "16px",
+                        "margin-desktop": "32px",
+                        "gutter": "16px",
+                        "container-max": "1440px"
+                    },
+                    "fontFamily": {
+                        "body-lg": ["Inter"],
+                        "display-lg": ["Montserrat"],
+                        "label-md": ["Inter"],
+                        "headline-lg-mobile": ["Montserrat"],
+                        "data-mono": ["Inter"],
+                        "headline-lg": ["Montserrat"],
+                        "headline-md": ["Montserrat"],
+                        "body-md": ["Inter"],
+                        "body-sm": ["Inter"]
+                    },
+                    "fontSize": {
+                        "body-lg": ["18px", {"lineHeight": "28px", "fontWeight": "400"}],
+                        "display-lg": ["48px", {"lineHeight": "56px", "letterSpacing": "-0.02em", "fontWeight": "800"}],
+                        "label-md": ["12px", {"lineHeight": "16px", "letterSpacing": "0.05em", "fontWeight": "600"}],
+                        "headline-lg-mobile": ["24px", {"lineHeight": "32px", "fontWeight": "700"}],
+                        "data-mono": ["14px", {"lineHeight": "20px", "fontWeight": "500"}],
+                        "headline-lg": ["32px", {"lineHeight": "40px", "letterSpacing": "-0.01em", "fontWeight": "700"}],
+                        "headline-md": ["20px", {"lineHeight": "28px", "fontWeight": "600"}],
+                        "body-md": ["16px", {"lineHeight": "24px", "fontWeight": "400"}],
+                        "body-sm": ["14px", {"lineHeight": "20px", "fontWeight": "400"}]
+                    }
+                },
+            },
+        }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+            display: inline-block;
+            vertical-align: middle;
+        }
+        .glass-card {
+            background: rgba(30, 41, 59, 0.7);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(51, 65, 85, 0.5);
+        }
+        .tote-number {
+            font-family: 'Inter', monospace;
+            color: #88d982; /* Turf Green equivalent */
+        }
+        .gold-gradient {
+            background: linear-gradient(135deg, #f2ca50 0%, #d4af37 100%);
+        }
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #0b1326;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #2d3449;
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #4d4635;
+        }
+    </style>
+</head>
+<body class="bg-background text-on-background font-body-md selection:bg-primary-container selection:text-on-primary-container">
+<!-- TopNavBar -->
+<header class="fixed top-0 left-0 w-full z-50 flex justify-between items-center px-margin-desktop h-16 bg-surface-container-high border-b border-outline-variant shadow-md">
+<div class="flex items-center gap-4">
+<div class="flex items-center gap-2 font-display-lg text-headline-md font-extrabold text-primary">
+<img alt="HTMS Logo" class="h-8 w-8 object-contain" src="https://lh3.googleusercontent.com/aida/AP1WRLsc3y8b8SyL_FvEx4lw6irnAQgXaQa58L8Hk8rg6f69oJSPyhAz6yuITq-IbdVE309lYWgLK2YQeUN9N0EkPWsq5pCz_bSKGR8zsfk2diylYUDiwk3iRmbs2ze0xevj0NZGdV67ran_L_yvIMoXNC3VLCMAnFTM-ODr2JohTpfv0yOPyQT-LsDIDpwnkoT483-5jaXhVW8rZbRAEM_Xa0BWm8O60DqPI-K0UOF6mB9tt4w_LU9uIcd8LSFi"/>
+<span>HTMS</span>
+</div>
+<nav class="hidden md:flex ml-10 gap-6">
+<a class="text-primary font-bold border-b-2 border-primary pb-1 font-body-md transition-colors" href="#">Dashboard</a>
+<a class="text-on-surface-variant font-medium hover:bg-surface-bright transition-colors duration-200 px-3 py-1 rounded-lg" href="#">Management</a>
+<a class="text-on-surface-variant font-medium hover:bg-surface-bright transition-colors duration-200 px-3 py-1 rounded-lg" href="#">Analytics</a>
+<a class="text-on-surface-variant font-medium hover:bg-surface-bright transition-colors duration-200 px-3 py-1 rounded-lg" href="#">Financials</a>
+</nav>
+</div>
+<div class="flex items-center gap-4">
+<div class="relative hidden lg:block">
+<span class="absolute left-3 top-1/2 -translate-y-1/2 material-symbols-outlined text-on-surface-variant text-sm">search</span>
+<input class="bg-surface-container-low border-none rounded-full pl-10 pr-4 py-1.5 text-body-sm focus:ring-2 focus:ring-primary w-64" placeholder="Search system records..." type="text"/>
+</div>
+<div class="flex items-center gap-2">
+<button class="p-2 text-on-surface-variant hover:bg-surface-bright rounded-full cursor-pointer active:scale-95 transition-transform">
+<span class="material-symbols-outlined">notifications</span>
+</button>
+<button class="p-2 text-on-surface-variant hover:bg-surface-bright rounded-full cursor-pointer active:scale-95 transition-transform">
+<span class="material-symbols-outlined">settings</span>
+</button>
+<div class="h-8 w-8 rounded-full bg-primary-container flex items-center justify-center text-on-primary-container font-bold text-xs border border-primary">
+                    AD
+                </div>
+</div>
+</div>
+</header>
+<!-- SideNavBar -->
+<aside class="fixed left-0 top-16 h-[calc(100vh-64px)] w-64 flex flex-col p-4 z-40 bg-surface-container border-r border-outline-variant shadow-lg hidden md:flex">
+<div class="flex flex-col gap-1 flex-1">
+<div class="mb-6 px-2">
+<h3 class="text-primary font-bold font-headline-md">HTMS Pro</h3>
+<p class="text-on-surface-variant text-body-sm">Stable Manager v4.2</p>
+</div>
+<a class="flex items-center gap-3 px-4 py-3 bg-primary-container text-on-primary-container rounded-lg font-bold transition-all active:translate-x-1" href="#">
+<span class="material-symbols-outlined">dashboard</span>
+<span class="font-label-md">Dashboard</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 text-on-surface-variant hover:text-on-surface hover:bg-surface-variant rounded-lg transition-all active:translate-x-1" href="#">
+<span class="material-symbols-outlined">person</span>
+<span class="font-label-md">User Management</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 text-on-surface-variant hover:text-on-surface hover:bg-surface-variant rounded-lg transition-all active:translate-x-1" href="#">
+<span class="material-symbols-outlined">emoji_events</span>
+<span class="font-label-md">Tournament CRUD</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 text-on-surface-variant hover:text-on-surface hover:bg-surface-variant rounded-lg transition-all active:translate-x-1" href="#">
+<span class="material-symbols-outlined">payments</span>
+<span class="font-label-md">Financial Reports</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 text-on-surface-variant hover:text-on-surface hover:bg-surface-variant rounded-lg transition-all active:translate-x-1" href="#">
+<span class="material-symbols-outlined">bedroom_parent</span>
+<span class="font-label-md">Stables</span>
+</a>
+<div class="mt-auto pt-6 border-t border-outline-variant">
+<button class="w-full gold-gradient text-on-primary-container font-bold py-3 rounded-lg flex items-center justify-center gap-2 shadow-lg active:scale-95 transition-transform">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">bolt</span>
+                    Live Race Feed
+                </button>
+</div>
+</div>
+<div class="mt-4 flex flex-col gap-1">
+<a class="flex items-center gap-3 px-4 py-3 text-on-surface-variant hover:text-on-surface hover:bg-surface-variant rounded-lg transition-all" href="#">
+<span class="material-symbols-outlined">logout</span>
+<span class="font-label-md">Logout</span>
+</a>
+</div>
+</aside>
+<!-- Main Content Canvas -->
+<main class="md:ml-64 pt-20 px-margin-mobile md:px-margin-desktop pb-12">
+<!-- Dashboard Header -->
+<div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
+<div>
+<h1 class="font-headline-lg text-headline-lg text-on-background">System Controller</h1>
+<p class="text-on-surface-variant font-body-md">Global overview and administrative actions.</p>
+</div>
+<div class="flex gap-3">
+<div class="flex items-center gap-2 bg-surface-container-high px-4 py-2 rounded-lg border border-outline-variant">
+<span class="w-3 h-3 bg-secondary rounded-full animate-pulse"></span>
+<span class="text-label-md text-secondary">SYSTEM ONLINE</span>
+</div>
+<button class="bg-surface-container-highest text-on-surface px-4 py-2 rounded-lg font-bold flex items-center gap-2 hover:bg-surface-bright transition-colors border border-outline-variant">
+<span class="material-symbols-outlined text-sm">download</span>
+                    Export PDF
+                </button>
+</div>
+</div>
+<!-- Global KPIs: Bento Grid -->
+<div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+<!-- KPI 1 -->
+<div class="glass-card p-6 rounded-xl flex flex-col relative overflow-hidden group">
+<div class="absolute -right-4 -bottom-4 opacity-10 group-hover:opacity-20 transition-opacity">
+<span class="material-symbols-outlined text-8xl">emoji_events</span>
+</div>
+<div class="flex justify-between items-start mb-4">
+<span class="text-label-md text-primary tracking-widest">TOTAL TOURNAMENTS</span>
+<span class="text-secondary text-body-sm font-bold flex items-center">+12% <span class="material-symbols-outlined text-sm">trending_up</span></span>
+</div>
+<div class="text-display-lg font-display-lg text-on-surface mb-1">1,284</div>
+<div class="text-body-sm text-on-surface-variant">42 Active currently</div>
+</div>
+<!-- KPI 2 -->
+<div class="glass-card p-6 rounded-xl flex flex-col relative overflow-hidden group">
+<div class="absolute -right-4 -bottom-4 opacity-10 group-hover:opacity-20 transition-opacity">
+<span class="material-symbols-outlined text-8xl">group</span>
+</div>
+<div class="flex justify-between items-start mb-4">
+<span class="text-label-md text-primary tracking-widest">ACTIVE USERS</span>
+<span class="text-secondary text-body-sm font-bold flex items-center">+8k <span class="material-symbols-outlined text-sm">person_add</span></span>
+</div>
+<div class="text-display-lg font-display-lg text-on-surface mb-1">142.5k</div>
+<div class="text-body-sm text-on-surface-variant">Real-time concurrent: 12.1k</div>
+</div>
+<!-- KPI 3 -->
+<div class="glass-card p-6 rounded-xl flex flex-col relative overflow-hidden group border-l-4 border-l-primary">
+<div class="absolute -right-4 -bottom-4 opacity-10 group-hover:opacity-20 transition-opacity">
+<span class="material-symbols-outlined text-8xl">monetization_on</span>
+</div>
+<div class="flex justify-between items-start mb-4">
+<span class="text-label-md text-primary tracking-widest">BETTING VOLUME</span>
+<span class="text-primary text-body-sm font-bold flex items-center">VIP <span class="material-symbols-outlined text-sm">star</span></span>
+</div>
+<div class="flex items-baseline gap-1">
+<span class="text-display-lg font-display-lg text-on-surface">$</span>
+<span class="text-display-lg font-display-lg text-on-surface">4.2M</span>
+</div>
+<div class="text-body-sm text-on-surface-variant">Last 24 hours (GMT)</div>
+</div>
+</div>
+<!-- Main Dashboard Section: Analytics and Tasks -->
+<div class="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+<!-- Tournament Health Chart Area -->
+<div class="lg:col-span-8 flex flex-col gap-8">
+<div class="glass-card rounded-xl p-6 h-[400px] flex flex-col">
+<div class="flex justify-between items-center mb-6">
+<h2 class="font-headline-md text-headline-md flex items-center gap-2">
+<span class="material-symbols-outlined text-primary">analytics</span>
+                            Tournament Health Index
+                        </h2>
+<div class="flex gap-2">
+<button class="px-3 py-1 rounded bg-surface-container-highest text-label-md">WEEK</button>
+<button class="px-3 py-1 rounded text-on-surface-variant text-label-md hover:bg-surface-bright">MONTH</button>
+</div>
+</div>
+<div class="flex-1 flex items-end justify-between gap-4 px-4 pb-4">
+<!-- Pseudo-Chart Visualization -->
+<div class="w-full h-full flex flex-col justify-end">
+<div class="flex items-end justify-between w-full h-[80%] gap-2">
+<div class="w-full bg-surface-variant relative group rounded-t-sm" style="height: 60%;">
+<div class="absolute inset-0 bg-primary opacity-20 group-hover:opacity-40 transition-opacity"></div>
+<div class="absolute -top-8 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity text-xs bg-surface-bright p-1 rounded">82%</div>
+</div>
+<div class="w-full bg-surface-variant relative group rounded-t-sm" style="height: 45%;">
+<div class="absolute inset-0 bg-primary opacity-20 group-hover:opacity-40 transition-opacity"></div>
+<div class="absolute -top-8 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity text-xs bg-surface-bright p-1 rounded">68%</div>
+</div>
+<div class="w-full bg-surface-variant relative group rounded-t-sm" style="height: 85%;">
+<div class="absolute inset-0 bg-primary opacity-20 group-hover:opacity-40 transition-opacity"></div>
+<div class="absolute -top-8 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity text-xs bg-surface-bright p-1 rounded">94%</div>
+</div>
+<div class="w-full bg-surface-variant relative group rounded-t-sm" style="height: 70%;">
+<div class="absolute inset-0 bg-primary opacity-20 group-hover:opacity-40 transition-opacity"></div>
+<div class="absolute -top-8 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity text-xs bg-surface-bright p-1 rounded">88%</div>
+</div>
+<div class="w-full bg-surface-variant relative group rounded-t-sm" style="height: 55%;">
+<div class="absolute inset-0 bg-primary opacity-20 group-hover:opacity-40 transition-opacity"></div>
+<div class="absolute -top-8 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity text-xs bg-surface-bright p-1 rounded">72%</div>
+</div>
+<div class="w-full bg-surface-variant relative group rounded-t-sm" style="height: 95%;">
+<div class="absolute inset-0 bg-primary opacity-20 group-hover:opacity-40 transition-opacity"></div>
+<div class="absolute -top-8 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity text-xs bg-surface-bright p-1 rounded">99%</div>
+</div>
+<div class="w-full bg-primary relative group rounded-t-sm shadow-[0_0_15px_rgba(242,202,80,0.3)]" style="height: 78%;">
+<div class="absolute -top-8 left-1/2 -translate-x-1/2 opacity-100 text-xs bg-primary text-on-primary-container font-bold p-1 rounded">LIVE</div>
+</div>
+</div>
+<div class="flex justify-between mt-4 text-label-md text-on-surface-variant">
+<span>MON</span><span>TUE</span><span>WED</span><span>THU</span><span>FRI</span><span>SAT</span><span>SUN</span>
+</div>
+</div>
+</div>
+</div>
+<!-- Pending Approvals Table -->
+<div class="glass-card rounded-xl overflow-hidden">
+<div class="p-6 border-b border-outline-variant flex justify-between items-center bg-surface-container-highest/30">
+<h2 class="font-headline-md text-headline-md">Pending Approvals</h2>
+<span class="bg-error-container text-on-error-container px-2 py-0.5 rounded text-label-md">14 ACTION REQUIRED</span>
+</div>
+<div class="overflow-x-auto">
+<table class="w-full text-left">
+<thead>
+<tr class="bg-surface-container-highest/20 text-on-surface-variant border-b border-outline-variant">
+<th class="px-6 py-4 font-label-md">IDENTIFIER</th>
+<th class="px-6 py-4 font-label-md">ROLE</th>
+<th class="px-6 py-4 font-label-md">STABLE/TEAM</th>
+<th class="px-6 py-4 font-label-md">VERIFICATION</th>
+<th class="px-6 py-4 font-label-md">ACTIONS</th>
+</tr>
+</thead>
+<tbody class="divide-y divide-outline-variant/30">
+<tr class="hover:bg-surface-bright/20 transition-colors">
+<td class="px-6 py-4">
+<div class="flex items-center gap-3">
+<div class="w-10 h-10 rounded-full bg-surface-container-high border border-outline flex items-center justify-center font-bold">JD</div>
+<div>
+<div class="text-body-md font-bold text-on-surface">Julian De Marco</div>
+<div class="text-body-sm text-on-surface-variant">j.demarco@prostable.com</div>
+</div>
+</div>
+</td>
+<td class="px-6 py-4">
+<span class="text-label-md uppercase border border-primary/50 text-primary px-2 py-1 rounded">Stable Owner</span>
+</td>
+<td class="px-6 py-4 font-data-mono">Thunder Ridge Stables</td>
+<td class="px-6 py-4">
+<div class="flex items-center gap-1 text-secondary">
+<span class="material-symbols-outlined text-sm">verified_user</span>
+<span class="text-body-sm">KYC Passed</span>
+</div>
+</td>
+<td class="px-6 py-4">
+<div class="flex gap-2">
+<button class="p-1.5 bg-secondary-container text-on-secondary-container rounded hover:brightness-110 transition-all">
+<span class="material-symbols-outlined">check</span>
+</button>
+<button class="p-1.5 bg-error-container text-on-error-container rounded hover:brightness-110 transition-all">
+<span class="material-symbols-outlined">close</span>
+</button>
+</div>
+</td>
+</tr>
+<tr class="hover:bg-surface-bright/20 transition-colors">
+<td class="px-6 py-4">
+<div class="flex items-center gap-3">
+<div class="w-10 h-10 rounded-full bg-surface-container-high border border-outline overflow-hidden">
+<img class="w-full h-full object-cover" data-alt="A professional close-up headshot of a jockey wearing racing silks, set against a blurred horse racing track background. The lighting is crisp and cinematic, emphasizing a serious and determined expression. The color palette is dominated by deep navy and gold highlights." src="https://lh3.googleusercontent.com/aida-public/AB6AXuArMdsBhsWOUUKtvpdN_Jc50H4HM07Mq-amXSXk5Zdxp-rDxsfIARes12ezIvLyXu1esNXB72xi6JgnpywjaACcjMeO1DwKKY6p1wUobH1zmC4cAtJDeijW378TVGc0Vy516P6bUMlilai5fBRGj8pCV9mNDgVkJsy1pqxmFKVU4UyU-C5wfteC-XKzbpj6OTuxNxLUzqli1mXH1V4HkANmAylMi42drKNZwWyPbVGWdHXt9x14-stidG3e1HgjpqpmwZwO8R2NV566"/>
+</div>
+<div>
+<div class="text-body-md font-bold text-on-surface">Sarah Sterling</div>
+<div class="text-body-sm text-on-surface-variant">s.sterling@racing.io</div>
+</div>
+</div>
+</td>
+<td class="px-6 py-4">
+<span class="text-label-md uppercase border border-outline text-on-surface-variant px-2 py-1 rounded">Jockey</span>
+</td>
+<td class="px-6 py-4 font-data-mono">Independent</td>
+<td class="px-6 py-4">
+<div class="flex items-center gap-1 text-on-surface-variant">
+<span class="material-symbols-outlined text-sm">schedule</span>
+<span class="text-body-sm">Pending KYC</span>
+</div>
+</td>
+<td class="px-6 py-4">
+<div class="flex gap-2">
+<button class="p-1.5 bg-secondary-container text-on-secondary-container rounded hover:brightness-110 transition-all">
+<span class="material-symbols-outlined">check</span>
+</button>
+<button class="p-1.5 bg-error-container text-on-error-container rounded hover:brightness-110 transition-all">
+<span class="material-symbols-outlined">close</span>
+</button>
+</div>
+</td>
+</tr>
+<tr class="hover:bg-surface-bright/20 transition-colors">
+<td class="px-6 py-4">
+<div class="flex items-center gap-3">
+<div class="w-10 h-10 rounded-full bg-surface-container-high border border-outline flex items-center justify-center font-bold">BK</div>
+<div>
+<div class="text-body-md font-bold text-on-surface">Bradley Knight</div>
+<div class="text-body-sm text-on-surface-variant">knight.b@globalturf.com</div>
+</div>
+</div>
+</td>
+<td class="px-6 py-4">
+<span class="text-label-md uppercase border border-primary/50 text-primary px-2 py-1 rounded">Stable Owner</span>
+</td>
+<td class="px-6 py-4 font-data-mono">Emerald Fields</td>
+<td class="px-6 py-4">
+<div class="flex items-center gap-1 text-secondary">
+<span class="material-symbols-outlined text-sm">verified_user</span>
+<span class="text-body-sm">KYC Passed</span>
+</div>
+</td>
+<td class="px-6 py-4">
+<div class="flex gap-2">
+<button class="p-1.5 bg-secondary-container text-on-secondary-container rounded hover:brightness-110 transition-all">
+<span class="material-symbols-outlined">check</span>
+</button>
+<button class="p-1.5 bg-error-container text-on-error-container rounded hover:brightness-110 transition-all">
+<span class="material-symbols-outlined">close</span>
+</button>
+</div>
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="p-4 bg-surface-container-high/50 text-center">
+<button class="text-primary font-bold hover:underline text-body-sm">View all 14 pending requests</button>
+</div>
+</div>
+</div>
+<!-- Side Panels: System Alerts & Recent Logs -->
+<div class="lg:col-span-4 flex flex-col gap-6">
+<!-- Tote Board / Live Events -->
+<div class="bg-surface-container-highest border border-outline-variant rounded-xl p-6 shadow-xl relative overflow-hidden">
+<div class="absolute top-0 left-0 w-1 h-full bg-primary"></div>
+<div class="flex justify-between items-center mb-6">
+<h3 class="font-headline-md text-headline-md uppercase tracking-tighter">Live Odds Feed</h3>
+<span class="bg-secondary text-on-secondary px-2 py-0.5 rounded text-[10px] font-bold">REAL-TIME</span>
+</div>
+<div class="space-y-4">
+<div class="flex justify-between items-center p-3 bg-background/50 rounded border border-outline-variant/30">
+<div>
+<span class="text-label-md text-on-surface-variant block">RACE #402 - ASCOT</span>
+<span class="font-bold">Midnight Shadow</span>
+</div>
+<div class="tote-number text-xl font-bold">2.45</div>
+</div>
+<div class="flex justify-between items-center p-3 bg-background/50 rounded border border-outline-variant/30">
+<div>
+<span class="text-label-md text-on-surface-variant block">RACE #402 - ASCOT</span>
+<span class="font-bold">Golden Mane</span>
+</div>
+<div class="tote-number text-xl font-bold">5.10</div>
+</div>
+<div class="flex justify-between items-center p-3 bg-background/50 rounded border border-outline-variant/30">
+<div>
+<span class="text-label-md text-on-surface-variant block">RACE #405 - EPSOM</span>
+<span class="font-bold">Silver Streak</span>
+</div>
+<div class="tote-number text-xl font-bold">1.85</div>
+</div>
+</div>
+<button class="w-full mt-6 py-2 border border-outline-variant rounded hover:bg-surface-bright transition-colors text-body-sm font-medium">
+                        Open Betting Control Center
+                    </button>
+</div>
+<!-- Recent Activity Log -->
+<div class="glass-card rounded-xl p-6">
+<h3 class="font-headline-md text-headline-md mb-6">System Logs</h3>
+<div class="space-y-4">
+<div class="flex gap-4">
+<div class="mt-1">
+<span class="material-symbols-outlined text-primary text-sm">settings</span>
+</div>
+<div>
+<p class="text-body-sm text-on-surface">Tournament #882 auto-finalized by system controller.</p>
+<span class="text-label-md text-on-surface-variant">2 mins ago</span>
+</div>
+</div>
+<div class="flex gap-4">
+<div class="mt-1">
+<span class="material-symbols-outlined text-secondary text-sm">person_add</span>
+</div>
+<div>
+<p class="text-body-sm text-on-surface">New owner 'Vanguard Stables' registered and verified.</p>
+<span class="text-label-md text-on-surface-variant">14 mins ago</span>
+</div>
+</div>
+<div class="flex gap-4">
+<div class="mt-1">
+<span class="material-symbols-outlined text-tertiary text-sm">warning</span>
+</div>
+<div>
+<p class="text-body-sm text-on-surface">Latency spike detected in Asian server cluster node 04.</p>
+<span class="text-label-md text-on-surface-variant">45 mins ago</span>
+</div>
+</div>
+<div class="flex gap-4">
+<div class="mt-1">
+<span class="material-symbols-outlined text-primary text-sm">payments</span>
+</div>
+<div>
+<p class="text-body-sm text-on-surface">Weekly payout cycle of $1.2M initiated.</p>
+<span class="text-label-md text-on-surface-variant">1 hour ago</span>
+</div>
+</div>
+</div>
+</div>
+<!-- Promotional / Hero Banner -->
+<div class="relative h-48 rounded-xl overflow-hidden group">
+<div class="absolute inset-0 bg-cover bg-center group-hover:scale-105 transition-transform duration-700" data-alt="A sweeping wide-angle shot of a majestic horse racing stadium at night, illuminated by intense floodlights that create a high-contrast dramatic effect. The grass track is a vibrant emerald green, and the stands are filled with the blurry shapes of a crowd. The overall aesthetic is professional, sleek, and high-energy with a deep navy and gold atmosphere." style="background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuC9djPn4B2XFFzOoskXUT6pkbjn7pSdEpZJm-BloLiNb22BC92ryef3YEAEgU3RS5UW4QAFxvbi_NuAKvMjP0AHG_fyHHsDStoaU4t-YFcN_CUeCllfmfw8LNqhy0PGhkS3Fzk0TP8YF28CL2oh8Egj_vsFeA6_VEGfySWQOGrPPafI8_4LilmWING_poB9_Q7_Jtg19Emn6P3kxAQQcNsn4A63KD189AHASnEI5mpkv0RyychsyIXBywTocY6XKdSgdKzy3LhrvpT4')"></div>
+<div class="absolute inset-0 bg-gradient-to-t from-background via-background/40 to-transparent"></div>
+<div class="absolute bottom-4 left-4 right-4">
+<h4 class="font-bold text-headline-md text-white">Elite Stable Series</h4>
+<p class="text-body-sm text-on-surface-variant">Launch scheduled for Q4</p>
+</div>
+</div>
+</div>
+</div>
+</main>
+<!-- Contextual FAB (Only on Main Dash) -->
+<button class="fixed bottom-8 right-8 w-14 h-14 gold-gradient text-on-primary rounded-full shadow-2xl flex items-center justify-center cursor-pointer active:scale-95 transition-transform z-50 group">
+<span class="material-symbols-outlined text-3xl group-hover:rotate-90 transition-transform duration-300">add</span>
+</button>
+<script>
+        // Micro-interactions and real-time feel simulation
+        document.addEventListener('DOMContentLoaded', () => {
+            // Randomize tote numbers slightly every 5 seconds to simulate live data
+            setInterval(() => {
+                const toteNumbers = document.querySelectorAll('.tote-number');
+                toteNumbers.forEach(el => {
+                    const current = parseFloat(el.innerText);
+                    const change = (Math.random() * 0.1 - 0.05).toFixed(2);
+                    const newVal = (current + parseFloat(change)).toFixed(2);
+                    if (newVal > 1.01) {
+                        el.innerText = newVal;
+                        el.classList.add('text-secondary');
+                        setTimeout(() => el.classList.remove('text-secondary'), 1000);
+                    }
+                });
+            }, 5000);
+
+            // Simple active state toggle for nav (demo only)
+            const navLinks = document.querySelectorAll('nav a, aside a');
+            navLinks.forEach(link => {
+                link.addEventListener('click', (e) => {
+                    // Logic to handle active navigation visually could go here
+                    // e.preventDefault();
+                });
+            });
+        });
+    </script>
+</body></html>

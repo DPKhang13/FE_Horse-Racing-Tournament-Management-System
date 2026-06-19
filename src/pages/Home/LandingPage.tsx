@@ -1,15 +1,495 @@
-import Hero from '../../components/Hero';
-import StatsSection from '../../components/StatsSection';
-import TrendingRaces from '../../components/TrendingRaces';
+import { useEffect, useMemo, useState } from 'react';
+import { ArrowRight, Eye, Gavel, Globe2, MessageCircle, PawPrint, Share2, Zap } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { getApiErrorMessage } from '../../services/apiClient';
+import { tournamentService } from '../../services/tournamentService';
+import type { Tournament, TournamentMatch, TournamentParticipant } from '../../types/tournament';
+
+const heroImage =
+  'https://lh3.googleusercontent.com/aida-public/AB6AXuAMECLOWNrDaYZayptmiktWx0wBNF3DYXYJFdqOmb7f0lbXELzFaizKIcqgCq655F9mfHQjMB4vV33zITEW68yWnSuVEElxHx5KKUrWfVL4ic11vvHju-2VZM7SItLPqX0z9udU8nLv8BQn-tI0WX8QXMYGBOo7h94yX5vlu8dOnTsd4GyzD93O_OBwAU1AG5ZCrCV8J9UMrVtaOB5KBBuol1OhNNGNy9VI8w9B0GDqcbDMR1kHiIAkYp73T3-E2huQ5Tsu20hvvvjc';
+
+const featureCards = [
+  {
+    title: 'Manage Your Stable',
+    description: 'Track horse health, pedigree, and tournament eligibility through a high-performance dashboard designed for owners.',
+    action: 'Explore Owner Tools',
+    tone: 'text-primary',
+    iconWrap: 'bg-primary-container/20 text-primary',
+    icon: PawPrint,
+  },
+  {
+    title: 'Premium Betting Experience',
+    description: 'Real-time Tote boards, AI-powered odds tracking, and seamless betting integrations for the ultimate fan engagement.',
+    action: 'Start Betting',
+    tone: 'text-secondary',
+    iconWrap: 'bg-secondary-container/20 text-secondary',
+    icon: Eye,
+    featured: true,
+  },
+  {
+    title: 'Precision Reporting',
+    description: 'Unmatched accuracy for stewards and referees. Instantly log incidents and verify results with millisecond-precision data.',
+    action: 'View Compliance',
+    tone: 'text-error',
+    iconWrap: 'bg-error-container/20 text-error',
+    icon: Gavel,
+  },
+];
+
+const fallbackWinners = [
+  {
+    rank: 1,
+    horse: 'Apex Legend',
+    jockey: 'S. Martinez',
+    time: '2:14.32',
+    payout: '$450,000',
+    image:
+      'https://lh3.googleusercontent.com/aida-public/AB6AXuBdZpD8K9lXUMOt7rzPyRRR5X6ZPzlqsngsIvNGFUqGlwlVpcq_0T35W66pROAVwq0fENeFYRtem4nYOY12qNT_QbydExUJJUKNkpDMH3lykT2Yw66w_WZRZN8zKhRSJO6OY-6YJ4vK7RXbEVTPETt-qeES_V5SIMmS8ZjP3DkiO_pEqflgDQWJu_HiMvoN8c-MXvKF16eko0x1Ot_L6JNnHG9fFgqZauczxthYb8Ax532oBO2zBAupTDXAQcnRw7qKaKwumQxsz7-v',
+    avatarClass: 'border-primary',
+    badgeClass: 'bg-primary text-on-primary',
+    silkClass: 'border-primary bg-[repeating-linear-gradient(45deg,#f2ca50,#f2ca50_4px,#3c2f00_4px,#3c2f00_8px)]',
+  },
+  {
+    rank: 2,
+    horse: 'Ghost Runner',
+    jockey: 'M. Thompson',
+    time: '2:14.58',
+    payout: '$180,000',
+    image:
+      'https://lh3.googleusercontent.com/aida-public/AB6AXuAzyG1ccRnSF94-iAkNoHXWUYZztRFaQZPmsxrISCnTm6pdqJIP_8KjFB7AIj6iPU7EMq5gRUd1PuBk56zrXc_wAGe_ykihqpz6KqBb1Yp2zgu8Dr09n6iPsgPX1jcsctYOjWfOUo4XDPUE0Ag_KE59QgkC_B9hNaXs5CrofPtiSFR8kgrBN7ucRpThawjHEoJh8MhNaLufNAdkuAqxd-vN0ixch8wSBW5OstU-IB6w_wGTVwuAIWpB8SmcR16uVaRCGg4r6Jos77v-',
+    avatarClass: 'border-outline-variant',
+    badgeClass: 'bg-on-surface-variant/30 text-on-surface',
+    silkClass: 'border-secondary bg-secondary-container',
+  },
+  {
+    rank: 3,
+    horse: 'Black Velvet',
+    jockey: 'L. Richards',
+    time: '2:15.01',
+    payout: '$75,000',
+    image:
+      'https://lh3.googleusercontent.com/aida-public/AB6AXuDwtfGwXw2Q6Mp31MK2E2SDi9ridHJoyl2h-nHT7xEqb8SRS9qagx9t9Ft5fvbv6pKgxVkno2ZKI0ZXKSLq7vhMlyEd6YIRiVB1z1UUPYosIvABHrtrg6cq7fYs-ga3WHA885fgIFn9QbkaMO0s4DNS3Xmj8lMM7GBjUvJiRN56pJZukHBz0sY2SGMYR2q_R0ZWim3HqXkU99uoHpGqWLJJlHj1wAzw47YWtyTLSEBR20in2ekZmYiCRLcKH5SIb35fgG7jHACzKeEa',
+    avatarClass: 'border-outline-variant/30',
+    badgeClass: 'bg-on-surface-variant/20 text-on-surface-variant',
+    silkClass: 'border-error bg-tertiary-container',
+  },
+];
+
+const footerGroups = [
+  {
+    title: 'Platform',
+    links: ['Race Management', 'Live Odds Engine', 'Stable Dashboards', 'Tote Systems'],
+  },
+  {
+    title: 'Company',
+    links: ['About Us', 'Partnerships', 'Press Kit', 'Careers'],
+  },
+  {
+    title: 'Compliance',
+    links: ['Privacy Policy', 'Terms of Service', 'Anti-Money Laundering', 'Global Licensing'],
+  },
+];
+
+const formatShortDate = (value: string) => {
+  if (!value) {
+    return '--/--';
+  }
+
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return '--/--';
+  }
+
+  return new Intl.DateTimeFormat('en-GB', {
+    day: '2-digit',
+    month: '2-digit',
+  }).format(date);
+};
+
+const formatTickerTime = (match: TournamentMatch) => `${formatShortDate(match.matchDate)} ${match.startTime}: ${match.matchName}`;
+
+const getTournamentRaceCount = (tournaments: Tournament[]) =>
+  tournaments.reduce((total, tournament) => total + tournament.schedule.length, 0);
+
+const getActiveHorseCount = (tournaments: Tournament[]) =>
+  tournaments.reduce((total, tournament) => total + tournament.currentParticipants, 0);
+
+const getTournamentParticipants = (tournament: Tournament | undefined) =>
+  tournament?.participants.length ? tournament.participants : [];
+
+const getTournamentMatches = (tournaments: Tournament[]) =>
+  tournaments.flatMap((tournament) =>
+    tournament.schedule.map((match) => ({
+      ...match,
+      tournamentName: tournament.tournamentName,
+    })),
+  );
 
 const LandingPage = () => {
+  const [tournaments, setTournaments] = useState<Tournament[]>([]);
+  const [isLoadingTournaments, setIsLoadingTournaments] = useState(true);
+  const [tournamentError, setTournamentError] = useState('');
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const loadTournaments = async () => {
+      try {
+        const data = await tournamentService.getAllTournaments(false);
+
+        if (isMounted) {
+          setTournaments(data);
+          setTournamentError('');
+        }
+      } catch (error) {
+        if (isMounted) {
+          setTournaments([]);
+          setTournamentError(getApiErrorMessage(error, 'Unable to load tournaments.'));
+        }
+      } finally {
+        if (isMounted) {
+          setIsLoadingTournaments(false);
+        }
+      }
+    };
+
+    void loadTournaments();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  const featuredTournament = useMemo(
+    () =>
+      tournaments.find((tournament) => tournament.status === 'Ongoing') ??
+      tournaments.find((tournament) => tournament.status === 'Upcoming') ??
+      tournaments[0],
+    [tournaments],
+  );
+
+  const featuredParticipants = useMemo(
+    () => getTournamentParticipants(featuredTournament).slice(0, 2),
+    [featuredTournament],
+  );
+
+  const tickerItems = useMemo(() => {
+    const matches = getTournamentMatches(tournaments)
+      .filter((match) => match.matchStatus !== 'Cancelled')
+      .slice(0, 4);
+
+    if (matches.length === 0) {
+      return [];
+    }
+
+    return matches.map((match) => ({
+      time: formatTickerTime(match),
+      horse: match.participant1 === 'TBD' ? match.tournamentName : match.participant1,
+      odds: match.matchStatus,
+    }));
+  }, [tournaments]);
+
+  const winners = useMemo(() => {
+    const completedTournament = tournaments.find((tournament) => tournament.status === 'Completed') ?? tournaments[0];
+    const participants = getTournamentParticipants(completedTournament).slice(0, 3);
+
+    if (participants.length === 0) {
+      return fallbackWinners;
+    }
+
+    return participants.map((participant: TournamentParticipant, index) => ({
+      rank: index + 1,
+      horse: participant.horseName,
+      jockey: participant.jockeyName,
+      time: completedTournament?.schedule[index]?.endTime ?? '-',
+      payout: index === 0 ? completedTournament?.prize || '-' : '-',
+      image: fallbackWinners[index]?.image ?? fallbackWinners[0].image,
+      avatarClass: fallbackWinners[index]?.avatarClass ?? 'border-outline-variant',
+      badgeClass: fallbackWinners[index]?.badgeClass ?? 'bg-on-surface-variant/30 text-on-surface',
+      silkClass: fallbackWinners[index]?.silkClass ?? 'border-primary bg-secondary-container',
+    }));
+  }, [tournaments]);
+
+  const activeHorseCount = getActiveHorseCount(tournaments);
+  const raceCount = getTournamentRaceCount(tournaments);
+
   return (
-    <>
-      <Hero />
-      <TrendingRaces />
-      <StatsSection />
-    </>
+    <div className="overflow-x-hidden bg-background text-body-md text-on-surface">
+      <section id="home" className="relative flex min-h-screen scroll-mt-24 items-center overflow-hidden pt-16">
+        <div className="absolute inset-0 z-0">
+          <img
+            className="h-full w-full object-cover opacity-40 blur-[2px]"
+            src={heroImage}
+            alt="Powerful thoroughbred horses galloping through early morning mist on a turf track"
+          />
+          <div className="absolute inset-0 bg-gradient-to-r from-background via-background/80 to-transparent" />
+        </div>
+
+        <div className="relative z-10 max-w-5xl px-8 md:px-32">
+          <span className="mb-6 inline-block rounded-full border border-primary px-4 py-1 text-label-md font-semibold uppercase tracking-widest text-primary">
+            Global Racing Management
+          </span>
+          <h1 className="font-display mb-6 text-5xl font-extrabold leading-[1.1] text-on-surface md:text-[64px]">
+            The Pinnacle of <br />
+            <span className="text-primary">Horse Racing</span> Management
+          </h1>
+          <p className="mb-10 max-w-2xl text-body-lg leading-7 text-on-surface-variant">
+            Experience precision data, lightning-fast tournament logistics, and the ultimate betting excitement. Whether you manage a stable or chase the thrill of the win, HTMS is your elite racing command center.
+          </p>
+          <div className="flex flex-wrap gap-4">
+            <Link to="/login" state={{ mode: 'signup' }} className="gold-gradient rounded-xl px-8 py-4 font-display text-xl font-bold text-on-primary shadow-lg shadow-primary/20 transition-transform active:scale-95">
+              Join the Race
+            </Link>
+            <Link to="/tournaments" className="rounded-xl border border-outline-variant bg-surface-container-highest px-8 py-4 font-display text-xl font-bold text-on-surface transition-colors hover:bg-surface-bright">
+              Explore Tournaments
+            </Link>
+          </div>
+        </div>
+
+        <div className="absolute bottom-0 right-0 hidden p-12 xl:block">
+          <div className="glass-card w-80 rounded-2xl border-l-4 border-primary p-6 shadow-2xl">
+            <div className="mb-4 flex items-center justify-between">
+              <span className="flex items-center text-label-md font-semibold text-secondary">
+                <span className="pulse-live mr-2 h-3 w-3 rounded-full bg-secondary" />
+                {featuredTournament?.status === 'Ongoing' ? 'LIVE TOURNAMENT' : 'FEATURED EVENT'}
+              </span>
+              <span className="text-data-mono font-medium text-on-surface-variant">
+                {featuredTournament ? `${featuredTournament.currentParticipants}/${featuredTournament.maximumParticipants}` : '--/--'}
+              </span>
+            </div>
+            {isLoadingTournaments ? (
+              <FloatingCardMessage text="Đang tải danh sách tournament..." />
+            ) : tournamentError ? (
+              <FloatingCardMessage tone="error" text={tournamentError} />
+            ) : !featuredTournament ? (
+              <FloatingCardMessage text="Chưa có tournament nào được lên lịch." />
+            ) : featuredParticipants.length === 0 ? (
+              <FloatingCardMessage text="Tournament chưa có ngựa tham gia." />
+            ) : (
+              <div className="space-y-3">
+                {featuredParticipants.map((item, index) => (
+                  <div key={item.participantId} className="flex items-center justify-between gap-3">
+                    <div className="flex min-w-0 items-center gap-3">
+                      <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-bold ${index === 0 ? 'bg-primary-container text-on-primary' : 'bg-on-tertiary-container text-on-tertiary'}`}>
+                        {item.horseName.slice(0, 2).toUpperCase()}
+                      </div>
+                      <span className="truncate font-bold">{item.horseName}</span>
+                    </div>
+                    <span className="shrink-0 text-data-mono font-medium text-primary">{item.jockeyName}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      </section>
+
+      <div id="live-odds" className="relative z-20 scroll-mt-28 overflow-hidden border-y border-outline-variant/30 bg-surface-container-lowest py-3">
+        <div className="ticker-scroll">
+          <div className="flex items-center space-x-12 px-6">
+            {[0, 1].map((loopIndex) => (
+              <div key={loopIndex} className="flex items-center space-x-12">
+                <span className="flex items-center text-label-md font-semibold uppercase tracking-widest text-secondary">
+                  <Zap className="mr-1 h-4 w-4" />
+                  Upcoming Races:
+                </span>
+                {tickerItems.length > 0 ? (
+                  tickerItems.map((item) => (
+                    <span key={`${item.time}-${loopIndex}`} className="flex items-center gap-2 whitespace-nowrap text-data-mono font-medium">
+                      <span className="text-on-surface-variant">{item.time}</span>
+                      {item.horse}
+                      <span className="font-bold text-primary">{item.odds}</span>
+                    </span>
+                  ))
+                ) : (
+                  <span className="whitespace-nowrap text-data-mono font-medium text-on-surface-variant">
+                    {tournamentError || 'Chưa có tournament nào được lên lịch.'}
+                  </span>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      <section id="tournaments" className="scroll-mt-28 bg-background px-8 py-24 md:px-32">
+        <div className="mb-16 text-center">
+          <h2 className="font-display mb-4 text-headline-lg font-bold">Precision Engineered for Every Actor</h2>
+          <p className="mx-auto max-w-xl text-on-surface-variant">
+            Our platform bridges the gap between field management and fan experience with tailored interfaces.
+          </p>
+        </div>
+
+        <div className="grid grid-cols-1 gap-8 md:grid-cols-3">
+          {featureCards.map((card) => (
+            <article
+              key={card.title}
+              className={`glass-card group rounded-2xl p-8 transition-all duration-300 hover:-translate-y-2 ${card.featured ? 'border-primary bg-surface-container-high/50' : ''}`}
+            >
+              <div className={`mb-8 flex h-16 w-16 items-center justify-center rounded-xl transition-transform group-hover:scale-110 ${card.iconWrap}`}>
+                <card.icon className="h-10 w-10" />
+              </div>
+              <h3 className="font-display mb-4 text-xl font-semibold text-on-surface">{card.title}</h3>
+              <p className="mb-8 text-on-surface-variant">{card.description}</p>
+              <a className={`flex items-center text-label-md font-semibold uppercase hover:underline ${card.tone}`} href="#">
+                {card.action}
+                <ArrowRight className="ml-2 h-4 w-4" />
+              </a>
+            </article>
+          ))}
+        </div>
+      </section>
+
+      <section className="border-y border-outline-variant/20 bg-surface-container-low py-20">
+        <div className="grid grid-cols-1 gap-12 px-8 text-center md:grid-cols-3 md:px-32">
+          <StatBlock value={isLoadingTournaments ? '...' : String(activeHorseCount || 0)} label="Active Horses" />
+          <div className="border-y border-outline-variant/30 py-12 md:border-x md:border-y-0 md:py-0">
+            <StatBlock value={isLoadingTournaments ? '...' : String(raceCount || 0)} label="Scheduled Races" />
+          </div>
+          <StatBlock value={isLoadingTournaments ? '...' : String(tournaments.length || 0)} label="Global Tournaments" />
+        </div>
+      </section>
+
+      <section id="rankings" className="scroll-mt-28 bg-background px-8 py-24 md:px-32">
+        <div className="mb-12 flex flex-col gap-6 md:flex-row md:items-end md:justify-between">
+          <div>
+            <h2 className="font-display mb-4 text-headline-lg font-bold">The Winner's Circle</h2>
+            <p className="text-on-surface-variant">
+              {tournaments[0] ? `Top entries from ${tournaments.find((tournament) => tournament.status === 'Completed')?.tournamentName ?? tournaments[0].tournamentName}` : 'Top finishers from the latest tournament'}
+            </p>
+          </div>
+          <Link to="/results" className="rounded-lg border border-outline-variant px-6 py-2 text-label-md font-semibold text-on-surface transition-all hover:bg-surface-container-highest">
+            View All Results
+          </Link>
+        </div>
+
+        <div className="glass-card overflow-hidden rounded-2xl">
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[860px] text-left">
+              <thead>
+                <tr className="bg-surface-container-high/50">
+                  {['Rank', 'Horse', 'Jockey / Silks', 'Time', 'Payout'].map((heading) => (
+                    <th key={heading} className="px-8 py-5 text-label-md font-semibold uppercase tracking-widest text-on-surface-variant">
+                      {heading}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-outline-variant/20">
+                {winners.map((winner) => (
+                  <tr key={winner.rank} className="transition-colors hover:bg-surface-container-highest/20">
+                    <td className="px-8 py-6">
+                      <span className={`flex h-8 w-8 items-center justify-center rounded-full font-bold ${winner.badgeClass}`}>
+                        {winner.rank}
+                      </span>
+                    </td>
+                    <td className="px-8 py-6">
+                      <div className="flex items-center gap-4">
+                        <img src={winner.image} alt={winner.horse} className={`h-12 w-12 rounded-full border-2 object-cover ${winner.avatarClass}`} />
+                        <span className="font-display text-xl font-semibold text-on-surface">{winner.horse}</span>
+                      </div>
+                    </td>
+                    <td className="px-8 py-6">
+                      <div className="flex items-center gap-3">
+                        <div className={`h-6 w-6 rounded-full border-2 ${winner.silkClass}`} />
+                        <span>{winner.jockey}</span>
+                      </div>
+                    </td>
+                    <td className="px-8 py-6 text-data-mono font-medium text-secondary">{winner.time}</td>
+                    <td className="px-8 py-6 text-data-mono font-medium text-primary">{winner.payout}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <section className="relative overflow-hidden bg-background px-8 py-24 md:px-32">
+        <div className="glass-card relative overflow-hidden rounded-[32px] border-primary/30 p-12 text-center md:p-24">
+          <div className="absolute inset-0 opacity-10">
+            <div className="h-full w-full bg-[radial-gradient(#f2ca50_1px,transparent_1px)] bg-[length:40px_40px]" />
+          </div>
+          <div className="relative z-10">
+            <h2 className="font-display mb-8 text-5xl font-extrabold leading-tight">Ready to Elevate Your Race?</h2>
+            <p className="mx-auto mb-12 max-w-2xl text-body-lg text-on-surface-variant">
+              Join the world's most advanced horse racing ecosystem today. Whether you're managing a stable or betting on glory, HTMS gives you the winning edge.
+            </p>
+            <div className="flex flex-col justify-center gap-6 md:flex-row">
+              <Link to="/login" state={{ mode: 'signup' }} className="gold-gradient rounded-xl px-10 py-5 font-display text-xl font-bold text-on-primary shadow-2xl transition-transform active:scale-95">
+                Create Operator Account
+              </Link>
+              <Link to="/login" state={{ mode: 'signup' }} className="rounded-xl border border-outline-variant bg-surface-container-highest px-10 py-5 font-display text-xl font-bold text-on-surface transition-colors hover:bg-surface-bright">
+                Register as Spectator
+              </Link>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <footer className="border-t border-outline-variant/30 bg-surface-container-lowest px-8 pb-10 pt-20 md:px-32">
+        <div className="mb-16 grid grid-cols-1 gap-12 md:grid-cols-4">
+          <div>
+            <div className="font-display mb-6 text-xl font-semibold text-primary">HTMS</div>
+            <p className="mb-6 text-body-sm text-on-surface-variant">
+              Redefining the standards of high-stakes sportsmanship through precision technology and elite tournament management since 2024.
+            </p>
+            <div className="flex gap-4">
+              {[Globe2, MessageCircle, Share2].map((Icon, index) => (
+                <button key={index} className="text-on-surface-variant transition-colors hover:text-primary" aria-label="Social link">
+                  <Icon className="h-5 w-5" />
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {footerGroups.map((group) => (
+            <div key={group.title}>
+              <h4 className="mb-6 text-label-md font-semibold uppercase tracking-widest text-on-surface">{group.title}</h4>
+              <ul className="space-y-4 text-body-sm text-on-surface-variant">
+                {group.links.map((link) => (
+                  <li key={link}>
+                    <a className="transition-colors hover:text-primary" href="#">
+                      {link}
+                    </a>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))}
+        </div>
+
+        <div className="flex flex-col items-center justify-between gap-6 border-t border-outline-variant/20 pt-10 md:flex-row">
+          <div className="flex items-center gap-4">
+            <span className="rounded border border-error px-2 py-0.5 text-label-md font-bold text-error">18+</span>
+            <p className="text-label-md font-semibold uppercase tracking-tight text-on-surface-variant">
+              Gamble Responsibly. If you or someone you know has a gambling problem, call 1-800-GAMBLER.
+            </p>
+          </div>
+          <p className="text-label-md text-on-surface-variant">© 2024 HTMS GLOBAL SYSTEMS. ALL RIGHTS RESERVED.</p>
+        </div>
+      </footer>
+    </div>
   );
 };
+
+const StatBlock = ({ value, label }: { value: string; label: string }) => (
+  <div>
+    <div className="font-display mb-2 text-5xl font-extrabold text-primary">{value}</div>
+    <div className="text-label-md font-semibold uppercase tracking-widest text-on-surface-variant">{label}</div>
+  </div>
+);
+
+const FloatingCardMessage = ({ text, tone = 'muted' }: { text: string; tone?: 'muted' | 'error' }) => (
+  <div className={`rounded-lg border px-3 py-4 text-body-sm font-semibold ${
+    tone === 'error'
+      ? 'border-error/30 bg-error-container/20 text-error'
+      : 'border-outline-variant/40 bg-surface-container-lowest/60 text-on-surface-variant'
+  }`}
+  >
+    {text}
+  </div>
+);
 
 export default LandingPage;

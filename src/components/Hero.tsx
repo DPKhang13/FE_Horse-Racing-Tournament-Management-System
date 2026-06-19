@@ -1,4 +1,4 @@
-import { Activity, Gauge, Shield, Trophy, Users } from 'lucide-react';
+import { Activity, CalendarDays, Gauge, MapPin, Shield, Trophy, Users } from 'lucide-react';
 
 const highlights = [
   {
@@ -18,10 +18,10 @@ const highlights = [
   },
 ];
 
-const liveOdds = [
-  { horse: 'Iron Vanguard', odds: '2.40', lane: 'A3' },
-  { horse: 'Eclipse Dancer', odds: '3.15', lane: 'B1' },
-  { horse: 'Royal Guard', odds: '4.20', lane: 'C2' },
+const featuredTournaments = [
+  { name: 'Saigon Summer Derby', location: 'Ho Chi Minh City', date: 'Jul 10 - Jul 12', status: 'Upcoming' },
+  { name: 'Central Highlands Cup', location: 'Da Lat Highland Course', date: 'Jun 20 - Jun 23', status: 'Ongoing' },
+  { name: 'Northern Sprint Invitational', location: 'Ha Noi Capital Track', date: 'Aug 05 - Aug 06', status: 'Upcoming' },
 ];
 
 const Hero = () => {
@@ -47,7 +47,7 @@ const Hero = () => {
             Horse Tournament Management System
           </h1>
           <p className="mt-6 max-w-2xl text-lg leading-8 text-on-surface-variant">
-            Command-center tools for tournament schedules, live odds, role dashboards, certified race results, and spectator tracking.
+            Command-center tools for tournament management, race schedules, role dashboards, certified results, and spectator tracking.
           </p>
 
           <div className="mt-10 grid max-w-2xl gap-4 sm:grid-cols-3">
@@ -68,28 +68,39 @@ const Hero = () => {
         <aside className="glass-panel rounded-2xl p-5 md:p-7">
           <div className="mb-6 flex items-center justify-between">
             <div>
-              <p className="text-xs font-bold uppercase tracking-[0.2em] text-secondary">Live Odds</p>
-              <h2 className="font-display mt-1 text-2xl font-bold text-on-surface">Derby Qualifier R4</h2>
+              <p className="text-xs font-bold uppercase tracking-[0.2em] text-secondary">Tournament Board</p>
+              <h2 className="font-display mt-1 text-2xl font-bold text-on-surface">Featured Events</h2>
             </div>
-            <span className="rounded-full bg-error-container/35 px-3 py-1 text-xs font-extrabold uppercase tracking-[0.14em] text-error">
-              Live
+            <span className="rounded-full bg-primary/15 px-3 py-1 text-xs font-extrabold uppercase tracking-[0.14em] text-primary">
+              Admin Ready
             </span>
           </div>
 
           <div className="space-y-3">
-            {liveOdds.map((item, index) => (
-              <div key={item.horse} className="rounded-xl border border-outline-variant/40 bg-surface-container-lowest/75 p-4">
+            {featuredTournaments.map((item, index) => (
+              <div key={item.name} className="rounded-xl border border-outline-variant/40 bg-surface-container-lowest/75 p-4">
                 <div className="flex items-center justify-between gap-4">
                   <div className="flex items-center gap-3">
                     <span className="gold-gradient flex h-9 w-9 items-center justify-center rounded-lg text-sm font-extrabold text-on-primary">
                       {index + 1}
                     </span>
                     <div>
-                      <p className="font-bold text-on-surface">{item.horse}</p>
-                      <p className="text-xs font-semibold uppercase tracking-[0.14em] text-on-surface-variant">Lane {item.lane}</p>
+                      <p className="font-bold text-on-surface">{item.name}</p>
+                      <p className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs font-semibold uppercase tracking-[0.12em] text-on-surface-variant">
+                        <span className="inline-flex items-center gap-1">
+                          <CalendarDays className="h-3 w-3" />
+                          {item.date}
+                        </span>
+                        <span className="inline-flex items-center gap-1">
+                          <MapPin className="h-3 w-3" />
+                          {item.location}
+                        </span>
+                      </p>
                     </div>
                   </div>
-                  <strong className="font-display text-2xl text-primary">{item.odds}</strong>
+                  <strong className="shrink-0 rounded-full bg-secondary-container/40 px-3 py-1 text-[10px] font-extrabold uppercase tracking-[0.12em] text-secondary">
+                    {item.status}
+                  </strong>
                 </div>
               </div>
             ))}
