@@ -89,9 +89,6 @@ const RaceResultList = () => {
             <div>
               <p className="text-label-md text-secondary uppercase tracking-widest mb-2">Result Screen</p>
               <h1 className="text-headline-lg font-bold text-primary mb-2">Race Results</h1>
-              <p className="text-body-md text-on-surface-variant max-w-2xl">
-                Comprehensive historical data, finish positions, and prize distributions from recent tournaments.
-              </p>
             </div>
             <ResultNav />
           </div>
