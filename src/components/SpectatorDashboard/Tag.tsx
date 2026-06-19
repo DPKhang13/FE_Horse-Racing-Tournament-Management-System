@@ -7,7 +7,7 @@ interface TagProps {
 
 const Tag: React.FC<TagProps> = ({ label, colorClass }) => {
   return (
-    <span className={`px-2 py-1 rounded-[4px] text-xs font-semibold uppercase tracking-wider ${colorClass || 'bg-[#e1e3e4] text-[#191c1d]'}`}>
+    <span className={`rounded px-2 py-1 text-xs font-semibold uppercase tracking-wider ${colorClass || 'bg-surface-container-high text-on-surface'}`}>
       {label}
     </span>
   );

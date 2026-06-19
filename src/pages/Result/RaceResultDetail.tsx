@@ -1,7 +1,8 @@
-import { useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { ArrowLeft, Calendar, MapPin, Trophy } from 'lucide-react';
 import { Link, useParams } from 'react-router-dom';
 import { raceResultService } from '../../services/raceResultService';
+import type { RaceResultSummary } from '../../types/raceResult';
 import PrizeBreakdown from './components/PrizeBreakdown';
 import RaceResultTable from './components/RaceResultTable';
 import ResultStatusChip from './components/ResultStatusChip';
@@ -32,10 +33,46 @@ const formatPublishedAt = (dateString?: string) => {
 
 const RaceResultDetail = () => {
   const { resultId } = useParams<{ resultId: string }>();
-  const result = useMemo(
-    () => (resultId ? raceResultService.getRaceResultById(resultId) : undefined),
-    [resultId],
-  );
+  const [result, setResult] = useState<RaceResultSummary | undefined>();
+  const [isLoading, setIsLoading] = useState(true);
+  const [errorMessage, setErrorMessage] = useState('');
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const loadResult = async () => {
+      if (!resultId) {
+        setIsLoading(false);
+        return;
+      }
+
+      setIsLoading(true);
+      setErrorMessage('');
+
+      try {
+        const resultDetail = await raceResultService.getRaceResultById(resultId);
+
+        if (isMounted) {
+          setResult(resultDetail);
+        }
+      } catch (error) {
+        if (isMounted) {
+          setResult(undefined);
+          setErrorMessage(error instanceof Error ? error.message : 'Unable to load race result.');
+        }
+      } finally {
+        if (isMounted) {
+          setIsLoading(false);
+        }
+      }
+    };
+
+    void loadResult();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [resultId]);
 
   const podium = useMemo(
     () =>
@@ -45,6 +82,18 @@ const RaceResultDetail = () => {
     [result],
   );
 
+  if (isLoading) {
+    return (
+      <div className="bg-surface min-h-screen py-12">
+        <div className="max-w-container mx-auto px-4 md:px-margin-desktop text-center">
+          <Trophy className="w-12 h-12 text-outline mx-auto mb-4" />
+          <h1 className="text-headline-lg font-bold text-primary mb-2">Loading result</h1>
+          <p className="text-body-md text-on-surface-variant">Fetching race result detail from the server.</p>
+        </div>
+      </div>
+    );
+  }
+
   if (!result) {
     return (
       <div className="bg-surface min-h-screen py-12">
@@ -52,7 +101,7 @@ const RaceResultDetail = () => {
           <Trophy className="w-12 h-12 text-outline mx-auto mb-4" />
           <h1 className="text-headline-lg font-bold text-primary mb-2">Result not found</h1>
           <p className="text-body-md text-on-surface-variant mb-6">
-            The race result you are looking for does not exist or has been removed.
+            {errorMessage || 'The race result you are looking for does not exist or has been removed.'}
           </p>
           <Link
             to="/results"

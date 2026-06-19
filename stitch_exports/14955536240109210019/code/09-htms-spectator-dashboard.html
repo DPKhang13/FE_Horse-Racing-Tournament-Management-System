@@ -1,0 +1,537 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>HTMS | Spectator Dashboard</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700;800&family=Inter:wght@400;500;600&family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@100..900&family=Montserrat:wght@100..900&display=swap" rel="stylesheet"/>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .glass-card {
+            background: rgba(30, 41, 59, 0.7);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(51, 65, 85, 0.5);
+        }
+        .betting-gradient {
+            background: linear-gradient(135deg, #d4af37 0%, #f2ca50 100%);
+        }
+        @keyframes pulse-live {
+            0% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.6; transform: scale(1.1); }
+            100% { opacity: 1; transform: scale(1); }
+        }
+        .animate-pulse-live {
+            animation: pulse-live 2s infinite ease-in-out;
+        }
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 4px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: #0f172a;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: #334155;
+            border-radius: 10px;
+        }
+    </style>
+<!-- Theme Configuration -->
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "background": "#0b1326",
+                        "on-tertiary": "#690007",
+                        "tertiary-fixed-dim": "#ffb4ac",
+                        "primary-container": "#d4af37",
+                        "on-secondary": "#003909",
+                        "error-container": "#93000a",
+                        "surface-container-high": "#222a3d",
+                        "secondary-container": "#005b14",
+                        "on-tertiary-container": "#90000e",
+                        "inverse-surface": "#dae2fd",
+                        "surface-container-highest": "#2d3449",
+                        "outline": "#99907c",
+                        "surface-variant": "#2d3449",
+                        "surface-container-low": "#131b2e",
+                        "on-primary": "#3c2f00",
+                        "on-primary-fixed-variant": "#574500",
+                        "on-primary-fixed": "#241a00",
+                        "primary-fixed-dim": "#e9c349",
+                        "inverse-primary": "#735c00",
+                        "surface-container-lowest": "#060e20",
+                        "on-background": "#dae2fd",
+                        "on-error-container": "#ffdad6",
+                        "surface": "#0b1326",
+                        "surface-container": "#171f33",
+                        "secondary": "#88d982",
+                        "outline-variant": "#4d4635",
+                        "on-surface": "#dae2fd",
+                        "on-secondary-fixed": "#002204",
+                        "surface-bright": "#31394d",
+                        "inverse-on-surface": "#283044",
+                        "primary-fixed": "#ffe088",
+                        "on-primary-container": "#554300",
+                        "on-surface-variant": "#d0c5af",
+                        "on-tertiary-fixed-variant": "#93000e",
+                        "on-secondary-container": "#81d27c",
+                        "secondary-fixed-dim": "#88d982",
+                        "on-error": "#690005",
+                        "surface-dim": "#0b1326",
+                        "tertiary-fixed": "#ffdad6",
+                        "primary": "#f2ca50",
+                        "tertiary-container": "#ff968c",
+                        "tertiary": "#ffbfb8",
+                        "surface-tint": "#e9c349",
+                        "error": "#ffb4ab",
+                        "on-tertiary-fixed": "#410003",
+                        "secondary-fixed": "#a3f69c",
+                        "on-secondary-fixed-variant": "#005312"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    "spacing": {
+                        "gutter": "16px",
+                        "unit": "4px",
+                        "margin-desktop": "32px",
+                        "container-max": "1440px",
+                        "margin-mobile": "16px"
+                    },
+                    "fontFamily": {
+                        "label-md": ["Inter"],
+                        "headline-lg-mobile": ["Montserrat"],
+                        "display-lg": ["Montserrat"],
+                        "body-sm": ["Inter"],
+                        "headline-lg": ["Montserrat"],
+                        "body-md": ["Inter"],
+                        "headline-md": ["Montserrat"],
+                        "body-lg": ["Inter"],
+                        "data-mono": ["Inter"]
+                    },
+                    "fontSize": {
+                        "label-md": ["12px", {"lineHeight": "16px", "letterSpacing": "0.05em", "fontWeight": "600"}],
+                        "headline-lg-mobile": ["24px", {"lineHeight": "32px", "fontWeight": "700"}],
+                        "display-lg": ["48px", {"lineHeight": "56px", "letterSpacing": "-0.02em", "fontWeight": "800"}],
+                        "body-sm": ["14px", {"lineHeight": "20px", "fontWeight": "400"}],
+                        "headline-lg": ["32px", {"lineHeight": "40px", "letterSpacing": "-0.01em", "fontWeight": "700"}],
+                        "body-md": ["16px", {"lineHeight": "24px", "fontWeight": "400"}],
+                        "headline-md": ["20px", {"lineHeight": "28px", "fontWeight": "600"}],
+                        "body-lg": ["18px", {"lineHeight": "28px", "fontWeight": "400"}],
+                        "data-mono": ["14px", {"lineHeight": "20px", "fontWeight": "500"}]
+                    }
+                },
+            },
+        }
+    </script>
+</head>
+<body class="bg-background text-on-background font-body-md min-h-screen">
+<!-- SideNavBar Anchor -->
+<aside class="fixed left-0 top-0 h-full flex flex-col p-4 z-40 bg-surface-container-low border-r border-outline-variant/20 shadow-lg w-64 hidden md:flex">
+<div class="mb-8 flex items-center gap-3 px-2">
+<div class="w-10 h-10 bg-primary-container rounded-lg flex items-center justify-center text-on-primary-container">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">emoji_events</span>
+</div>
+<div>
+<h1 class="font-headline-md text-headline-md font-bold text-primary">HTMS</h1>
+<p class="text-[10px] font-label-md text-on-surface-variant uppercase tracking-widest">Pro Manager</p>
+</div>
+</div>
+<nav class="flex-1 space-y-2">
+<a class="flex items-center gap-3 px-4 py-3 bg-secondary-container text-on-secondary-container rounded-lg font-bold transition-all" href="#">
+<span class="material-symbols-outlined">pets</span>
+<span class="font-label-md">Horses</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 text-on-surface-variant hover:text-on-surface hover:bg-surface-container-highest rounded-lg transition-all" href="#">
+<span class="material-symbols-outlined">emoji_events</span>
+<span class="font-label-md">Races</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 text-on-surface-variant hover:text-on-surface hover:bg-surface-container-highest rounded-lg transition-all" href="#">
+<span class="material-symbols-outlined">account_balance_wallet</span>
+<span class="font-label-md">Wallet</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 text-on-surface-variant hover:text-on-surface hover:bg-surface-container-highest rounded-lg transition-all" href="#">
+<span class="material-symbols-outlined">leaderboard</span>
+<span class="font-label-md">Rankings</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 text-on-surface-variant hover:text-on-surface hover:bg-surface-container-highest rounded-lg transition-all" href="#">
+<span class="material-symbols-outlined">admin_panel_settings</span>
+<span class="font-label-md">Admin</span>
+</a>
+</nav>
+<div class="mt-auto pt-4 space-y-2 border-t border-outline-variant/20">
+<a class="flex items-center gap-3 px-4 py-3 text-on-surface-variant hover:text-on-surface hover:bg-surface-container-highest rounded-lg transition-all" href="#">
+<span class="material-symbols-outlined">help</span>
+<span class="font-label-md">Support</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 text-on-surface-variant hover:text-on-surface hover:bg-surface-container-highest rounded-lg transition-all" href="#">
+<span class="material-symbols-outlined">logout</span>
+<span class="font-label-md">Logout</span>
+</a>
+</div>
+</aside>
+<!-- Main Content Canvas -->
+<main class="md:ml-64 flex flex-col min-h-screen">
+<!-- TopNavBar Anchor -->
+<header class="fixed top-0 right-0 left-0 md:left-64 h-16 z-30 flex items-center justify-between px-gutter bg-surface-container-low/80 backdrop-blur-md border-b border-outline-variant/30 shadow-sm">
+<div class="flex items-center gap-4">
+<div class="flex items-center bg-surface-container rounded-full px-4 py-2 border border-outline-variant/20">
+<span class="material-symbols-outlined text-primary text-[20px] mr-2" style="font-variation-settings: 'FILL' 1;">account_balance_wallet</span>
+<span class="font-data-mono text-primary font-bold">$2,450.00</span>
+</div>
+</div>
+<div class="flex items-center gap-4">
+<button class="material-symbols-outlined text-on-surface-variant hover:bg-surface-container-highest/50 p-2 rounded-full transition-colors cursor-pointer active:scale-95">notifications</button>
+<button class="material-symbols-outlined text-on-surface-variant hover:bg-surface-container-highest/50 p-2 rounded-full transition-colors cursor-pointer active:scale-95">settings</button>
+<div class="h-8 w-px bg-outline-variant/30 mx-2"></div>
+<div class="flex items-center gap-3 cursor-pointer group">
+<span class="font-label-md text-on-surface hidden sm:inline">Spectator Mode</span>
+<div class="w-10 h-10 rounded-full border-2 border-primary overflow-hidden">
+<img alt="User Avatar" class="w-full h-full object-cover" data-alt="A high-quality professional portrait of a modern tech-savvy individual in a dark studio setting. The subject has a confident expression with soft lighting emphasizing facial features against a deep slate background. The image has a clean, corporate yet energetic vibe, matching the high-end racing management dashboard aesthetic with cool-toned shadows and crisp highlights." src="https://lh3.googleusercontent.com/aida-public/AB6AXuC0zYiYbHoPkpiHwxdjvNozvrm573RghNP6ejLSgUH2GX_yeBzTKecSC0hDtNX5f5O0cLOWdH3qGkt0-4brPplDawbvN42sNciBnvvNX7dzvlG3rigkoMlUDeSOdzWgeY-g7A3KrzCdOBIpGkdHW4k2vr6yxH7F9xGOHFuoY3_a1CkaGhR6usowe648Vqi_j5WI-m61ffbZH_7BuDi5l3fM6m71Bear0WU7NHDP4hYo9EZiC22I40dfRkab2bA_Jb8Cmas78_OyIpew"/>
+</div>
+</div>
+</div>
+</header>
+<div class="mt-16 p-gutter flex flex-col lg:flex-row gap-6 lg:h-[calc(100vh-64px)]">
+<!-- Dashboard Left Scrollable Area -->
+<div class="flex-1 overflow-y-auto custom-scrollbar pr-2 space-y-8">
+<!-- Live Tournament Viewer -->
+<section>
+<div class="flex items-center justify-between mb-4">
+<div class="flex items-center gap-2">
+<span class="w-2 h-2 rounded-full bg-error animate-pulse-live"></span>
+<h2 class="font-headline-lg text-headline-lg text-on-surface">Live Tournaments</h2>
+</div>
+<a class="text-primary font-label-md hover:underline" href="#">View All</a>
+</div>
+<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+<!-- Tournament Card 1 -->
+<div class="group relative overflow-hidden rounded-xl glass-card h-48 border-l-4 border-primary">
+<img class="absolute inset-0 w-full h-full object-cover opacity-30 group-hover:scale-105 transition-transform duration-700" data-alt="A dramatic wide-angle shot of a premium horse racing track at sunset. Intense golden light sweeps across the manicured turf as professional jockeys on powerful thoroughbreds thunder towards the finish line. The atmosphere is electric with dust kicking up and a slight motion blur to convey high speed and high stakes competition in a professional racing event." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCWypr9o_opbPSCLy_1AnjGYuXCz2_DfG-ccucM8Vq5UjVk0W_8A6xkSWy9kvkkdxteQYbBZtMeKoiRZrFJTL3cRdRk-d4FzsBef637bjroLaIvisOY4EJF98LN_zfYLrOj2kMdhGCFkSuh9a8Vm-dm4r8-jn6IWDG-waQR-EjtQcTOK2HprczD5DXqiflUV4Dohi314Vg7RNKBsoWt5ogDLwciA0KjYn66y-CtxOqUGjBmnbl6dL-bcZD_gKQbNN0h_neHNkA2YLvR"/>
+<div class="absolute inset-0 bg-gradient-to-t from-background via-transparent to-transparent"></div>
+<div class="relative p-5 h-full flex flex-col justify-between">
+<div>
+<span class="bg-error text-on-error-container text-[10px] font-bold px-2 py-0.5 rounded uppercase tracking-tighter">Live - Final Lap</span>
+<h3 class="font-headline-md text-headline-md text-white mt-1">Ascot Gold Cup Finals</h3>
+<p class="text-on-surface-variant text-body-sm">8 Runners • $500k Pot</p>
+</div>
+<div class="flex items-center justify-between">
+<div class="flex -space-x-2">
+<div class="w-8 h-8 rounded-full border-2 border-surface-container bg-surface-bright flex items-center justify-center text-[10px] font-bold">#1</div>
+<div class="w-8 h-8 rounded-full border-2 border-surface-container bg-surface-bright flex items-center justify-center text-[10px] font-bold">#4</div>
+<div class="w-8 h-8 rounded-full border-2 border-surface-container bg-surface-bright flex items-center justify-center text-[10px] font-bold">#7</div>
+</div>
+<button class="bg-primary text-on-primary px-4 py-2 rounded-lg font-label-md flex items-center gap-2 hover:brightness-110 active:scale-95 transition-all">
+<span class="material-symbols-outlined text-[18px]">play_circle</span>
+                                        Watch Live
+                                    </button>
+</div>
+</div>
+</div>
+<!-- Tournament Card 2 -->
+<div class="group relative overflow-hidden rounded-xl glass-card h-48">
+<img class="absolute inset-0 w-full h-full object-cover opacity-20 group-hover:scale-105 transition-transform duration-700" data-alt="Close-up detail of polished leather racing gear and a sleek racing saddle in a high-end stable. Warm low-key lighting reflects off metallic accents, creating a moody and sophisticated equestrian aesthetic. The focus is on precision and craftsmanship, conveying a sense of luxury and professional preparation for a high-stakes championship tournament." src="https://lh3.googleusercontent.com/aida-public/AB6AXuAllcW-4umHs2dnNgrjZGmU1ltP3RbwLdsi9oJdFVLVpmZGdLLJkss1NnWQgBakkozgO_wWPS5yg_lq1zhPS-2vUzCWs6o5nQD_-YY-T0YvhF0tqsFnSS15SsnsqBfTDN-BRhmdQfM2gFstqlLYHTcTrqiPPsjhnuSgAMfdknbex2maOZ_6Dg29zo_3LzX1dBK8hkN1t-AgqY08A5_9dYEcEayjVj9qjs4tOuGAkL--ltxCi9ypfR47GpA9OVTk56yqCyXQI7iYj5fO"/>
+<div class="relative p-5 h-full flex flex-col justify-between">
+<div>
+<span class="bg-surface-container-highest text-on-surface-variant text-[10px] font-bold px-2 py-0.5 rounded uppercase tracking-tighter">Starting in 04:22</span>
+<h3 class="font-headline-md text-headline-md text-white mt-1">Dubai World Cup</h3>
+<p class="text-on-surface-variant text-body-sm">12 Runners • $1M Grand Prize</p>
+</div>
+<div class="flex items-center justify-between">
+<span class="text-secondary font-label-md flex items-center gap-1">
+<span class="material-symbols-outlined text-[16px]">trending_up</span> High Stakes
+                                    </span>
+<button class="bg-surface-container-highest text-on-surface px-4 py-2 rounded-lg font-label-md flex items-center gap-2 hover:bg-primary hover:text-on-primary active:scale-95 transition-all">
+<span class="material-symbols-outlined text-[18px]">visibility</span>
+                                        Enter Hub
+                                    </button>
+</div>
+</div>
+</div>
+</div>
+</section>
+<!-- Wallet Summary Card -->
+<section>
+<h2 class="font-headline-lg text-headline-lg text-on-surface mb-4">Financial Overview</h2>
+<div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+<div class="md:col-span-2 glass-card rounded-2xl p-6 flex flex-col justify-between border-t border-primary/20">
+<div class="flex justify-between items-start">
+<div>
+<p class="font-label-md text-on-surface-variant uppercase">Available Balance</p>
+<h3 class="font-display-lg text-display-lg text-primary">$2,450.00</h3>
+<p class="text-secondary text-body-sm flex items-center gap-1 mt-1">
+<span class="material-symbols-outlined text-[16px]">arrow_upward</span> +$120.40 from last race
+                                    </p>
+</div>
+<button class="betting-gradient text-on-primary-container px-6 py-3 rounded-xl font-bold flex items-center gap-2 shadow-lg shadow-primary/20 hover:scale-105 transition-transform active:scale-95">
+<span class="material-symbols-outlined">add_circle</span>
+                                    Top Up
+                                </button>
+</div>
+<div class="grid grid-cols-2 gap-4 mt-8 border-t border-outline-variant/20 pt-4">
+<div>
+<p class="font-label-md text-on-surface-variant">Active Bets</p>
+<p class="font-headline-md text-headline-md text-white">$450.00</p>
+</div>
+<div>
+<p class="font-label-md text-on-surface-variant">Pending Payouts</p>
+<p class="font-headline-md text-headline-md text-secondary">$1,120.00</p>
+</div>
+</div>
+</div>
+<div class="glass-card rounded-2xl p-5 border border-outline-variant/20">
+<h4 class="font-label-md text-on-surface uppercase mb-4">Recent Activity</h4>
+<div class="space-y-4">
+<div class="flex items-center justify-between">
+<div class="flex items-center gap-3">
+<div class="w-8 h-8 rounded bg-secondary-container flex items-center justify-center text-secondary">
+<span class="material-symbols-outlined text-[18px]">call_received</span>
+</div>
+<div>
+<p class="text-body-sm font-bold text-white">Win Payout</p>
+<p class="text-[10px] text-on-surface-variant">Dubai Sprint • 2h ago</p>
+</div>
+</div>
+<p class="text-secondary font-data-mono font-bold">+$120</p>
+</div>
+<div class="flex items-center justify-between">
+<div class="flex items-center gap-3">
+<div class="w-8 h-8 rounded bg-error-container flex items-center justify-center text-error">
+<span class="material-symbols-outlined text-[18px]">call_made</span>
+</div>
+<div>
+<p class="text-body-sm font-bold text-white">Bet Placed</p>
+<p class="text-[10px] text-on-surface-variant">Ascot Cup • 5h ago</p>
+</div>
+</div>
+<p class="text-error font-data-mono font-bold">-$50</p>
+</div>
+<div class="flex items-center justify-between">
+<div class="flex items-center gap-3">
+<div class="w-8 h-8 rounded bg-surface-container-highest flex items-center justify-center text-primary">
+<span class="material-symbols-outlined text-[18px]">account_balance</span>
+</div>
+<div>
+<p class="text-body-sm font-bold text-white">Deposit</p>
+<p class="text-[10px] text-on-surface-variant">Card **** 4242</p>
+</div>
+</div>
+<p class="text-white font-data-mono font-bold">+$500</p>
+</div>
+</div>
+</div>
+</div>
+</section>
+<!-- Recommended Races -->
+<section class="pb-12">
+<h2 class="font-headline-lg text-headline-lg text-on-surface mb-4">Recommended for You</h2>
+<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+<!-- Odds Card 1 -->
+<div class="glass-card rounded-xl border-l-4 border-primary p-4 hover:translate-y-[-4px] transition-all cursor-pointer">
+<div class="flex justify-between items-start mb-3">
+<div>
+<p class="text-[10px] font-bold text-primary-container bg-primary/10 px-2 py-0.5 rounded w-max uppercase mb-1">Boosted Odds</p>
+<h4 class="font-headline-md text-headline-md text-white">Shadow Boxer</h4>
+</div>
+<span class="text-secondary font-data-mono font-bold text-lg">7.50</span>
+</div>
+<div class="flex items-center gap-2 mb-4">
+<div class="w-6 h-6 rounded-full bg-white/10 flex items-center justify-center">
+<span class="material-symbols-outlined text-[14px]">person</span>
+</div>
+<p class="text-body-sm text-on-surface-variant">Jockey: Marcus Vane</p>
+</div>
+<button class="w-full py-2 bg-surface-container-highest rounded-lg font-label-md text-white hover:bg-secondary-container hover:text-on-secondary-container transition-colors">Place Quick Bet</button>
+</div>
+<!-- Odds Card 2 -->
+<div class="glass-card rounded-xl border-l-4 border-outline-variant p-4 hover:translate-y-[-4px] transition-all cursor-pointer">
+<div class="flex justify-between items-start mb-3">
+<div>
+<p class="text-[10px] font-bold text-on-surface-variant bg-surface-variant px-2 py-0.5 rounded w-max uppercase mb-1">Fan Favorite</p>
+<h4 class="font-headline-md text-headline-md text-white">Lightning Rod</h4>
+</div>
+<span class="text-white font-data-mono font-bold text-lg">2.10</span>
+</div>
+<div class="flex items-center gap-2 mb-4">
+<div class="w-6 h-6 rounded-full bg-white/10 flex items-center justify-center">
+<span class="material-symbols-outlined text-[14px]">person</span>
+</div>
+<p class="text-body-sm text-on-surface-variant">Jockey: Elena Ross</p>
+</div>
+<button class="w-full py-2 bg-surface-container-highest rounded-lg font-label-md text-white hover:bg-secondary-container hover:text-on-secondary-container transition-colors">Place Quick Bet</button>
+</div>
+<!-- Odds Card 3 -->
+<div class="glass-card rounded-xl border-l-4 border-outline-variant p-4 hover:translate-y-[-4px] transition-all cursor-pointer">
+<div class="flex justify-between items-start mb-3">
+<div>
+<p class="text-[10px] font-bold text-on-surface-variant bg-surface-variant px-2 py-0.5 rounded w-max uppercase mb-1">Underdog</p>
+<h4 class="font-headline-md text-headline-md text-white">Desert Wind</h4>
+</div>
+<span class="text-white font-data-mono font-bold text-lg">14.00</span>
+</div>
+<div class="flex items-center gap-2 mb-4">
+<div class="w-6 h-6 rounded-full bg-white/10 flex items-center justify-center">
+<span class="material-symbols-outlined text-[14px]">person</span>
+</div>
+<p class="text-body-sm text-on-surface-variant">Jockey: Sam Tarly</p>
+</div>
+<button class="w-full py-2 bg-surface-container-highest rounded-lg font-label-md text-white hover:bg-secondary-container hover:text-on-secondary-container transition-colors">Place Quick Bet</button>
+</div>
+</div>
+</section>
+</div>
+<!-- Integrated Betting Slip Side Panel -->
+<aside class="w-full lg:w-80 shrink-0">
+<div class="glass-card h-full rounded-2xl flex flex-col border border-outline-variant/20 overflow-hidden">
+<div class="p-4 bg-surface-container-highest flex items-center justify-between border-b border-outline-variant/30">
+<h3 class="font-headline-md text-headline-md text-white flex items-center gap-2">
+<span class="material-symbols-outlined text-primary">receipt_long</span>
+                            Betting Slip
+                        </h3>
+<span class="bg-primary text-on-primary text-xs font-bold px-2 py-1 rounded-full">3 Active</span>
+</div>
+<div class="flex-1 overflow-y-auto p-4 space-y-4 custom-scrollbar">
+<!-- Bet Entry 1 -->
+<div class="bg-surface-container rounded-lg p-3 border border-outline-variant/10">
+<div class="flex justify-between items-start mb-2">
+<div>
+<p class="font-bold text-white text-body-sm">Ascot Gold Cup</p>
+<p class="text-[11px] text-on-surface-variant">Horse: <span class="text-primary">Shadow Boxer</span></p>
+</div>
+<button class="material-symbols-outlined text-on-surface-variant text-[18px]">close</button>
+</div>
+<div class="flex justify-between items-end mt-4">
+<div>
+<p class="text-[10px] text-on-surface-variant uppercase">Stake</p>
+<p class="font-data-mono font-bold text-white">$50.00</p>
+</div>
+<div class="text-right">
+<p class="text-[10px] text-on-surface-variant uppercase">Pot. Payout</p>
+<p class="font-data-mono font-bold text-secondary">$375.00</p>
+</div>
+</div>
+</div>
+<!-- Bet Entry 2 -->
+<div class="bg-surface-container rounded-lg p-3 border border-outline-variant/10">
+<div class="flex justify-between items-start mb-2">
+<div>
+<p class="font-bold text-white text-body-sm">Dubai Sprint</p>
+<p class="text-[11px] text-on-surface-variant">Horse: <span class="text-primary">Thunder Dash</span></p>
+</div>
+<button class="material-symbols-outlined text-on-surface-variant text-[18px]">close</button>
+</div>
+<div class="flex justify-between items-end mt-4">
+<div>
+<p class="text-[10px] text-on-surface-variant uppercase">Stake</p>
+<p class="font-data-mono font-bold text-white">$100.00</p>
+</div>
+<div class="text-right">
+<p class="text-[10px] text-on-surface-variant uppercase">Pot. Payout</p>
+<p class="font-data-mono font-bold text-secondary">$220.00</p>
+</div>
+</div>
+</div>
+<!-- Add new bet placeholder -->
+<div class="border-2 border-dashed border-outline-variant/30 rounded-lg p-6 flex flex-col items-center justify-center text-on-surface-variant hover:border-primary/50 transition-colors cursor-pointer group">
+<span class="material-symbols-outlined text-[32px] group-hover:text-primary transition-colors">add</span>
+<span class="font-label-md mt-2">Add more bets</span>
+</div>
+</div>
+<div class="p-4 bg-surface-container-low border-t border-outline-variant/30 space-y-3">
+<div class="flex justify-between text-body-sm">
+<span class="text-on-surface-variant">Total Stake</span>
+<span class="text-white font-data-mono font-bold">$150.00</span>
+</div>
+<div class="flex justify-between text-body-lg">
+<span class="text-on-surface-variant">Possible Win</span>
+<span class="text-secondary font-data-mono font-bold">$595.00</span>
+</div>
+<button class="w-full betting-gradient text-on-primary-container font-bold py-4 rounded-xl shadow-lg shadow-primary/20 hover:scale-[1.02] active:scale-[0.98] transition-all">
+                            CONFIRM BETS
+                        </button>
+</div>
+</div>
+</aside>
+</div>
+</main>
+<!-- Mobile Bottom NavBar Anchor -->
+<nav class="fixed bottom-0 left-0 w-full z-50 flex justify-around items-center px-4 h-16 bg-surface-container-low border-t border-outline-variant/30 md:hidden">
+<button class="flex flex-col items-center gap-1 text-primary">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">pets</span>
+<span class="text-[10px] font-label-md">Horses</span>
+</button>
+<button class="flex flex-col items-center gap-1 text-on-surface-variant">
+<span class="material-symbols-outlined">emoji_events</span>
+<span class="text-[10px] font-label-md">Races</span>
+</button>
+<button class="flex flex-col items-center gap-1 text-on-surface-variant">
+<span class="material-symbols-outlined">account_balance_wallet</span>
+<span class="text-[10px] font-label-md">Wallet</span>
+</button>
+<button class="flex flex-col items-center gap-1 text-on-surface-variant">
+<span class="material-symbols-outlined">leaderboard</span>
+<span class="text-[10px] font-label-md">Rank</span>
+</button>
+<button class="flex flex-col items-center gap-1 text-on-surface-variant">
+<span class="material-symbols-outlined">person</span>
+<span class="text-[10px] font-label-md">Profile</span>
+</button>
+</nav>
+<script>
+        // Simple micro-interaction for active states
+        document.querySelectorAll('a, button').forEach(el => {
+            el.addEventListener('click', function(e) {
+                if(this.tagName === 'A' && this.getAttribute('href') === '#') e.preventDefault();
+            });
+        });
+
+        // Background atmosphere: Subtle canvas pulse for 'high stakes' feel
+        const canvasBg = document.createElement('canvas');
+        canvasBg.className = 'fixed inset-0 pointer-events-none -z-10 opacity-20';
+        document.body.appendChild(canvasBg);
+        const ctx = canvasBg.getContext('2d');
+        
+        let w, h;
+        const resize = () => {
+            w = canvasBg.width = window.innerWidth;
+            h = canvasBg.height = window.innerHeight;
+        };
+        window.addEventListener('resize', resize);
+        resize();
+
+        const particles = Array.from({ length: 30 }, () => ({
+            x: Math.random() * w,
+            y: Math.random() * h,
+            r: Math.random() * 2 + 1,
+            vx: Math.random() * 0.5 - 0.25,
+            vy: Math.random() * 0.5 - 0.25
+        }));
+
+        function animate() {
+            ctx.clearRect(0, 0, w, h);
+            ctx.fillStyle = '#f2ca50';
+            particles.forEach(p => {
+                p.x += p.vx;
+                p.y += p.vy;
+                if (p.x < 0) p.x = w;
+                if (p.x > w) p.x = 0;
+                if (p.y < 0) p.y = h;
+                if (p.y > h) p.y = 0;
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+                ctx.fill();
+            });
+            requestAnimationFrame(animate);
+        }
+        animate();
+    </script>
+</body></html>

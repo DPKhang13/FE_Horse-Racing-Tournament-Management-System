@@ -1,7 +1,7 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { BarChart3, Trophy } from 'lucide-react';
 import { raceResultService } from '../../services/raceResultService';
-import type { RankingCategory } from '../../types/raceResult';
+import type { RankingBoard, RankingCategory } from '../../types/raceResult';
 import RankingTable from './components/RankingTable';
 import ResultNav from './components/ResultNav';
 
@@ -23,11 +23,41 @@ const formatLastUpdated = (dateString: string) => {
 
 const RankingPage = () => {
   const [category, setCategory] = useState<RankingCategory>('horse');
+  const [rankingBoard, setRankingBoard] = useState<RankingBoard | undefined>();
+  const [isLoading, setIsLoading] = useState(true);
+  const [errorMessage, setErrorMessage] = useState('');
 
-  const rankingBoard = useMemo(
-    () => raceResultService.getRankingBoard(category),
-    [category],
-  );
+  useEffect(() => {
+    let isMounted = true;
+
+    const loadRanking = async () => {
+      setIsLoading(true);
+      setErrorMessage('');
+
+      try {
+        const board = await raceResultService.getRankingBoard(category);
+
+        if (isMounted) {
+          setRankingBoard(board);
+        }
+      } catch (error) {
+        if (isMounted) {
+          setRankingBoard(undefined);
+          setErrorMessage(error instanceof Error ? error.message : 'Unable to load ranking data.');
+        }
+      } finally {
+        if (isMounted) {
+          setIsLoading(false);
+        }
+      }
+    };
+
+    void loadRanking();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [category]);
 
   const topEntry = rankingBoard?.entries[0];
 
@@ -109,7 +139,19 @@ const RankingPage = () => {
           )}
         </div>
 
-        {rankingBoard ? (
+        {errorMessage && (
+          <div className="mb-6 rounded-md border border-error/30 bg-error-container/20 px-4 py-3 text-body-sm font-semibold text-error">
+            {errorMessage}
+          </div>
+        )}
+
+        {isLoading ? (
+          <div className="rounded-lg border border-outline-variant bg-white p-12 text-center">
+            <BarChart3 className="w-10 h-10 text-outline mx-auto mb-4" />
+            <h2 className="text-headline-md font-bold text-primary mb-2">Loading rankings</h2>
+            <p className="text-body-md text-on-surface-variant">Fetching leaderboard data from the server.</p>
+          </div>
+        ) : rankingBoard ? (
           <section className="bg-white border border-outline-variant rounded-lg overflow-hidden">
             <div className="p-6 border-b border-outline-variant">
               <p className="text-label-md text-secondary uppercase tracking-widest mb-1">Leaderboard</p>

@@ -5,16 +5,16 @@ interface StatusChipProps {
 }
 
 const statusColor: Record<string, string> = {
-  'To Do': 'bg-[#F8F9FA] text-[#191c1d] border border-[#75777e]',
-  'In Progress': 'bg-[#85f8c4] text-[#002114]',
-  'Done': 'bg-[#b9c7e4] text-[#0d1c32]',
-  'Medium': 'bg-[#ffe088] text-[#574500]',
+  'To Do': 'border border-outline-variant bg-surface-container-low text-on-surface-variant',
+  'In Progress': 'bg-secondary-container/50 text-on-secondary-container',
+  'Done': 'bg-primary/15 text-primary',
+  'Medium': 'bg-primary-container text-on-primary-container',
 };
 
 const StatusChip: React.FC<StatusChipProps> = ({ status }) => {
   return (
     <span
-      className={`px-2 py-1 rounded-[4px] text-xs font-bold uppercase tracking-wider ${statusColor[status] || 'bg-gray-200 text-gray-700'}`}
+      className={`rounded px-2 py-1 text-xs font-bold uppercase tracking-wider ${statusColor[status] || 'bg-surface-container-high text-on-surface-variant'}`}
     >
       {status}
     </span>
