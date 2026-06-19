@@ -2,6 +2,9 @@ import { useEffect, useMemo, useState } from 'react';
 import { BarChart3, CheckCircle2, Clock3 } from 'lucide-react';
 import { getApiErrorMessage } from '../../services/apiClient';
 import { betService, type BetItem } from '../../services/betService';
+import { predictionMockService } from '../../services/predictionMockService';
+
+const shouldUseMockData = import.meta.env.DEV;
 
 const formatPoints = (value: number) => new Intl.NumberFormat('en-US', {
   maximumFractionDigits: 0,
@@ -37,11 +40,16 @@ const ResultTrackingPage = () => {
         const data = await betService.getBets();
 
         if (isMounted) {
-          setTrackedResults(data);
+          if (shouldUseMockData || data.length === 0) {
+            setTrackedResults(predictionMockService.getBets());
+          } else {
+            setTrackedResults(data);
+          }
         }
       } catch (error) {
         if (isMounted) {
           setErrorMessage(getApiErrorMessage(error, 'Unable to load prediction results.'));
+          setTrackedResults(predictionMockService.getBets());
         }
       } finally {
         if (isMounted) {
@@ -77,6 +85,10 @@ const ResultTrackingPage = () => {
   }, [trackedResults]);
 
   const winRatio = stats.settled ? Math.round((stats.won / stats.settled) * 100) : 0;
+  const settledResults = useMemo(
+    () => trackedResults.filter((item) => item.status.toLowerCase() !== 'pending'),
+    [trackedResults],
+  );
 
   return (
     <div className="bg-surface min-h-screen py-12">
@@ -85,11 +97,7 @@ const ResultTrackingPage = () => {
           <div className="space-y-3">
             <p className="text-xs font-semibold uppercase tracking-[0.2em] text-secondary">Result Tracking</p>
             <h1 className="text-headline-lg font-bold text-primary">Track prediction results</h1>
-            <p className="max-w-2xl text-body-md text-on-surface-variant">Review finished races, settlement status, and score your prediction performance in one clear dashboard.</p>
           </div>
-          <button className="gold-gradient inline-flex items-center gap-2 rounded-md px-6 py-3 text-sm font-bold text-on-primary transition">
-            View full leaderboard
-          </button>
         </div>
 
         {errorMessage && (
@@ -157,7 +165,7 @@ const ResultTrackingPage = () => {
                       </tr>
                     )}
 
-                    {!isLoading && trackedResults.map((item) => (
+                    {!isLoading && settledResults.map((item) => (
                       <tr key={item.betId} className="hover:bg-surface-container-lowest transition-colors">
                         <td className="px-6 py-4 text-body-sm font-semibold text-primary">{item.raceName}</td>
                         <td className="px-6 py-4 text-body-sm text-on-surface-variant">{item.horseName}</td>
@@ -171,7 +179,7 @@ const ResultTrackingPage = () => {
                       </tr>
                     ))}
 
-                    {!isLoading && trackedResults.length === 0 && (
+                    {!isLoading && settledResults.length === 0 && (
                       <tr>
                         <td colSpan={5} className="px-6 py-8 text-center text-body-sm font-semibold text-on-surface-variant">
                           No prediction results found.
@@ -205,7 +213,7 @@ const ResultTrackingPage = () => {
                 <div className="rounded-2xl bg-surface-container p-4">
                   <p className="text-sm text-on-surface-variant">Latest settled prediction</p>
                   <p className="mt-2 text-body-lg font-semibold text-primary">
-                    {trackedResults.find((item) => item.status.toLowerCase() !== 'pending')?.horseName ?? 'No settled prediction yet'}
+                    {settledResults[0]?.horseName ?? 'No settled prediction yet'}
                   </p>
                 </div>
               </div>

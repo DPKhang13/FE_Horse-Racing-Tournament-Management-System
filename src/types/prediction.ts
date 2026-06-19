@@ -1,6 +1,14 @@
+export interface PredictionOption {
+  horseId: number;
+  horseName: string;
+  jockeyName: string;
+  odds: number;
+}
+
 export interface OpenRacePrediction {
   id: number;
   raceName: string;
+  tournamentName: string;
   date: string;
   track: string;
   closesAt: string;
@@ -9,6 +17,7 @@ export interface OpenRacePrediction {
   favoriteHorse: string;
   odds: string;
   status: 'Open' | 'Closed' | 'Live';
+  options: PredictionOption[];
 }
 
 export interface ActivePrediction {

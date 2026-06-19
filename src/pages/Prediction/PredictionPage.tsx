@@ -1,11 +1,20 @@
-import { useEffect, useMemo, useState } from 'react';
-import { ArrowRight, Clock3, Ticket, TrendingUp } from 'lucide-react';
+import { useEffect, useMemo, useState, type FormEvent } from 'react';
+import { Clock3, Ticket, TrendingUp, X } from 'lucide-react';
+import { mockOpenRacePredictions, mockPredictionWallet } from '../../mocks/predictionMockData';
 import { getApiErrorMessage } from '../../services/apiClient';
 import { betService, type BetItem } from '../../services/betService';
+import { predictionMockService } from '../../services/predictionMockService';
+
+const shouldUseMockData = import.meta.env.DEV;
 
 const formatPoints = (value: number) => new Intl.NumberFormat('en-US', {
   maximumFractionDigits: 0,
 }).format(value);
+
+const formatCloseTime = (value: string) => new Intl.DateTimeFormat('en-US', {
+  hour: '2-digit',
+  minute: '2-digit',
+}).format(new Date(value));
 
 const statusClassName = (status: string) => {
   const normalizedStatus = status.toLowerCase();
@@ -25,6 +34,13 @@ const PredictionPage = () => {
   const [bets, setBets] = useState<BetItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState('');
+  const [walletBalance, setWalletBalance] = useState<number>(mockPredictionWallet.balance);
+  const [isPredictionModalOpen, setIsPredictionModalOpen] = useState(false);
+  const [selectedRaceId, setSelectedRaceId] = useState(mockOpenRacePredictions[0]?.id ?? 0);
+  const [selectedHorseId, setSelectedHorseId] = useState(mockOpenRacePredictions[0]?.options[0]?.horseId ?? 0);
+  const [stake, setStake] = useState('100');
+  const [formError, setFormError] = useState('');
+  const [successMessage, setSuccessMessage] = useState('');
 
   useEffect(() => {
     let isMounted = true;
@@ -37,11 +53,18 @@ const PredictionPage = () => {
         const data = await betService.getBets();
 
         if (isMounted) {
-          setBets(data);
+          if (shouldUseMockData || data.length === 0) {
+            setBets(predictionMockService.getBets());
+            setWalletBalance(predictionMockService.getWalletBalance());
+          } else {
+            setBets(data);
+          }
         }
       } catch (error) {
         if (isMounted) {
           setErrorMessage(getApiErrorMessage(error, 'Unable to load predictions.'));
+          setBets(predictionMockService.getBets());
+          setWalletBalance(predictionMockService.getWalletBalance());
         }
       } finally {
         if (isMounted) {
@@ -60,10 +83,72 @@ const PredictionPage = () => {
   const stats = useMemo(() => {
     const pending = bets.filter((bet) => bet.status.toLowerCase() === 'pending').length;
     const settled = bets.length - pending;
-    const balanceProxy = bets.reduce((total, bet) => total + (bet.status.toLowerCase() === 'won' ? bet.potentialPayout : 0), 0);
+    const openRaces = mockOpenRacePredictions.filter((race) => race.status === 'Open').length;
 
-    return { pending, settled, balanceProxy };
+    return { openRaces, pending, settled };
   }, [bets]);
+
+  const activePredictions = useMemo(
+    () => bets.filter((bet) => bet.status.toLowerCase() === 'pending'),
+    [bets],
+  );
+
+  const selectedRace = useMemo(
+    () => mockOpenRacePredictions.find((race) => race.id === selectedRaceId) ?? mockOpenRacePredictions[0],
+    [selectedRaceId],
+  );
+
+  const selectedOption = useMemo(
+    () => selectedRace?.options.find((option) => option.horseId === selectedHorseId) ?? selectedRace?.options[0],
+    [selectedHorseId, selectedRace],
+  );
+
+  const stakeValue = Number(stake);
+  const potentialPayout = selectedOption && Number.isFinite(stakeValue)
+    ? Math.round(stakeValue * selectedOption.odds)
+    : 0;
+
+  const openPredictionModal = (raceId = mockOpenRacePredictions[0]?.id ?? 0) => {
+    const race = mockOpenRacePredictions.find((item) => item.id === raceId) ?? mockOpenRacePredictions[0];
+
+    setSelectedRaceId(race?.id ?? 0);
+    setSelectedHorseId(race?.options[0]?.horseId ?? 0);
+    setStake('100');
+    setFormError('');
+    setSuccessMessage('');
+    setIsPredictionModalOpen(true);
+  };
+
+  const handleRaceChange = (raceId: number) => {
+    const race = mockOpenRacePredictions.find((item) => item.id === raceId);
+    setSelectedRaceId(raceId);
+    setSelectedHorseId(race?.options[0]?.horseId ?? 0);
+  };
+
+  const handleCreatePrediction = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setFormError('');
+
+    if (!selectedRace || !selectedOption) {
+      setFormError('Please select a race and horse.');
+      return;
+    }
+
+    try {
+      const prediction = predictionMockService.createPrediction({
+        race: selectedRace,
+        option: selectedOption,
+        amount: stakeValue,
+      });
+
+      setBets((current) => [prediction, ...current]);
+      setWalletBalance(predictionMockService.getWalletBalance());
+      setSuccessMessage(`Prediction placed on ${prediction.horseName} for ${formatPoints(prediction.amount)} pts.`);
+      setIsPredictionModalOpen(false);
+    } catch (error) {
+      setFormError(error instanceof Error ? error.message : 'Unable to create prediction.');
+    }
+  };
 
   return (
     <div className="bg-surface min-h-screen py-12">
@@ -72,15 +157,17 @@ const PredictionPage = () => {
           <div className="space-y-3">
             <p className="text-headline-lg font-bold text-primary mb-2">Prediction Center</p>
           </div>
-          <button className="inline-flex items-center gap-2 rounded-md bg-secondary px-6 py-3 text-sm font-semibold text-white transition hover:bg-secondary-container/90">
-            New Prediction
-            <ArrowRight className="w-4 h-4" />
-          </button>
         </div>
 
         {errorMessage && (
           <div className="mb-8 rounded-md border border-error/30 bg-error-container/20 px-4 py-3 text-body-sm font-semibold text-error">
             {errorMessage}
+          </div>
+        )}
+
+        {successMessage && (
+          <div className="mb-8 rounded-md border border-secondary/30 bg-secondary-container/20 px-4 py-3 text-body-sm font-semibold text-secondary">
+            {successMessage}
           </div>
         )}
 
@@ -90,13 +177,13 @@ const PredictionPage = () => {
               <div className="flex items-center justify-between gap-4 mb-6">
                 <div>
                   <p className="text-xs font-semibold uppercase tracking-[0.2em] text-secondary">Wallet</p>
-                  <h2 className="mt-2 text-3xl font-bold text-primary">{formatPoints(stats.balanceProxy)} pts</h2>
+                  <h2 className="mt-2 text-3xl font-bold text-primary">{formatPoints(walletBalance)} {mockPredictionWallet.currency}</h2>
                 </div>
-                <div className="rounded-2xl bg-secondary-container px-4 py-3 text-sm font-semibold text-secondary">Won payout total</div>
+                <div className="rounded-2xl bg-secondary-container px-4 py-3 text-sm font-semibold text-secondary">Available balance</div>
               </div>
               <div className="grid gap-4 sm:grid-cols-3">
                 {[
-                  { label: 'Open predictions', value: String(stats.pending).padStart(2, '0'), color: 'bg-surface-container-highest text-primary' },
+                  { label: 'Open races', value: String(stats.openRaces).padStart(2, '0'), color: 'bg-surface-container-highest text-primary' },
                   { label: 'Pending', value: String(stats.pending).padStart(2, '0'), color: 'text-primary' },
                   { label: 'Settled', value: String(stats.settled).padStart(2, '0'), color: 'text-secondary' },
                 ].map((item) => (
@@ -115,12 +202,41 @@ const PredictionPage = () => {
                   <h2 className="mt-2 text-2xl font-bold text-primary">Prediction windows</h2>
                 </div>
                 <div className="inline-flex items-center gap-2 rounded-full bg-surface-container px-4 py-2 text-sm font-semibold text-on-surface-variant">
-                  <Clock3 className="w-4 h-4" /> Awaiting API
+                  <Clock3 className="w-4 h-4" /> {mockOpenRacePredictions.length} open
                 </div>
               </div>
 
-              <div className="rounded-2xl border border-dashed border-outline-variant bg-surface-container-low p-6 text-sm text-on-surface-variant">
-                Current API documentation exposes saved bets through <span className="font-semibold text-primary">/api/bets/get-all</span>, but it does not include an open race prediction-window endpoint or bet creation endpoint in lines 1-495.
+              <div className="grid gap-4 md:grid-cols-2">
+                {mockOpenRacePredictions.map((race) => (
+                  <article key={race.id} className="rounded-2xl border border-outline-variant bg-surface-container-low p-5 transition hover:border-secondary">
+                    <div className="flex items-start justify-between gap-4">
+                      <div>
+                        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-secondary">{race.grade} / {race.surface}</p>
+                        <h3 className="mt-2 text-lg font-bold text-primary">{race.raceName}</h3>
+                        <p className="mt-1 text-sm text-on-surface-variant">{race.track} · {race.date}</p>
+                      </div>
+                      <span className="rounded-full bg-secondary-container/50 px-3 py-1 text-xs font-bold uppercase tracking-[0.16em] text-on-secondary-container">
+                        {race.status}
+                      </span>
+                    </div>
+                    <div className="mt-5 flex items-end justify-between gap-4">
+                      <div>
+                        <p className="text-xs text-on-surface-variant">Favorite</p>
+                        <p className="mt-1 font-semibold text-on-surface">{race.favoriteHorse} · {race.odds} odds</p>
+                      </div>
+                      <p className="inline-flex items-center gap-1 text-sm font-semibold text-primary">
+                        <Clock3 className="h-4 w-4" /> Closes {formatCloseTime(race.closesAt)}
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => openPredictionModal(race.id)}
+                      className="mt-5 w-full rounded-md border border-secondary px-4 py-2.5 text-sm font-bold text-secondary transition hover:bg-secondary-container/30"
+                    >
+                      Predict this race
+                    </button>
+                  </article>
+                ))}
               </div>
             </section>
           </div>
@@ -141,7 +257,7 @@ const PredictionPage = () => {
                   </div>
                 )}
 
-                {!isLoading && bets.map((prediction) => (
+                {!isLoading && activePredictions.map((prediction) => (
                   <article key={prediction.betId} className="rounded-2xl border border-outline-variant bg-surface-container-low p-4">
                     <div className="flex items-start justify-between gap-4">
                       <div>
@@ -162,7 +278,7 @@ const PredictionPage = () => {
                   </article>
                 ))}
 
-                {!isLoading && bets.length === 0 && (
+                {!isLoading && activePredictions.length === 0 && (
                   <div className="rounded-2xl border border-outline-variant bg-surface-container-low p-4 text-sm font-semibold text-on-surface-variant">
                     No predictions found.
                   </div>
@@ -187,6 +303,129 @@ const PredictionPage = () => {
           </aside>
         </div>
       </div>
+
+      {isPredictionModalOpen && selectedRace && selectedOption && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-surface/80 p-4 backdrop-blur-sm"
+          role="presentation"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) {
+              setIsPredictionModalOpen(false);
+            }
+          }}
+        >
+          <section
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="new-prediction-title"
+            className="glass-panel w-full max-w-xl rounded-2xl p-6"
+          >
+            <div className="mb-6 flex items-start justify-between gap-4">
+              <div>
+                <p className="text-xs font-bold uppercase tracking-[0.2em] text-secondary">Place prediction</p>
+                <h2 id="new-prediction-title" className="mt-2 text-2xl font-bold text-primary">New Prediction</h2>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsPredictionModalOpen(false)}
+                aria-label="Close prediction form"
+                className="rounded-md border border-outline-variant p-2 text-on-surface-variant transition hover:text-primary"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleCreatePrediction} className="space-y-5">
+              <label className="grid gap-2">
+                <span className="text-xs font-bold uppercase tracking-[0.16em] text-on-surface-variant">Race</span>
+                <select
+                  value={selectedRace.id}
+                  onChange={(event) => handleRaceChange(Number(event.target.value))}
+                  className="w-full rounded-md border border-outline-variant bg-surface-container-low px-4 py-3 focus:border-primary focus:outline-none"
+                >
+                  {mockOpenRacePredictions.map((race) => (
+                    <option key={race.id} value={race.id}>{race.raceName} — closes {formatCloseTime(race.closesAt)}</option>
+                  ))}
+                </select>
+              </label>
+
+              <label className="grid gap-2">
+                <span className="text-xs font-bold uppercase tracking-[0.16em] text-on-surface-variant">Horse / Jockey</span>
+                <select
+                  value={selectedOption.horseId}
+                  onChange={(event) => setSelectedHorseId(Number(event.target.value))}
+                  className="w-full rounded-md border border-outline-variant bg-surface-container-low px-4 py-3 focus:border-primary focus:outline-none"
+                >
+                  {selectedRace.options.map((option) => (
+                    <option key={option.horseId} value={option.horseId}>
+                      {option.horseName} / {option.jockeyName} — {option.odds} odds
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              <label className="grid gap-2">
+                <span className="text-xs font-bold uppercase tracking-[0.16em] text-on-surface-variant">Prediction points</span>
+                <input
+                  type="number"
+                  min="1"
+                  max={walletBalance > 0 ? walletBalance : undefined}
+                  step="1"
+                  value={stake}
+                  onChange={(event) => setStake(event.target.value)}
+                  className="w-full rounded-md border border-outline-variant bg-surface-container-low px-4 py-3 focus:border-primary focus:outline-none"
+                  disabled={walletBalance <= 0}
+                  required
+                />
+              </label>
+
+              <div className="grid gap-3 rounded-xl bg-surface-container p-4 sm:grid-cols-3">
+                <div>
+                  <p className="text-xs text-on-surface-variant">Available</p>
+                  <p className="mt-1 font-bold text-primary">{formatPoints(walletBalance)} pts</p>
+                </div>
+                <div>
+                  <p className="text-xs text-on-surface-variant">Odds</p>
+                  <p className="mt-1 font-bold text-on-surface">{selectedOption.odds}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-on-surface-variant">Potential payout</p>
+                  <p className="mt-1 font-bold text-secondary">{formatPoints(potentialPayout)} pts</p>
+                </div>
+              </div>
+
+              {formError && (
+                <p className="rounded-md border border-error/30 bg-error-container/20 px-4 py-3 text-sm font-semibold text-error">
+                  {formError}
+                </p>
+              )}
+
+              {walletBalance <= 0 && (
+                <p className="rounded-md border border-error/30 bg-error-container/20 px-4 py-3 text-sm font-semibold text-error">
+                  Your wallet has no available points. Add points before creating a prediction.
+                </p>
+              )}
+
+              <div className="flex justify-end gap-3">
+                <button
+                  type="button"
+                  onClick={() => setIsPredictionModalOpen(false)}
+                  className="rounded-md border border-outline-variant px-5 py-3 text-sm font-bold text-on-surface"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={walletBalance <= 0}
+                  className="rounded-md bg-secondary px-5 py-3 text-sm font-bold text-on-secondary transition hover:bg-secondary-container disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  Confirm prediction
+                </button>
+              </div>
+            </form>
+          </section>
+        </div>
+      )}
     </div>
   );
 };
