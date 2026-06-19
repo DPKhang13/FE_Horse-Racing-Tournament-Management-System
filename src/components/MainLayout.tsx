@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Bell, LogIn, LogOut, Trophy, User } from 'lucide-react';
+import { motion } from 'motion/react';
 import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { getAccessToken } from '../services/apiClient';
 import { authService } from '../services/authService';
@@ -182,10 +183,12 @@ const LandingTopBar = ({
   }, []);
 
   return (
-    <header
+    <motion.header
+      layout
+      transition={{ type: 'spring', stiffness: 260, damping: 28 }}
       className={`fixed z-50 transition-all duration-500 ease-out ${
         isScrolled
-          ? 'left-1/2 top-4 h-14 w-[calc(100%-2rem)] max-w-5xl -translate-x-1/2 rounded-full border border-outline-variant/40 bg-surface-container-low/75 px-5 shadow-2xl shadow-black/30 backdrop-blur-2xl md:px-7'
+          ? 'left-4 right-4 top-4 mx-auto h-14 max-w-5xl rounded-full border border-outline-variant/40 bg-surface-container-low/75 px-5 shadow-2xl shadow-black/30 backdrop-blur-2xl md:px-7'
           : 'left-0 top-0 h-16 w-full border-b border-outline-variant/30 bg-surface-container-low/80 px-8 shadow-sm backdrop-blur-md md:px-32'
       }`}
     >
@@ -248,7 +251,7 @@ const LandingTopBar = ({
           )}
         </div>
       </div>
-    </header>
+    </motion.header>
   );
 };
 

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { ArrowRight, Eye, Gavel, Globe2, MessageCircle, PawPrint, Share2, Zap } from 'lucide-react';
+import { motion } from 'motion/react';
 import { Link } from 'react-router-dom';
 import { getApiErrorMessage } from '../../services/apiClient';
 import { tournamentService } from '../../services/tournamentService';
@@ -89,6 +90,22 @@ const footerGroups = [
     links: ['Privacy Policy', 'Terms of Service', 'Anti-Money Laundering', 'Global Licensing'],
   },
 ];
+
+const revealUp = {
+  hidden: { opacity: 0, y: 28 },
+  visible: { opacity: 1, y: 0 },
+};
+
+const revealContainer = {
+  hidden: {},
+  visible: {
+    transition: {
+      staggerChildren: 0.12,
+    },
+  },
+};
+
+const viewportReveal = { once: true, amount: 0.18 };
 
 const formatShortDate = (value: string) => {
   if (!value) {
@@ -226,29 +243,51 @@ const LandingPage = () => {
           <div className="absolute inset-0 bg-gradient-to-r from-background via-background/80 to-transparent" />
         </div>
 
-        <div className="relative z-10 max-w-5xl px-8 md:px-32">
-          <span className="mb-6 inline-block rounded-full border border-primary px-4 py-1 text-label-md font-semibold uppercase tracking-widest text-primary">
+        <motion.div
+          className="relative z-10 max-w-5xl px-8 md:px-32"
+          initial="hidden"
+          animate="visible"
+          variants={revealContainer}
+        >
+          <motion.span
+            className="mb-6 inline-block rounded-full border border-primary px-4 py-1 text-label-md font-semibold uppercase tracking-widest text-primary"
+            variants={revealUp}
+            transition={{ duration: 0.55 }}
+          >
             Global Racing Management
-          </span>
-          <h1 className="font-display mb-6 text-5xl font-extrabold leading-[1.1] text-on-surface md:text-[64px]">
+          </motion.span>
+          <motion.h1
+            className="font-display mb-6 text-5xl font-extrabold leading-[1.1] text-on-surface md:text-[64px]"
+            variants={revealUp}
+            transition={{ duration: 0.65 }}
+          >
             The Pinnacle of <br />
             <span className="text-primary">Horse Racing</span> Management
-          </h1>
-          <p className="mb-10 max-w-2xl text-body-lg leading-7 text-on-surface-variant">
+          </motion.h1>
+          <motion.p
+            className="mb-10 max-w-2xl text-body-lg leading-7 text-on-surface-variant"
+            variants={revealUp}
+            transition={{ duration: 0.65 }}
+          >
             Experience precision data, lightning-fast tournament logistics, and the ultimate betting excitement. Whether you manage a stable or chase the thrill of the win, HTMS is your elite racing command center.
-          </p>
-          <div className="flex flex-wrap gap-4">
+          </motion.p>
+          <motion.div className="flex flex-wrap gap-4" variants={revealUp} transition={{ duration: 0.65 }}>
             <Link to="/login" state={{ mode: 'signup' }} className="gold-gradient rounded-xl px-8 py-4 font-display text-xl font-bold text-on-primary shadow-lg shadow-primary/20 transition-transform active:scale-95">
               Join the Race
             </Link>
             <Link to="/tournaments" className="rounded-xl border border-outline-variant bg-surface-container-highest px-8 py-4 font-display text-xl font-bold text-on-surface transition-colors hover:bg-surface-bright">
               Explore Tournaments
             </Link>
-          </div>
-        </div>
+          </motion.div>
+        </motion.div>
 
         <div className="absolute bottom-0 right-0 hidden p-12 xl:block">
-          <div className="glass-card w-80 rounded-2xl border-l-4 border-primary p-6 shadow-2xl">
+          <motion.div
+            className="glass-card w-80 rounded-2xl border-l-4 border-primary p-6 shadow-2xl"
+            initial={{ opacity: 0, x: 42, scale: 0.96 }}
+            animate={{ opacity: 1, x: 0, scale: 1 }}
+            transition={{ delay: 0.4, type: 'spring', stiffness: 150, damping: 18 }}
+          >
             <div className="mb-4 flex items-center justify-between">
               <span className="flex items-center text-label-md font-semibold text-secondary">
                 <span className="pulse-live mr-2 h-3 w-3 rounded-full bg-secondary" />
@@ -269,7 +308,13 @@ const LandingPage = () => {
             ) : (
               <div className="space-y-3">
                 {featuredParticipants.map((item, index) => (
-                  <div key={item.participantId} className="flex items-center justify-between gap-3">
+                  <motion.div
+                    key={item.participantId}
+                    className="flex items-center justify-between gap-3"
+                    initial={{ opacity: 0, x: 12 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: 0.55 + index * 0.08 }}
+                  >
                     <div className="flex min-w-0 items-center gap-3">
                       <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-bold ${index === 0 ? 'bg-primary-container text-on-primary' : 'bg-on-tertiary-container text-on-tertiary'}`}>
                         {item.horseName.slice(0, 2).toUpperCase()}
@@ -277,15 +322,21 @@ const LandingPage = () => {
                       <span className="truncate font-bold">{item.horseName}</span>
                     </div>
                     <span className="shrink-0 text-data-mono font-medium text-primary">{item.jockeyName}</span>
-                  </div>
+                  </motion.div>
                 ))}
               </div>
             )}
-          </div>
+          </motion.div>
         </div>
       </section>
 
-      <div id="live-odds" className="relative z-20 scroll-mt-28 overflow-hidden border-y border-outline-variant/30 bg-surface-container-lowest py-3">
+      <motion.div
+        id="live-odds"
+        className="relative z-20 scroll-mt-28 overflow-hidden border-y border-outline-variant/30 bg-surface-container-lowest py-3"
+        initial={{ opacity: 0, y: 12 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.65, duration: 0.45 }}
+      >
         <div className="ticker-scroll">
           <div className="flex items-center space-x-12 px-6">
             {[0, 1].map((loopIndex) => (
@@ -311,21 +362,34 @@ const LandingPage = () => {
             ))}
           </div>
         </div>
-      </div>
+      </motion.div>
 
       <section id="tournaments" className="scroll-mt-28 bg-background px-8 py-24 md:px-32">
-        <div className="mb-16 text-center">
+        <motion.div
+          className="mb-16 text-center"
+          initial="hidden"
+          whileInView="visible"
+          viewport={viewportReveal}
+          variants={revealUp}
+          transition={{ duration: 0.55 }}
+        >
           <h2 className="font-display mb-4 text-headline-lg font-bold">Precision Engineered for Every Actor</h2>
           <p className="mx-auto max-w-xl text-on-surface-variant">
             Our platform bridges the gap between field management and fan experience with tailored interfaces.
           </p>
-        </div>
+        </motion.div>
 
         <div className="grid grid-cols-1 gap-8 md:grid-cols-3">
           {featureCards.map((card) => (
-            <article
+            <motion.article
               key={card.title}
-              className={`glass-card group rounded-2xl p-8 transition-all duration-300 hover:-translate-y-2 ${card.featured ? 'border-primary bg-surface-container-high/50' : ''}`}
+              className={`glass-card group rounded-2xl p-8 ${card.featured ? 'border-primary bg-surface-container-high/50' : ''}`}
+              initial="hidden"
+              whileInView="visible"
+              viewport={viewportReveal}
+              variants={revealUp}
+              whileHover={{ y: -8, scale: 1.01 }}
+              transition={{ type: 'spring', stiffness: 230, damping: 22 }}
             >
               <div className={`mb-8 flex h-16 w-16 items-center justify-center rounded-xl transition-transform group-hover:scale-110 ${card.iconWrap}`}>
                 <card.icon className="h-10 w-10" />
@@ -336,7 +400,7 @@ const LandingPage = () => {
                 {card.action}
                 <ArrowRight className="ml-2 h-4 w-4" />
               </a>
-            </article>
+            </motion.article>
           ))}
         </div>
       </section>
@@ -352,7 +416,14 @@ const LandingPage = () => {
       </section>
 
       <section id="rankings" className="scroll-mt-28 bg-background px-8 py-24 md:px-32">
-        <div className="mb-12 flex flex-col gap-6 md:flex-row md:items-end md:justify-between">
+        <motion.div
+          className="mb-12 flex flex-col gap-6 md:flex-row md:items-end md:justify-between"
+          initial="hidden"
+          whileInView="visible"
+          viewport={viewportReveal}
+          variants={revealUp}
+          transition={{ duration: 0.55 }}
+        >
           <div>
             <h2 className="font-display mb-4 text-headline-lg font-bold">The Winner's Circle</h2>
             <p className="text-on-surface-variant">
@@ -362,9 +433,15 @@ const LandingPage = () => {
           <Link to="/results" className="rounded-lg border border-outline-variant px-6 py-2 text-label-md font-semibold text-on-surface transition-all hover:bg-surface-container-highest">
             View All Results
           </Link>
-        </div>
+        </motion.div>
 
-        <div className="glass-card overflow-hidden rounded-2xl">
+        <motion.div
+          className="glass-card overflow-hidden rounded-2xl"
+          initial={{ opacity: 0, y: 28 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={viewportReveal}
+          transition={{ duration: 0.6 }}
+        >
           <div className="overflow-x-auto">
             <table className="w-full min-w-[860px] text-left">
               <thead>
@@ -377,8 +454,15 @@ const LandingPage = () => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-outline-variant/20">
-                {winners.map((winner) => (
-                  <tr key={winner.rank} className="transition-colors hover:bg-surface-container-highest/20">
+                {winners.map((winner, index) => (
+                  <motion.tr
+                    key={winner.rank}
+                    className="transition-colors hover:bg-surface-container-highest/20"
+                    initial={{ opacity: 0, x: -18 }}
+                    whileInView={{ opacity: 1, x: 0 }}
+                    viewport={{ once: true, amount: 0.35 }}
+                    transition={{ delay: index * 0.07, duration: 0.42 }}
+                  >
                     <td className="px-8 py-6">
                       <span className={`flex h-8 w-8 items-center justify-center rounded-full font-bold ${winner.badgeClass}`}>
                         {winner.rank}
@@ -398,16 +482,22 @@ const LandingPage = () => {
                     </td>
                     <td className="px-8 py-6 text-data-mono font-medium text-secondary">{winner.time}</td>
                     <td className="px-8 py-6 text-data-mono font-medium text-primary">{winner.payout}</td>
-                  </tr>
+                  </motion.tr>
                 ))}
               </tbody>
             </table>
           </div>
-        </div>
+        </motion.div>
       </section>
 
       <section className="relative overflow-hidden bg-background px-8 py-24 md:px-32">
-        <div className="glass-card relative overflow-hidden rounded-[32px] border-primary/30 p-12 text-center md:p-24">
+        <motion.div
+          className="glass-card relative overflow-hidden rounded-[32px] border-primary/30 p-12 text-center md:p-24"
+          initial={{ opacity: 0, y: 36, scale: 0.98 }}
+          whileInView={{ opacity: 1, y: 0, scale: 1 }}
+          viewport={viewportReveal}
+          transition={{ type: 'spring', stiffness: 150, damping: 20 }}
+        >
           <div className="absolute inset-0 opacity-10">
             <div className="h-full w-full bg-[radial-gradient(#f2ca50_1px,transparent_1px)] bg-[length:40px_40px]" />
           </div>
@@ -425,7 +515,7 @@ const LandingPage = () => {
               </Link>
             </div>
           </div>
-        </div>
+        </motion.div>
       </section>
 
       <footer className="border-t border-outline-variant/30 bg-surface-container-lowest px-8 pb-10 pt-20 md:px-32">
@@ -437,9 +527,15 @@ const LandingPage = () => {
             </p>
             <div className="flex gap-4">
               {[Globe2, MessageCircle, Share2].map((Icon, index) => (
-                <button key={index} className="text-on-surface-variant transition-colors hover:text-primary" aria-label="Social link">
+                <motion.button
+                  key={index}
+                  className="text-on-surface-variant transition-colors hover:text-primary"
+                  aria-label="Social link"
+                  whileHover={{ y: -2, scale: 1.08 }}
+                  whileTap={{ scale: 0.94 }}
+                >
                   <Icon className="h-5 w-5" />
-                </button>
+                </motion.button>
               ))}
             </div>
           </div>
@@ -475,10 +571,15 @@ const LandingPage = () => {
 };
 
 const StatBlock = ({ value, label }: { value: string; label: string }) => (
-  <div>
+  <motion.div
+    initial={{ opacity: 0, y: 20 }}
+    whileInView={{ opacity: 1, y: 0 }}
+    viewport={viewportReveal}
+    transition={{ duration: 0.5 }}
+  >
     <div className="font-display mb-2 text-5xl font-extrabold text-primary">{value}</div>
     <div className="text-label-md font-semibold uppercase tracking-widest text-on-surface-variant">{label}</div>
-  </div>
+  </motion.div>
 );
 
 const FloatingCardMessage = ({ text, tone = 'muted' }: { text: string; tone?: 'muted' | 'error' }) => (
