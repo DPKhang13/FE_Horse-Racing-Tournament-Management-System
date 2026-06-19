@@ -1,11 +1,15 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { ArrowRight, Bell, CalendarDays, Clock3, Trophy } from 'lucide-react';
+import { Bell, CalendarDays, Clock3, Trophy } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import { getApiErrorMessage } from '../../services/apiClient';
 import { betService, type BetItem } from '../../services/betService';
 import { notificationService, type NotificationItem } from '../../services/notificationService';
 import { raceResultService } from '../../services/raceResultService';
 import { scheduleService, type RaceScheduleItem } from '../../services/scheduleService';
 import type { RaceResultListItem } from '../../types/raceResult';
+import { spectatorDashboardMockData } from './mockData';
+
+const shouldUseMockData = import.meta.env.DEV;
 
 const formatTime = (value: string) => new Intl.DateTimeFormat('en-US', {
   hour: '2-digit',
@@ -26,6 +30,7 @@ const formatDateTime = (value?: string) => {
 };
 
 const SpectatorDashboard: React.FC = () => {
+  const navigate = useNavigate();
   const [upcomingRaces, setUpcomingRaces] = useState<RaceScheduleItem[]>([]);
   const [myPredictions, setMyPredictions] = useState<BetItem[]>([]);
   const [latestResults, setLatestResults] = useState<RaceResultListItem[]>([]);
@@ -49,14 +54,43 @@ const SpectatorDashboard: React.FC = () => {
         ]);
 
         if (isMounted) {
-          setUpcomingRaces(races.status === 'fulfilled' ? races.value.filter((race) => new Date(race.scheduledAt).getTime() >= Date.now()).slice(0, 6) : []);
-          setMyPredictions(bets.status === 'fulfilled' ? bets.value.slice(0, 5) : []);
-          setLatestResults(results.status === 'fulfilled' ? results.value.slice(0, 5) : []);
-          setNotifications(notificationList.status === 'fulfilled' ? notificationList.value.slice(0, 5) : []);
+          const nextUpcomingRaces = races.status === 'fulfilled'
+            ? races.value.filter((race) => new Date(race.scheduledAt).getTime() >= Date.now()).slice(0, 6)
+            : [];
+          const nextMyPredictions = bets.status === 'fulfilled' ? bets.value.slice(0, 5) : [];
+          const nextLatestResults = results.status === 'fulfilled' ? results.value.slice(0, 5) : [];
+          const nextNotifications = notificationList.status === 'fulfilled' ? notificationList.value.slice(0, 5) : [];
+
+          setUpcomingRaces(nextUpcomingRaces);
+          setMyPredictions(nextMyPredictions);
+          setLatestResults(nextLatestResults);
+          setNotifications(nextNotifications);
+
+          const hasAnyRealData =
+            nextUpcomingRaces.length > 0 ||
+            nextMyPredictions.length > 0 ||
+            nextLatestResults.length > 0 ||
+            nextNotifications.length > 0;
+
+          if (shouldUseMockData || !hasAnyRealData) {
+            setUpcomingRaces(spectatorDashboardMockData.upcomingRaces);
+            setMyPredictions(spectatorDashboardMockData.myPredictions);
+            setLatestResults(spectatorDashboardMockData.latestResults);
+            setNotifications(spectatorDashboardMockData.notifications);
+          } else {
+            setUpcomingRaces(nextUpcomingRaces);
+            setMyPredictions(nextMyPredictions);
+            setLatestResults(nextLatestResults);
+            setNotifications(nextNotifications);
+          }
         }
       } catch (error) {
         if (isMounted) {
           setErrorMessage(getApiErrorMessage(error, 'Unable to load spectator dashboard.'));
+          setUpcomingRaces(spectatorDashboardMockData.upcomingRaces);
+          setMyPredictions(spectatorDashboardMockData.myPredictions);
+          setLatestResults(spectatorDashboardMockData.latestResults);
+          setNotifications(spectatorDashboardMockData.notifications);
         }
       } finally {
         if (isMounted) {
@@ -73,10 +107,25 @@ const SpectatorDashboard: React.FC = () => {
   }, []);
 
   const metrics = useMemo(() => [
-    { label: 'Live Races', value: String(upcomingRaces.filter((race) => race.status.toLowerCase() === 'live').length).padStart(2, '0'), tone: 'text-secondary' },
-    { label: 'Open Predictions', value: String(myPredictions.filter((item) => item.status.toLowerCase() === 'pending').length).padStart(2, '0'), tone: 'text-primary' },
-    { label: 'Notifications', value: String(notifications.length).padStart(2, '0'), tone: 'text-on-surface' },
-  ], [myPredictions, notifications, upcomingRaces]);
+    {
+      label: 'Live Races',
+      value: String(upcomingRaces.filter((race) => race.status.toLowerCase() === 'live').length).padStart(2, '0'),
+      tone: 'text-secondary',
+      action: () => document.getElementById('race-schedule')?.scrollIntoView({ behavior: 'smooth', block: 'start' }),
+    },
+    {
+      label: 'Open Predictions',
+      value: String(myPredictions.filter((item) => item.status.toLowerCase() === 'pending').length).padStart(2, '0'),
+      tone: 'text-primary',
+      action: () => navigate('/prediction'),
+    },
+    {
+      label: 'Notifications',
+      value: String(notifications.length).padStart(2, '0'),
+      tone: 'text-on-surface',
+      action: () => navigate('/notifications'),
+    },
+  ], [myPredictions, navigate, notifications, upcomingRaces]);
 
   return (
     <main className="min-h-screen bg-surface text-on-surface">
@@ -87,10 +136,6 @@ const SpectatorDashboard: React.FC = () => {
               <p className="text-xs font-bold uppercase tracking-[0.22em] text-secondary">Spectator Experience</p>
               <h1 className="font-display text-4xl font-extrabold text-primary md:text-5xl">Spectator Dashboard</h1>
             </div>
-            <button className="gold-gradient inline-flex items-center gap-2 rounded-xl px-5 py-3 text-sm font-extrabold text-on-primary transition-all">
-              View live races
-              <ArrowRight className="h-4 w-4" />
-            </button>
           </div>
 
           {errorMessage && (
@@ -101,7 +146,13 @@ const SpectatorDashboard: React.FC = () => {
 
           <div className="grid gap-4 md:grid-cols-3">
             {metrics.map((item) => (
-              <article key={item.label} className="glass-panel rounded-xl p-5">
+              <button
+                key={item.label}
+                type="button"
+                onClick={item.action}
+                aria-label={`${item.label}: ${item.value}. Open details`}
+                className="glass-panel w-full rounded-xl p-5 text-left transition hover:-translate-y-0.5 hover:border-primary/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-surface"
+              >
                 <p className="text-sm text-on-surface-variant">{item.label}</p>
                 <div className="mt-3 flex items-end justify-between gap-3">
                   <strong className={`font-display text-4xl font-extrabold ${item.tone}`}>{item.value}</strong>
@@ -109,7 +160,7 @@ const SpectatorDashboard: React.FC = () => {
                     Today
                   </span>
                 </div>
-              </article>
+              </button>
             ))}
           </div>
         </div>
@@ -117,7 +168,7 @@ const SpectatorDashboard: React.FC = () => {
 
       <section className="mx-auto grid max-w-[1440px] gap-8 px-4 py-8 md:px-8 lg:grid-cols-[1.1fr_0.9fr]">
         <div className="space-y-8">
-          <DashboardPanel eyebrow="Upcoming races" title="Race schedule" icon={<CalendarDays className="h-5 w-5 text-secondary" />}>
+          <DashboardPanel id="race-schedule" eyebrow="Upcoming races" title="Race schedule" icon={<CalendarDays className="h-5 w-5 text-secondary" />}>
             <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
               {isLoading && <EmptyState text="Loading races..." />}
 
@@ -208,17 +259,19 @@ const SpectatorDashboard: React.FC = () => {
 };
 
 const DashboardPanel = ({
+  id,
   eyebrow,
   title,
   icon,
   children,
 }: {
+  id?: string;
   eyebrow: string;
   title: string;
   icon: React.ReactNode;
   children: React.ReactNode;
 }) => (
-  <article className="glass-panel rounded-2xl p-6">
+  <article id={id} className="glass-panel scroll-mt-6 rounded-2xl p-6">
     <div className="mb-4 flex items-center justify-between gap-3">
       <div>
         <p className="text-xs font-bold uppercase tracking-[0.2em] text-secondary">{eyebrow}</p>
