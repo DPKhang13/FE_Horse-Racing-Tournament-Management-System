@@ -8,6 +8,7 @@ import RankingPage from '../pages/Result/RankingPage';
 import PredictionPage from '../pages/Prediction/PredictionPage';
 import ResultTrackingPage from '../pages/Prediction/ResultTrackingPage';
 import AuthPage from '../pages/Auth/AuthPage';
+import RegistrationPage from '../pages/Auth/RegistrationPage';
 import HorseManagementPage from '../pages/Horse/HorseManagementPage';
 import MainLayout from '../components/MainLayout';
 import ProtectedRoute from '../components/ProtectedRoute';
@@ -36,6 +37,7 @@ const AppRoutes = () => {
     <Routes>
       {/* Trang Auth không có Header/Footer chung */}
       <Route path="/login" element={<AuthPage />} />
+      <Route path="/registration" element={<RegistrationPage />} />
 
       {/* Các trang khác có Header/Footer chung */}
       <Route path="/" element={withLayout(<LandingPage />)} />

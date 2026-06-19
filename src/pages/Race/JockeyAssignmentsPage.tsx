@@ -4,6 +4,7 @@ import { getApiErrorMessage } from '../../services/apiClient';
 import { authService } from '../../services/authService';
 import { jockeyAssignmentService, type JockeyAssignmentItem, type JockeyInvitationFormData } from '../../services/jockeyAssignmentService';
 import { jockeyService, type JockeyItem } from '../../services/jockeyService';
+import { raceRegistrationService, type RaceRegistrationItem } from '../../services/raceRegistrationService';
 import type { UserProfile } from '../../types/user';
 
 const initialForm: JockeyInvitationFormData = {
@@ -18,6 +19,7 @@ const JockeyAssignmentsPage = () => {
   const [profile, setProfile] = useState<UserProfile | undefined>(() => authService.getStoredUserProfile());
   const [assignments, setAssignments] = useState<JockeyAssignmentItem[]>([]);
   const [jockeys, setJockeys] = useState<JockeyItem[]>([]);
+  const [registrations, setRegistrations] = useState<RaceRegistrationItem[]>([]);
   const [form, setForm] = useState<JockeyInvitationFormData>(initialForm);
   const [isLoading, setIsLoading] = useState(true);
   const [message, setMessage] = useState('');
@@ -35,12 +37,14 @@ const JockeyAssignmentsPage = () => {
       setProfile(currentProfile);
 
       if (currentProfile.roleType === 'horse_owner') {
-        const [sent, availableJockeys] = await Promise.all([
+        const [sent, availableJockeys, registrationList] = await Promise.all([
           jockeyAssignmentService.getSent(),
           jockeyService.getJockeys('active'),
+          raceRegistrationService.getMine(),
         ]);
         setAssignments(sent);
         setJockeys(availableJockeys);
+        setRegistrations(registrationList);
       } else {
         setAssignments(await jockeyAssignmentService.getMine());
       }
@@ -97,6 +101,10 @@ const JockeyAssignmentsPage = () => {
   };
 
   const pendingAssignments = assignments.filter((item) => String(item.status ?? '').toLowerCase() === 'pending').length;
+  const raceOptions = registrations.filter((registration, index, source) => {
+    const raceId = registration.raceId;
+    return Boolean(raceId) && source.findIndex((item) => item.raceId === raceId) === index;
+  });
 
   return (
     <div className="min-h-screen bg-surface py-8">
@@ -129,19 +137,50 @@ const JockeyAssignmentsPage = () => {
                 <h2 className="font-display text-title-large font-bold text-primary">Invite jockey</h2>
               </div>
               <form onSubmit={handleCreate} className="grid gap-4">
-                <NumberInput label="Registration ID" value={form.registrationId} onChange={(value) => setForm((current) => ({ ...current, registrationId: value }))} required />
-                <NumberInput label="Race ID" value={form.raceId} onChange={(value) => setForm((current) => ({ ...current, raceId: value }))} required />
-                <label className="grid gap-2">
-                  <span className="text-label-sm font-bold uppercase tracking-wider text-outline">Jockey</span>
-                  <select value={form.jockeyId || ''} onChange={(event) => setForm((current) => ({ ...current, jockeyId: Number(event.target.value) }))} required className="rounded-md border border-outline-variant bg-surface-container-low px-4 py-3 text-body-sm focus:border-primary focus:outline-none">
-                    <option value="">Select jockey</option>
-                    {jockeys.map((jockey) => (
-                      <option key={jockey.jockeyId} value={jockey.jockeyId}>
-                        {jockey.fullName ?? jockey.username ?? `Jockey ${jockey.jockeyId}`}
+                <SelectInput
+                  label="Registration"
+                  value={form.registrationId}
+                  onChange={(value) => {
+                    const selectedRegistration = registrations.find((registration) => (registration.regId ?? registration.id) === Number(value));
+                    setForm((current) => ({
+                      ...current,
+                      registrationId: Number(value),
+                      raceId: selectedRegistration?.raceId ?? current.raceId,
+                    }));
+                  }}
+                  required
+                >
+                  <option value="">Select registration</option>
+                  {registrations.map((registration) => {
+                    const id = registration.regId ?? registration.id;
+
+                    if (!id) {
+                      return null;
+                    }
+
+                    return (
+                      <option key={id} value={id}>
+                        {registration.horseName ?? `Horse ${registration.horseId ?? '-'}`} / {registration.raceName ?? `Race ${registration.raceId ?? '-'}`} / {registration.status ?? 'pending'}
                       </option>
-                    ))}
-                  </select>
-                </label>
+                    );
+                  })}
+                </SelectInput>
+                <SelectInput label="Race" value={form.raceId} onChange={(value) => setForm((current) => ({ ...current, raceId: Number(value) }))} required>
+                  <option value="">Select race</option>
+                  {raceOptions.map((registration) => (
+                    <option key={registration.raceId} value={registration.raceId}>
+                      {registration.raceName ?? `Race ${registration.raceId}`} / {registration.tournamentName ?? `Tournament ${registration.tournamentId ?? '-'}`}
+                    </option>
+                  ))}
+                </SelectInput>
+                <SelectInput label="Jockey" value={form.jockeyId} onChange={(value) => setForm((current) => ({ ...current, jockeyId: Number(value) }))} required>
+                  <option value="">Select jockey</option>
+                  {jockeys.map((jockey) => (
+                    <option key={jockey.jockeyId} value={jockey.jockeyId}>
+                      {jockey.fullName ?? jockey.username ?? `Jockey ${jockey.jockeyId}`}
+                    </option>
+                  ))}
+                </SelectInput>
                 <NumberInput label="Gate number" value={form.gateNumber ?? 0} onChange={(value) => setForm((current) => ({ ...current, gateNumber: value || undefined }))} />
                 <TextInput label="Status" value={form.status} onChange={(value) => setForm((current) => ({ ...current, status: value }))} />
                 <button className="rounded-lg bg-secondary px-5 py-3 text-body-sm font-bold text-on-secondary hover:bg-opacity-90">Send Invitation</button>
@@ -225,6 +264,27 @@ const TextInput = ({ label, value, onChange }: { label: string; value: string; o
   <label className="grid gap-2">
     <span className="text-label-sm font-bold uppercase tracking-wider text-outline">{label}</span>
     <input value={value} onChange={(event) => onChange(event.target.value)} className="rounded-md border border-outline-variant bg-surface-container-low px-4 py-3 text-body-sm focus:border-primary focus:outline-none" />
+  </label>
+);
+
+const SelectInput = ({
+  label,
+  value,
+  onChange,
+  children,
+  required = false,
+}: {
+  label: string;
+  value: number | string;
+  onChange: (value: string) => void;
+  children: ReactNode;
+  required?: boolean;
+}) => (
+  <label className="grid gap-2">
+    <span className="text-label-sm font-bold uppercase tracking-wider text-outline">{label}</span>
+    <select value={value || ''} onChange={(event) => onChange(event.target.value)} required={required} className="rounded-md border border-outline-variant bg-surface-container-low px-4 py-3 text-body-sm focus:border-primary focus:outline-none">
+      {children}
+    </select>
   </label>
 );
 

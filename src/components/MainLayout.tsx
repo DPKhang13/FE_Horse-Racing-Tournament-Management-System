@@ -3,7 +3,7 @@ import { Bell, LogOut, Shield, Trophy, User } from 'lucide-react';
 import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { getAccessToken } from '../services/apiClient';
 import { authService } from '../services/authService';
-import { canAccessRole, navigationItems } from '../utils/permissions';
+import { canAccessRole, getDefaultRouteForRole, navigationItems } from '../utils/permissions';
 import type { UserProfile } from '../types/user';
 
 const MainLayout = ({ children }: { children: ReactNode }) => {
@@ -69,7 +69,7 @@ const MainLayout = ({ children }: { children: ReactNode }) => {
   if (isLanding) {
     return (
       <div className="min-h-screen bg-surface text-on-surface">
-        <LandingTopBar />
+        <LandingTopBar isAuthenticated={isAuthenticated} profile={profile} />
         {children}
       </div>
     );
@@ -149,29 +149,78 @@ const MainLayout = ({ children }: { children: ReactNode }) => {
   );
 };
 
-const LandingTopBar = () => (
-  <header className="sticky top-0 z-50 border-b border-outline-variant/40 bg-surface-container-low/70 px-4 py-4 backdrop-blur-xl md:px-8">
-    <div className="mx-auto flex max-w-[1440px] items-center justify-between gap-4">
-      <Link to="/" className="font-display text-xl font-extrabold text-primary">HTMS</Link>
-      <div className="flex items-center gap-3">
-        <Link
-          to="/login"
-          state={{ mode: 'login' }}
-          className="rounded-lg border border-outline-variant/50 px-5 py-2 text-sm font-bold text-on-surface-variant transition-colors hover:border-primary hover:text-primary"
-        >
-          Login
+const landingNavItems = ['Home', 'Schedules', 'Live Odds', 'Rankings'];
+
+const LandingTopBar = ({
+  isAuthenticated,
+  profile,
+}: {
+  isAuthenticated: boolean;
+  profile?: UserProfile;
+}) => {
+  const dashboardRoute = profile?.roleType === 'spectator'
+    ? '/spectator-dashboard'
+    : getDefaultRouteForRole(profile?.roleType);
+
+  return (
+    <header className="sticky top-0 z-50 border-b border-outline-variant/40 bg-surface-container-low/80 px-4 py-4 shadow-lg shadow-black/10 backdrop-blur-xl md:px-8">
+      <div className="mx-auto flex max-w-[1440px] items-center justify-between gap-4">
+        <Link to="/" className="flex items-center gap-3">
+          <span className="gold-gradient flex h-9 w-9 items-center justify-center rounded-lg shadow-lg shadow-primary/10">
+            <Trophy className="h-5 w-5 text-on-primary" />
+          </span>
+          <span className="font-display text-xl font-extrabold text-primary">HTMS</span>
         </Link>
-        <Link
-          to="/login"
-          state={{ mode: 'signup' }}
-          className="gold-gradient inline-flex items-center gap-2 rounded-lg px-5 py-2 text-sm font-extrabold text-on-primary transition-all"
-        >
-          <Shield className="h-4 w-4" />
-          Sign Up
-        </Link>
+
+        <nav className="hidden items-center gap-8 md:flex">
+          {landingNavItems.map((item) => (
+            <a
+              key={item}
+              href="#"
+              className="text-xs font-bold uppercase tracking-[0.14em] text-on-surface-variant transition-colors hover:text-primary"
+            >
+              {item}
+            </a>
+          ))}
+        </nav>
+
+        <div className="flex items-center gap-3">
+          {isAuthenticated ? (
+            <>
+              <span className="hidden rounded-full border border-secondary/40 bg-secondary-container/20 px-3 py-1 text-xs font-bold uppercase tracking-[0.14em] text-secondary sm:inline-flex">
+                Logged in
+              </span>
+              <Link
+                to={dashboardRoute}
+                className="flex h-10 w-10 items-center justify-center rounded-full border border-outline-variant/50 text-on-surface-variant transition-colors hover:border-primary hover:text-primary"
+                aria-label="Open dashboard"
+              >
+                <User className="h-5 w-5" />
+              </Link>
+            </>
+          ) : (
+            <>
+              <Link
+                to="/login"
+                state={{ mode: 'login' }}
+                className="rounded-lg border border-outline-variant/50 px-5 py-2 text-sm font-bold text-on-surface-variant transition-colors hover:border-primary hover:text-primary"
+              >
+                Login
+              </Link>
+              <Link
+                to="/login"
+                state={{ mode: 'signup' }}
+                className="gold-gradient inline-flex items-center gap-2 rounded-lg px-5 py-2 text-sm font-extrabold text-on-primary transition-all"
+              >
+                <Shield className="h-4 w-4" />
+                Sign Up
+              </Link>
+            </>
+          )}
+        </div>
       </div>
-    </div>
-  </header>
-);
+    </header>
+  );
+};
 
 export default MainLayout;

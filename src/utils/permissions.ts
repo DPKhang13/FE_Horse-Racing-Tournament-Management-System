@@ -60,7 +60,7 @@ export const getDefaultRouteForRole = (roleType: UserRoleType | undefined) => {
     case 'horse_owner':
       return '/horses';
     case 'spectator':
-      return '/spectator-dashboard';
+      return '/';
     case 'admin':
       return '/admin-ops';
     case 'race_referee':

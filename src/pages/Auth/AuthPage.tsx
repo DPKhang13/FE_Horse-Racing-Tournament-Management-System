@@ -2,11 +2,11 @@ import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
 import { ArrowRight, Lock, Mail, Phone, Shield, User } from 'lucide-react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { getApiErrorMessage } from '../../services/apiClient';
-import { authService, type RegisterRequest } from '../../services/authService';
+import { authService } from '../../services/authService';
 import { getDefaultRouteForRole } from '../../utils/permissions';
 
-type SignupRole = RegisterRequest['roleType'];
 type AuthMode = 'login' | 'signup' | 'verify';
+const DEFAULT_SIGNUP_ROLE = 'spectator';
 
 const AuthPage = () => {
   const location = useLocation();
@@ -19,17 +19,20 @@ const AuthPage = () => {
   const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
   const [otp, setOtp] = useState('');
-  const [roleType, setRoleType] = useState<SignupRole>('spectator');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
 
   useEffect(() => {
-    const mode = (location.state as { mode?: 'login' | 'signup' })?.mode;
+    const state = location.state as { mode?: 'login' | 'signup'; email?: string } | null;
+    const mode = state?.mode;
 
     if (mode) {
       const timeoutId = window.setTimeout(() => {
         setActiveTab(mode);
+        if (state?.email) {
+          setEmail(state.email);
+        }
         setErrorMessage('');
         setSuccessMessage('');
         setOtp('');
@@ -57,12 +60,19 @@ const AuthPage = () => {
       }
 
       if (activeTab === 'verify') {
+        const verifiedEmail = verificationEmail || email;
         await authService.verifyOtp({
-          email: verificationEmail || email,
+          email: verifiedEmail,
           otp,
         });
-        setSuccessMessage('Email verified. Please sign in with your credentials.');
-        setActiveTab('login');
+        navigate('/registration', {
+          replace: true,
+          state: {
+            email: verifiedEmail,
+            fullName,
+            phone,
+          },
+        });
         setOtp('');
         return;
       }
@@ -77,7 +87,7 @@ const AuthPage = () => {
         password,
         fullName,
         phone,
-        roleType,
+        roleType: DEFAULT_SIGNUP_ROLE,
       });
 
       setSuccessMessage('Account created. Enter the verification code sent to your email.');
@@ -324,22 +334,6 @@ const AuthPage = () => {
                     className={inputClassName}
                   />
                 </AuthField>
-
-                {activeTab === 'signup' && (
-                  <label className="space-y-2 block">
-                    <span className="text-label-sm text-outline uppercase tracking-wider font-bold">Account Type</span>
-                    <select
-                      value={roleType}
-                      onChange={(event) => setRoleType(event.target.value as SignupRole)}
-                      className="w-full rounded-lg border border-outline-variant/50 bg-surface-container-lowest px-4 py-3 text-body-sm text-on-surface transition-all focus:border-primary focus:outline-none"
-                    >
-                      <option value="spectator">Spectator</option>
-                      <option value="horse_owner">Horse Owner</option>
-                      <option value="jockey">Jockey</option>
-                      <option value="race_referee">Race Referee</option>
-                    </select>
-                  </label>
-                )}
 
                 <button disabled={isSubmitting} className={primaryButtonClassName}>
                   {isSubmitting ? 'Please wait...' : activeTab === 'login' ? 'Secure Access' : 'Create Account'}

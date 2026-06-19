@@ -1,8 +1,12 @@
-import { useEffect, useState, type FormEvent } from 'react';
+import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
 import { CheckCircle2, ClipboardList, Trash2 } from 'lucide-react';
 import { getApiErrorMessage } from '../../services/apiClient';
 import { authService } from '../../services/authService';
+import { HorseService } from '../../services/HorseService';
+import { jockeyService, type JockeyItem } from '../../services/jockeyService';
 import { raceRegistrationService, type RaceRegistrationFormData, type RaceRegistrationItem } from '../../services/raceRegistrationService';
+import { scheduleService, type RaceScheduleItem, type TournamentApiItem } from '../../services/scheduleService';
+import type { Horse } from '../../types/horse';
 import type { UserProfile } from '../../types/user';
 
 const initialForm: RaceRegistrationFormData = {
@@ -17,6 +21,10 @@ const initialForm: RaceRegistrationFormData = {
 const RaceRegistrationPage = () => {
   const [profile, setProfile] = useState<UserProfile | undefined>(() => authService.getStoredUserProfile());
   const [items, setItems] = useState<RaceRegistrationItem[]>([]);
+  const [horses, setHorses] = useState<Horse[]>([]);
+  const [jockeys, setJockeys] = useState<JockeyItem[]>([]);
+  const [races, setRaces] = useState<RaceScheduleItem[]>([]);
+  const [tournaments, setTournaments] = useState<TournamentApiItem[]>([]);
   const [form, setForm] = useState<RaceRegistrationFormData>(initialForm);
   const [isLoading, setIsLoading] = useState(true);
   const [message, setMessage] = useState('');
@@ -32,10 +40,23 @@ const RaceRegistrationPage = () => {
     try {
       const currentProfile = profile ?? await authService.getCurrentUser();
       setProfile(currentProfile);
-      const data = currentProfile.roleType === 'horse_owner'
-        ? await raceRegistrationService.getMine()
-        : await raceRegistrationService.getAll();
-      setItems(data);
+      if (currentProfile.roleType === 'horse_owner') {
+        const [registrations, horseList, jockeyList, raceList, tournamentList] = await Promise.all([
+          raceRegistrationService.getMine(),
+          HorseService.getHorses(),
+          jockeyService.getJockeys('active'),
+          scheduleService.getRaceSchedule(),
+          scheduleService.getTournaments(),
+        ]);
+
+        setItems(registrations);
+        setHorses(horseList);
+        setJockeys(jockeyList);
+        setRaces(raceList);
+        setTournaments(tournamentList);
+      } else {
+        setItems(await raceRegistrationService.getAll());
+      }
     } catch (error) {
       setErrorMessage(getApiErrorMessage(error, 'Unable to load race registrations.'));
     } finally {
@@ -108,10 +129,65 @@ const RaceRegistrationPage = () => {
                 <h2 className="text-title-large font-bold text-primary">Create registration</h2>
               </div>
               <form onSubmit={handleCreate} className="grid gap-4">
-                <NumberInput label="Tournament ID" value={form.tournamentId} onChange={(value) => setForm((current) => ({ ...current, tournamentId: value }))} required />
-                <NumberInput label="Race ID" value={form.raceId} onChange={(value) => setForm((current) => ({ ...current, raceId: value }))} required />
-                <NumberInput label="Horse ID" value={form.horseId} onChange={(value) => setForm((current) => ({ ...current, horseId: value }))} required />
-                <NumberInput label="Jockey ID" value={form.jockeyId ?? 0} onChange={(value) => setForm((current) => ({ ...current, jockeyId: value || undefined }))} />
+                <SelectInput
+                  label="Tournament"
+                  value={form.tournamentId}
+                  onChange={(value) => setForm((current) => ({ ...current, tournamentId: Number(value), raceId: 0 }))}
+                  required
+                >
+                  <option value="">Select tournament</option>
+                  {tournaments.map((tournament) => {
+                    const id = tournament.tournamentId ?? tournament.id;
+
+                    if (!id) {
+                      return null;
+                    }
+
+                    return (
+                      <option key={id} value={id}>
+                        {tournament.name ?? `Tournament ${id}`}
+                      </option>
+                    );
+                  })}
+                </SelectInput>
+                <SelectInput
+                  label="Race"
+                  value={form.raceId}
+                  onChange={(value) => {
+                    const selectedRace = races.find((race) => race.raceId === Number(value));
+                    setForm((current) => ({
+                      ...current,
+                      raceId: Number(value),
+                      tournamentId: selectedRace?.tournamentId ?? current.tournamentId,
+                    }));
+                  }}
+                  required
+                >
+                  <option value="">Select race</option>
+                  {races
+                    .filter((race) => !form.tournamentId || race.tournamentId === form.tournamentId)
+                    .map((race) => (
+                      <option key={race.raceId} value={race.raceId}>
+                        {race.raceName} / {race.tournamentName} / Group {race.rankGroup}
+                      </option>
+                    ))}
+                </SelectInput>
+                <SelectInput label="Horse" value={form.horseId} onChange={(value) => setForm((current) => ({ ...current, horseId: Number(value) }))} required>
+                  <option value="">Select horse</option>
+                  {horses.map((horse) => (
+                    <option key={horse.horseId} value={horse.horseId}>
+                      {horse.name} / {horse.breed} / Group {horse.rankGroup}
+                    </option>
+                  ))}
+                </SelectInput>
+                <SelectInput label="Jockey" value={form.jockeyId ?? ''} onChange={(value) => setForm((current) => ({ ...current, jockeyId: value ? Number(value) : undefined }))}>
+                  <option value="">Select jockey (optional)</option>
+                  {jockeys.map((jockey) => (
+                    <option key={jockey.jockeyId} value={jockey.jockeyId}>
+                      {jockey.fullName ?? jockey.username ?? `Jockey ${jockey.jockeyId}`}
+                    </option>
+                  ))}
+                </SelectInput>
                 <TextInput label="Status" value={form.status} onChange={(value) => setForm((current) => ({ ...current, status: value }))} />
                 <TextInput label="Owner confirmation" value={form.ownerConfirmationStatus} onChange={(value) => setForm((current) => ({ ...current, ownerConfirmationStatus: value }))} />
                 <button className="rounded-md bg-secondary px-5 py-3 text-body-sm font-bold text-white hover:bg-opacity-90">Register Horse</button>
@@ -190,10 +266,24 @@ const TextInput = ({ label, value, onChange }: { label: string; value: string; o
   </label>
 );
 
-const NumberInput = ({ label, value, onChange, required = false }: { label: string; value: number; onChange: (value: number) => void; required?: boolean }) => (
+const SelectInput = ({
+  label,
+  value,
+  onChange,
+  children,
+  required = false,
+}: {
+  label: string;
+  value: number | string;
+  onChange: (value: string) => void;
+  children: ReactNode;
+  required?: boolean;
+}) => (
   <label className="grid gap-2">
     <span className="text-label-sm font-bold uppercase tracking-wider text-outline">{label}</span>
-    <input type="number" value={value || ''} onChange={(event) => onChange(Number(event.target.value))} required={required} className="rounded-md border border-outline-variant bg-surface-container-low px-4 py-3 text-body-sm focus:border-primary focus:outline-none" />
+    <select value={value || ''} onChange={(event) => onChange(event.target.value)} required={required} className="rounded-md border border-outline-variant bg-surface-container-low px-4 py-3 text-body-sm focus:border-primary focus:outline-none">
+      {children}
+    </select>
   </label>
 );
 
