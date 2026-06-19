@@ -16,6 +16,10 @@ const formatTime = (value: string) => new Intl.DateTimeFormat('en-US', {
   minute: '2-digit',
 }).format(new Date(value));
 
+const formatPoints = (value: number) => new Intl.NumberFormat('en-US', {
+  maximumFractionDigits: 0,
+}).format(value);
+
 const formatDateTime = (value?: string) => {
   if (!value) {
     return '-';
@@ -201,7 +205,7 @@ const SpectatorDashboard: React.FC = () => {
                       <p className="text-sm text-on-surface-variant">{item.horseName}{item.jockeyName ? ` / ${item.jockeyName}` : ''}</p>
                     </div>
                     <div className="text-right text-sm">
-                      <p className="text-on-surface-variant">Stake: {item.amount}</p>
+                      <p className="text-on-surface-variant">Points placed: {formatPoints(item.amount)}</p>
                       <span className="inline-flex rounded-full bg-primary/15 px-3 py-1 text-xs font-bold uppercase tracking-[0.16em] text-primary">
                         {item.status}
                       </span>
