@@ -87,14 +87,12 @@ const createResult = ({
     winnerHorse: winner?.horseName ?? '-',
     winnerJockey: winner?.jockeyName ?? '-',
     winnerTime: winner?.finishTime ?? '-',
-    totalPrizePool: '₫640,000,000',
+    totalPrizePool: '₫560,000,000',
     entries,
     prizeDistributions: [
       { position: 1, amount: '₫320,000,000', label: 'Champion' },
       { position: 2, amount: '₫160,000,000', label: 'Runner-up' },
       { position: 3, amount: '₫80,000,000', label: 'Third place' },
-      { position: 4, amount: '₫48,000,000', label: 'Fourth place' },
-      { position: 5, amount: '₫32,000,000', label: 'Fifth place' },
     ],
   };
 };
