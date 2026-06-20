@@ -25,7 +25,7 @@ export type JockeyInvitationFormData = {
   raceId: number;
   jockeyId: number;
   gateNumber?: number;
-  status: string;
+  status?: string;
 };
 
 const toPayload = (data: JockeyInvitationFormData) => ({
@@ -33,7 +33,11 @@ const toPayload = (data: JockeyInvitationFormData) => ({
   raceId: Number(data.raceId),
   jockeyId: Number(data.jockeyId),
   gateNumber: data.gateNumber ? Number(data.gateNumber) : undefined,
-  status: data.status.trim(),
+});
+
+const toUpdatePayload = (data: JockeyInvitationFormData) => ({
+  ...toPayload(data),
+  status: data.status?.trim(),
 });
 
 export const jockeyAssignmentService = {
@@ -62,14 +66,13 @@ export const jockeyAssignmentService = {
   },
 
   async update(id: number | string, data: JockeyInvitationFormData): Promise<JockeyAssignmentItem> {
-    const response = await apiClient.put(`/api/jockey-assignments/update/${id}`, toPayload(data));
+    const response = await apiClient.put(`/api/jockey-assignments/update/${id}`, toUpdatePayload(data));
     return unwrapApiData<JockeyAssignmentItem>(response);
   },
 
   async respond(id: number | string, status: string): Promise<JockeyAssignmentItem> {
     const response = await apiClient.put(`/api/jockey-assignments/respond/${id}`, {
       status,
-      respondedAt: new Date().toISOString(),
     });
     return unwrapApiData<JockeyAssignmentItem>(response);
   },

@@ -12,7 +12,6 @@ const initialForm: JockeyInvitationFormData = {
   raceId: 0,
   jockeyId: 0,
   gateNumber: undefined,
-  status: 'pending',
 };
 
 const JockeyAssignmentsPage = () => {
@@ -39,7 +38,7 @@ const JockeyAssignmentsPage = () => {
       if (currentProfile.roleType === 'horse_owner') {
         const [sent, availableJockeys, registrationList] = await Promise.all([
           jockeyAssignmentService.getSent(),
-          jockeyService.getJockeys('active'),
+          jockeyService.getJockeys('available'),
           raceRegistrationService.getMine(),
         ]);
         setAssignments(sent);
@@ -182,7 +181,6 @@ const JockeyAssignmentsPage = () => {
                   ))}
                 </SelectInput>
                 <NumberInput label="Gate number" value={form.gateNumber ?? 0} onChange={(value) => setForm((current) => ({ ...current, gateNumber: value || undefined }))} />
-                <TextInput label="Status" value={form.status} onChange={(value) => setForm((current) => ({ ...current, status: value }))} />
                 <button className="rounded-lg bg-secondary px-5 py-3 text-body-sm font-bold text-on-secondary hover:bg-opacity-90">Send Invitation</button>
               </form>
             </section>
@@ -258,13 +256,6 @@ const StatusBanner = ({ tone, text }: { tone: 'success' | 'error'; text: string 
   <div className={`mb-6 rounded-md border px-4 py-3 text-body-sm font-semibold ${tone === 'success' ? 'border-secondary/30 bg-secondary-container/30 text-secondary' : 'border-error/30 bg-error-container/20 text-error'}`}>
     {text}
   </div>
-);
-
-const TextInput = ({ label, value, onChange }: { label: string; value: string; onChange: (value: string) => void }) => (
-  <label className="grid gap-2">
-    <span className="text-label-sm font-bold uppercase tracking-wider text-outline">{label}</span>
-    <input value={value} onChange={(event) => onChange(event.target.value)} className="rounded-md border border-outline-variant bg-surface-container-low px-4 py-3 text-body-sm focus:border-primary focus:outline-none" />
-  </label>
 );
 
 const SelectInput = ({
