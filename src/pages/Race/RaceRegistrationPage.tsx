@@ -14,8 +14,6 @@ const initialForm: RaceRegistrationFormData = {
   raceId: 0,
   horseId: 0,
   jockeyId: undefined,
-  status: 'pending',
-  ownerConfirmationStatus: 'confirmed',
 };
 
 const RaceRegistrationPage = () => {
@@ -44,7 +42,7 @@ const RaceRegistrationPage = () => {
         const [registrations, horseList, jockeyList, raceList, tournamentList] = await Promise.all([
           raceRegistrationService.getMine(),
           HorseService.getHorses(),
-          jockeyService.getJockeys('active'),
+          jockeyService.getJockeys('available'),
           scheduleService.getRaceSchedule(),
           scheduleService.getTournaments(),
         ]);
@@ -188,8 +186,6 @@ const RaceRegistrationPage = () => {
                     </option>
                   ))}
                 </SelectInput>
-                <TextInput label="Status" value={form.status} onChange={(value) => setForm((current) => ({ ...current, status: value }))} />
-                <TextInput label="Owner confirmation" value={form.ownerConfirmationStatus} onChange={(value) => setForm((current) => ({ ...current, ownerConfirmationStatus: value }))} />
                 <button className="rounded-md bg-secondary px-5 py-3 text-body-sm font-bold text-white hover:bg-opacity-90">Register Horse</button>
               </form>
             </section>
@@ -257,13 +253,6 @@ const StatusBanner = ({ tone, text }: { tone: 'success' | 'error'; text: string 
   <div className={`mb-6 rounded-md border px-4 py-3 text-body-sm font-semibold ${tone === 'success' ? 'border-secondary/30 bg-secondary-container/30 text-secondary' : 'border-error/30 bg-error-container/20 text-error'}`}>
     {text}
   </div>
-);
-
-const TextInput = ({ label, value, onChange }: { label: string; value: string; onChange: (value: string) => void }) => (
-  <label className="grid gap-2">
-    <span className="text-label-sm font-bold uppercase tracking-wider text-outline">{label}</span>
-    <input value={value} onChange={(event) => onChange(event.target.value)} className="rounded-md border border-outline-variant bg-surface-container-low px-4 py-3 text-body-sm focus:border-primary focus:outline-none" />
-  </label>
 );
 
 const SelectInput = ({

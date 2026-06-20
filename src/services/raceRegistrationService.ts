@@ -27,8 +27,8 @@ export type RaceRegistrationFormData = {
   raceId: number;
   horseId: number;
   jockeyId?: number;
-  status: string;
-  ownerConfirmationStatus: string;
+  status?: string;
+  ownerConfirmationStatus?: string;
 };
 
 const toPayload = (data: RaceRegistrationFormData) => ({
@@ -36,8 +36,12 @@ const toPayload = (data: RaceRegistrationFormData) => ({
   raceId: Number(data.raceId),
   horseId: Number(data.horseId),
   jockeyId: data.jockeyId ? Number(data.jockeyId) : undefined,
-  status: data.status.trim(),
-  ownerConfirmationStatus: data.ownerConfirmationStatus.trim(),
+});
+
+const toUpdatePayload = (data: RaceRegistrationFormData) => ({
+  ...toPayload(data),
+  status: data.status?.trim(),
+  ownerConfirmationStatus: data.ownerConfirmationStatus?.trim(),
 });
 
 export const raceRegistrationService = {
@@ -46,10 +50,8 @@ export const raceRegistrationService = {
     return unwrapApiList<RaceRegistrationItem>(response);
   },
 
-  async getMine(status?: string): Promise<RaceRegistrationItem[]> {
-    const response = await apiClient.get('/api/race-registrations/get-my-registrations', {
-      params: status ? { status } : undefined,
-    });
+  async getMine(): Promise<RaceRegistrationItem[]> {
+    const response = await apiClient.get('/api/race-registrations/get-my-registrations');
     return unwrapApiList<RaceRegistrationItem>(response);
   },
 
@@ -59,7 +61,7 @@ export const raceRegistrationService = {
   },
 
   async update(id: number | string, data: RaceRegistrationFormData): Promise<RaceRegistrationItem> {
-    const response = await apiClient.put(`/api/race-registrations/update/${id}`, toPayload(data));
+    const response = await apiClient.put(`/api/race-registrations/update/${id}`, toUpdatePayload(data));
     return unwrapApiData<RaceRegistrationItem>(response);
   },
 

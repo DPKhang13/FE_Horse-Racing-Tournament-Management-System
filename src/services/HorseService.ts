@@ -52,6 +52,15 @@ const toPayload = (horse: HorseFormData) => ({
   age: Number(horse.age),
   weightKg: Number(horse.weightKg),
   rankGroup: horse.rankGroup.trim(),
+  avatarUrl: horse.avatarUrl.trim(),
+});
+
+const toUpdatePayload = (horse: HorseFormData) => ({
+  name: horse.name.trim(),
+  breed: horse.breed.trim(),
+  age: Number(horse.age),
+  weightKg: Number(horse.weightKg),
+  rankGroup: horse.rankGroup.trim(),
   rankingPoints: Number(horse.rankingPoints),
   avatarUrl: horse.avatarUrl.trim(),
   totalWins: Number(horse.totalWins),
@@ -75,7 +84,7 @@ export const HorseService = {
   },
 
   async updateHorse(id: number, horse: HorseFormData): Promise<Horse> {
-    const response = await apiClient.put(`/api/horses/update/${id}`, toPayload(horse));
+    const response = await apiClient.put(`/api/horses/update/${id}`, toUpdatePayload(horse));
     return mapHorse(unwrapApiData<RawHorse>(response));
   },
 
