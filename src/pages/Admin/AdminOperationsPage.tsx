@@ -1,9 +1,25 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { motion } from 'motion/react';
 import { Activity, CalendarDays, Flag, Trophy, Users } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { getApiErrorMessage } from '../../services/apiClient';
 import { tournamentService } from '../../services/tournamentService';
 import type { Tournament } from '../../types/tournament';
+
+// Animation variants
+const revealContainer = {
+  hidden: {},
+  visible: {
+    transition: {
+      staggerChildren: 0.12,
+    },
+  },
+};
+
+const revealUp = {
+  hidden: { opacity: 0, y: 28 },
+  visible: { opacity: 1, y: 0 },
+};
 
 const AdminOperationsPage = () => {
   const [tournaments, setTournaments] = useState<Tournament[]>([]);
@@ -56,33 +72,68 @@ const AdminOperationsPage = () => {
   return (
     <div className="min-h-screen bg-surface py-8">
       <div className="mx-auto max-w-[1440px] px-4 md:px-8">
-        <div className="glass-panel mb-6 rounded-2xl p-6">
+        <motion.div 
+          className="glass-panel mb-6 rounded-2xl p-6"
+          initial="hidden"
+          animate="visible"
+          variants={revealContainer}
+        >
           <div className="flex flex-col gap-6 xl:flex-row xl:items-end xl:justify-between">
-            <div>
+            <motion.div variants={revealUp}>
               <p className="text-xs font-bold uppercase tracking-[0.2em] text-secondary">Admin Dashboard</p>
               <h1 className="font-display mt-2 text-headline-lg font-extrabold text-primary">Operations overview</h1>
               <p className="mt-2 max-w-2xl text-body-sm text-on-surface-variant">
                 Monitor tournament volume, race coverage, and participant activity. CRUD actions are handled in Tournament Management.
               </p>
-            </div>
-            <Link to="/tournaments" className="gold-gradient inline-flex items-center justify-center gap-2 rounded-xl px-6 py-3 text-body-sm font-extrabold text-on-primary">
-              <Trophy className="h-4 w-4" />
-              Manage Tournaments
-            </Link>
+            </motion.div>
+            <motion.div variants={revealUp}>
+              <Link to="/tournaments" className="gold-gradient inline-flex items-center justify-center gap-2 rounded-xl px-6 py-3 text-body-sm font-extrabold text-on-primary">
+                <Trophy className="h-4 w-4" />
+                Manage Tournaments
+              </Link>
+            </motion.div>
           </div>
-        </div>
+        </motion.div>
 
-        {errorMessage && <StatusBanner tone="error" text={errorMessage} />}
+        {errorMessage && (
+          <motion.div 
+            initial="hidden"
+            animate="visible"
+            variants={revealUp}
+          >
+            <StatusBanner tone="error" text={errorMessage} />
+          </motion.div>
+        )}
 
-        <section className="mb-6 grid gap-4 md:grid-cols-2 xl:grid-cols-5">
-          <MetricCard icon={<Trophy className="h-5 w-5" />} label="Tournaments" value={isLoading ? '...' : String(tournaments.length).padStart(2, '0')} />
-          <MetricCard icon={<CalendarDays className="h-5 w-5" />} label="Upcoming" value={isLoading ? '...' : String(stats.upcoming).padStart(2, '0')} />
-          <MetricCard icon={<Activity className="h-5 w-5" />} label="Ongoing" value={isLoading ? '...' : String(stats.ongoing).padStart(2, '0')} />
-          <MetricCard icon={<Flag className="h-5 w-5" />} label="Races" value={isLoading ? '...' : String(stats.raceCount).padStart(2, '0')} />
-          <MetricCard icon={<Users className="h-5 w-5" />} label="Participants" value={isLoading ? '...' : String(stats.participantCount)} />
-        </section>
+        <motion.section 
+          className="mb-6 grid gap-4 md:grid-cols-2 xl:grid-cols-5"
+          initial="hidden"
+          animate="visible"
+          variants={revealContainer}
+        >
+          <motion.div variants={revealUp}>
+            <MetricCard icon={<Trophy className="h-5 w-5" />} label="Tournaments" value={isLoading ? '...' : String(tournaments.length).padStart(2, '0')} />
+          </motion.div>
+          <motion.div variants={revealUp}>
+            <MetricCard icon={<CalendarDays className="h-5 w-5" />} label="Upcoming" value={isLoading ? '...' : String(stats.upcoming).padStart(2, '0')} />
+          </motion.div>
+          <motion.div variants={revealUp}>
+            <MetricCard icon={<Activity className="h-5 w-5" />} label="Ongoing" value={isLoading ? '...' : String(stats.ongoing).padStart(2, '0')} />
+          </motion.div>
+          <motion.div variants={revealUp}>
+            <MetricCard icon={<Flag className="h-5 w-5" />} label="Races" value={isLoading ? '...' : String(stats.raceCount).padStart(2, '0')} />
+          </motion.div>
+          <motion.div variants={revealUp}>
+            <MetricCard icon={<Users className="h-5 w-5" />} label="Participants" value={isLoading ? '...' : String(stats.participantCount)} />
+          </motion.div>
+        </motion.section>
 
-        <section className="glass-panel rounded-xl p-6">
+        <motion.section 
+          className="glass-panel rounded-xl p-6"
+          initial="hidden"
+          animate="visible"
+          variants={revealUp}
+        >
           <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <h2 className="font-display text-title-large font-bold text-primary">Recent tournaments</h2>
@@ -106,23 +157,33 @@ const AdminOperationsPage = () => {
               </thead>
               <tbody className="divide-y divide-outline-variant">
                 {isLoading ? (
-                  <tr><td colSpan={5} className="px-4 py-8 text-center text-body-sm text-on-surface-variant">Loading dashboard...</td></tr>
-                ) : latestTournaments.map((tournament) => (
-                  <tr key={tournament.tournamentId}>
+                  <motion.tr 
+                    variants={revealUp}
+                  >
+                    <td colSpan={5} className="px-4 py-8 text-center text-body-sm text-on-surface-variant">Loading dashboard...</td>
+                  </motion.tr>
+                ) : latestTournaments.map((tournament, index) => (
+                  <motion.tr 
+                    key={tournament.tournamentId}
+                    variants={revealUp}
+                    transition={{ delay: index * 0.05 }}
+                  >
                     <td className="px-4 py-4 text-body-sm font-bold text-primary">{tournament.tournamentName}</td>
                     <td className="px-4 py-4 text-body-sm text-on-surface-variant">{tournament.location}</td>
                     <td className="px-4 py-4 text-body-sm text-on-surface-variant">{tournament.startDate} - {tournament.endDate}</td>
                     <td className="px-4 py-4 text-body-sm font-semibold text-primary">{tournament.schedule.length}</td>
                     <td className="px-4 py-4 text-body-sm text-on-surface-variant">{tournament.status}</td>
-                  </tr>
+                  </motion.tr>
                 ))}
                 {!isLoading && latestTournaments.length === 0 && (
-                  <tr><td colSpan={5} className="px-4 py-8 text-center text-body-sm text-on-surface-variant">No tournaments found.</td></tr>
+                  <motion.tr variants={revealUp}>
+                    <td colSpan={5} className="px-4 py-8 text-center text-body-sm text-on-surface-variant">No tournaments found.</td>
+                  </motion.tr>
                 )}
               </tbody>
             </table>
           </div>
-        </section>
+        </motion.section>
       </div>
     </div>
   );

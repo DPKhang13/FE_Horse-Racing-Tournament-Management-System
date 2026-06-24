@@ -1,9 +1,25 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { motion } from 'motion/react';
 import { ArrowLeft, CalendarDays, Clock, Filter, MapPin, Search, Trophy, Users } from 'lucide-react';
 import { Link, useParams } from 'react-router-dom';
 import { getApiErrorMessage } from '../../services/apiClient';
 import { tournamentService } from '../../services/tournamentService';
 import type { MatchStatus, Tournament, TournamentMatch } from '../../types/tournament';
+
+// Animation variants
+const revealContainer = {
+  hidden: {},
+  visible: {
+    transition: {
+      staggerChildren: 0.12,
+    },
+  },
+};
+
+const revealUp = {
+  hidden: { opacity: 0, y: 28 },
+  visible: { opacity: 1, y: 0 },
+};
 
 const matchStatusOptions: MatchStatus[] = ['Scheduled', 'Ongoing', 'Finished', 'Cancelled'];
 
@@ -125,9 +141,14 @@ const TournamentSchedulePage = () => {
   return (
     <div className="min-h-screen bg-surface py-8">
       <div className="mx-auto max-w-[1440px] px-4 md:px-8">
-        <div className="glass-panel mb-6 rounded-2xl p-6">
+        <motion.div 
+          className="glass-panel mb-6 rounded-2xl p-6"
+          initial="hidden"
+          animate="visible"
+          variants={revealContainer}
+        >
           <div className="flex flex-col gap-6 xl:flex-row xl:items-end xl:justify-between">
-            <div>
+            <motion.div variants={revealUp}>
               <Link
                 to="/tournaments"
                 className="mb-4 inline-flex items-center gap-2 text-label-sm font-bold uppercase tracking-[0.14em] text-on-surface-variant transition-colors hover:text-primary"
@@ -149,18 +170,34 @@ const TournamentSchedulePage = () => {
                   {tournament?.location ?? 'Tournament location'}
                 </span>
               </div>
-            </div>
+            </motion.div>
 
-            <div className="grid min-w-full gap-3 sm:grid-cols-2 xl:min-w-[560px] xl:grid-cols-4">
-              <MetricCard icon={<Trophy className="h-4 w-4" />} label="Matches" value={String(matches.length).padStart(2, '0')} />
-              <MetricCard icon={<CalendarDays className="h-4 w-4" />} label="Scheduled" value={String(scheduledCount).padStart(2, '0')} />
-              <MetricCard icon={<Clock className="h-4 w-4" />} label="Ongoing" value={String(ongoingCount).padStart(2, '0')} />
-              <MetricCard icon={<Users className="h-4 w-4" />} label="Finished" value={String(finishedCount).padStart(2, '0')} />
-            </div>
+            <motion.div 
+              className="grid min-w-full gap-3 sm:grid-cols-2 xl:min-w-[560px] xl:grid-cols-4"
+              variants={revealContainer}
+            >
+              <motion.div variants={revealUp}>
+                <MetricCard icon={<Trophy className="h-4 w-4" />} label="Matches" value={String(matches.length).padStart(2, '0')} />
+              </motion.div>
+              <motion.div variants={revealUp}>
+                <MetricCard icon={<CalendarDays className="h-4 w-4" />} label="Scheduled" value={String(scheduledCount).padStart(2, '0')} />
+              </motion.div>
+              <motion.div variants={revealUp}>
+                <MetricCard icon={<Clock className="h-4 w-4" />} label="Ongoing" value={String(ongoingCount).padStart(2, '0')} />
+              </motion.div>
+              <motion.div variants={revealUp}>
+                <MetricCard icon={<Users className="h-4 w-4" />} label="Finished" value={String(finishedCount).padStart(2, '0')} />
+              </motion.div>
+            </motion.div>
           </div>
-        </div>
+        </motion.div>
 
-        <div className="glass-panel mb-6 rounded-xl p-4">
+        <motion.div 
+          className="glass-panel mb-6 rounded-xl p-4"
+          initial="hidden"
+          animate="visible"
+          variants={revealUp}
+        >
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(220px,1fr)_180px_180px_180px]">
             <div className="relative">
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-outline" />
@@ -198,17 +235,42 @@ const TournamentSchedulePage = () => {
               className={plainFilterInputClassName}
             />
           </div>
-        </div>
+        </motion.div>
 
-        {errorMessage && <StatusBanner tone="error" text={errorMessage} />}
+        {errorMessage && (
+          <motion.div 
+            initial="hidden"
+            animate="visible"
+            variants={revealUp}
+          >
+            <StatusBanner tone="error" text={errorMessage} />
+          </motion.div>
+        )}
 
         {isLoading ? (
-          <EmptyScheduleState title="Loading schedule" description="Fetching tournament matches." />
+          <motion.div 
+            initial="hidden"
+            animate="visible"
+            variants={revealUp}
+          >
+            <EmptyScheduleState title="Loading schedule" description="Fetching tournament matches." />
+          </motion.div>
         ) : filteredMatches.length === 0 ? (
-          <EmptyScheduleState title="No matches found" description="No matches exist for the current schedule view." />
+          <motion.div 
+            initial="hidden"
+            animate="visible"
+            variants={revealUp}
+          >
+            <EmptyScheduleState title="No matches found" description="No matches exist for the current schedule view." />
+          </motion.div>
         ) : (
           <>
-            <div className="glass-panel hidden overflow-hidden rounded-xl lg:block">
+            <motion.div 
+              className="glass-panel hidden overflow-hidden rounded-xl lg:block"
+              initial="hidden"
+              animate="visible"
+              variants={revealUp}
+            >
               <div className="overflow-x-auto">
                 <table className="w-full min-w-[1180px] text-left">
                   <thead className="border-b border-outline-variant bg-surface-container">
@@ -226,8 +288,15 @@ const TournamentSchedulePage = () => {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-outline-variant">
-                    {filteredMatches.map((match) => (
-                      <tr key={match.matchId} className="transition-colors hover:bg-surface-container-lowest">
+                    {filteredMatches.map((match, index) => (
+                      <motion.tr 
+                        key={match.matchId} 
+                        className="transition-colors hover:bg-surface-container-lowest"
+                        variants={revealUp}
+                        initial="hidden"
+                        animate="visible"
+                        transition={{ delay: index * 0.05 }}
+                      >
                         <td className="px-5 py-4 text-body-sm font-bold text-primary">{match.matchId}</td>
                         <td className="px-5 py-4 text-body-sm font-bold text-primary">{match.matchName}</td>
                         <td className="px-5 py-4 text-body-sm font-medium text-on-surface-variant">{match.round}</td>
@@ -240,18 +309,25 @@ const TournamentSchedulePage = () => {
                         <td className="px-5 py-4">
                           <MatchStatusBadge status={match.matchStatus} />
                         </td>
-                      </tr>
+                      </motion.tr>
                     ))}
                   </tbody>
                 </table>
               </div>
-            </div>
+            </motion.div>
 
-            <div className="grid gap-4 lg:hidden">
-              {filteredMatches.map((match) => (
-                <ScheduleCard key={match.matchId} match={match} />
+            <motion.div 
+              className="grid gap-4 lg:hidden"
+              initial="hidden"
+              animate="visible"
+              variants={revealContainer}
+            >
+              {filteredMatches.map((match, index) => (
+                <motion.div key={match.matchId} variants={revealUp} transition={{ delay: index * 0.05 }}>
+                  <ScheduleCard match={match} />
+                </motion.div>
               ))}
-            </div>
+            </motion.div>
           </>
         )}
       </div>

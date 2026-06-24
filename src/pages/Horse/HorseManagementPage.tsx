@@ -1,8 +1,24 @@
 import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
+import { motion } from 'motion/react';
 import { Activity, Eye, Filter, Gauge, Pencil, Plus, Search, Trash2, Trophy, X } from 'lucide-react';
 import { getApiErrorMessage } from '../../services/apiClient';
 import { HorseService } from '../../services/HorseService';
 import type { Horse, HorseFormData } from '../../types/horse';
+
+// Animation variants
+const revealContainer = {
+  hidden: {},
+  visible: {
+    transition: {
+      staggerChildren: 0.12,
+    },
+  },
+};
+
+const revealUp = {
+  hidden: { opacity: 0, y: 28 },
+  visible: { opacity: 1, y: 0 },
+};
 
 type HorseFormErrors = Partial<Record<keyof HorseFormData, string>>;
 
@@ -20,7 +36,7 @@ const emptyFormData: HorseFormData = {
 
 const statusOptions = ['active', 'inactive'];
 const fallbackHorseImage =
-  'https://images.unsplash.com/photo-1553284965-83fd3e82fa5a?auto=format&fit=crop&q=80&w=300';
+  'https://picsum.photos/300/300?random=horse';
 
 const formatDate = (value?: string) => {
   if (!value) {
@@ -227,27 +243,51 @@ const HorseManagementPage = () => {
   return (
     <div className="min-h-screen bg-surface py-8">
       <div className="mx-auto max-w-[1440px] px-4 md:px-8">
-        <div className="glass-panel mb-6 rounded-2xl p-6">
+        <motion.div 
+          className="glass-panel mb-6 rounded-2xl p-6"
+          initial="hidden"
+          animate="visible"
+          variants={revealContainer}
+        >
           <div className="flex flex-col gap-6 xl:flex-row xl:items-end xl:justify-between">
-            <div>
+            <motion.div variants={revealUp}>
               <p className="mb-3 text-label-sm font-bold uppercase tracking-[0.18em] text-secondary">Horse Owner Dashboard</p>
               <h1 className="font-display mb-2 text-headline-lg font-extrabold text-primary">Stable command center</h1>
               <p className="max-w-2xl text-body-md text-on-surface-variant">
                 Manage horse records using fields stored in the database.
               </p>
-            </div>
+            </motion.div>
 
-            <div className="grid min-w-full gap-3 sm:grid-cols-2 xl:min-w-[560px] xl:grid-cols-4">
-              <MetricCard icon={<Activity className="h-4 w-4" />} label="Total" value={String(horses.length).padStart(2, '0')} />
-              <MetricCard icon={<Gauge className="h-4 w-4" />} label="Active" value={String(activeHorseCount).padStart(2, '0')} />
-              <MetricCard icon={<Trophy className="h-4 w-4" />} label="Wins" value={String(totalWins)} />
-              <MetricCard icon={<Filter className="h-4 w-4" />} label="Top points" value={String(topRating)} />
-            </div>
+            <motion.div 
+              className="grid min-w-full gap-3 sm:grid-cols-2 xl:min-w-[560px] xl:grid-cols-4"
+              variants={revealContainer}
+            >
+              <motion.div variants={revealUp}>
+                <MetricCard icon={<Activity className="h-4 w-4" />} label="Total" value={String(horses.length).padStart(2, '0')} />
+              </motion.div>
+              <motion.div variants={revealUp}>
+                <MetricCard icon={<Gauge className="h-4 w-4" />} label="Active" value={String(activeHorseCount).padStart(2, '0')} />
+              </motion.div>
+              <motion.div variants={revealUp}>
+                <MetricCard icon={<Trophy className="h-4 w-4" />} label="Wins" value={String(totalWins)} />
+              </motion.div>
+              <motion.div variants={revealUp}>
+                <MetricCard icon={<Filter className="h-4 w-4" />} label="Top points" value={String(topRating)} />
+              </motion.div>
+            </motion.div>
           </div>
-        </div>
+        </motion.div>
 
-        <div className="mb-6 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-          <div className="glass-panel flex-1 rounded-xl p-4">
+        <motion.div 
+          className="mb-6 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between"
+          initial="hidden"
+          animate="visible"
+          variants={revealContainer}
+        >
+          <motion.div 
+            className="glass-panel flex-1 rounded-xl p-4"
+            variants={revealUp}
+          >
             <div className="grid grid-cols-1 gap-4 md:grid-cols-[1fr_240px]">
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-outline" />
@@ -274,24 +314,37 @@ const HorseManagementPage = () => {
                 </select>
               </div>
             </div>
-          </div>
-          <button
+          </motion.div>
+          <motion.button
             type="button"
             onClick={openCreateModal}
             className="gold-gradient inline-flex items-center justify-center gap-2 rounded-xl px-6 py-4 text-body-sm font-extrabold text-on-primary transition-all"
+            variants={revealUp}
+            whileHover={{ y: -2, scale: 1.01 }}
+            whileTap={{ scale: 0.98 }}
           >
             <Plus className="h-4 w-4" />
             Register Horse
-          </button>
-        </div>
+          </motion.button>
+        </motion.div>
 
         {errorMessage && (
-          <div className="mb-6 rounded-md border border-error/30 bg-error-container/20 px-4 py-3 text-body-sm font-semibold text-error">
+          <motion.div 
+            className="mb-6 rounded-md border border-error/30 bg-error-container/20 px-4 py-3 text-body-sm font-semibold text-error"
+            initial="hidden"
+            animate="visible"
+            variants={revealUp}
+          >
             {errorMessage}
-          </div>
+          </motion.div>
         )}
 
-        <div className="glass-panel overflow-hidden rounded-xl">
+        <motion.div 
+          className="glass-panel overflow-hidden rounded-xl"
+          initial="hidden"
+          animate="visible"
+          variants={revealUp}
+        >
           <div className="overflow-x-auto">
             <table className="w-full min-w-[1120px] text-left">
               <thead className="bg-surface-container border-b border-outline-variant">
@@ -310,8 +363,15 @@ const HorseManagementPage = () => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-outline-variant">
-                {!isLoading && filteredHorses.map((horse) => (
-                  <tr key={horse.horseId} className="hover:bg-surface-container-lowest transition-colors">
+                {!isLoading && filteredHorses.map((horse, index) => (
+                  <motion.tr 
+                    key={horse.horseId} 
+                    className="hover:bg-surface-container-lowest transition-colors"
+                    variants={revealUp}
+                    initial="hidden"
+                    animate="visible"
+                    transition={{ delay: index * 0.05 }}
+                  >
                     <td className="px-5 py-4 text-body-sm font-bold text-primary">{horse.id}</td>
                     <td className="px-5 py-4">
                       <img src={horse.avatarUrl || fallbackHorseImage} alt={horse.name} className="w-12 h-12 rounded-md object-cover border border-outline-variant" />
@@ -341,14 +401,17 @@ const HorseManagementPage = () => {
                         </IconButton>
                       </div>
                     </td>
-                  </tr>
+                  </motion.tr>
                 ))}
               </tbody>
             </table>
           </div>
 
           {(isLoading || filteredHorses.length === 0) && (
-            <div className="px-6 py-16 text-center">
+            <motion.div 
+              className="px-6 py-16 text-center"
+              variants={revealUp}
+            >
               <div className="w-14 h-14 mx-auto rounded-full bg-surface-container flex items-center justify-center mb-4">
                 <Search className="w-6 h-6 text-outline" />
               </div>
@@ -358,77 +421,150 @@ const HorseManagementPage = () => {
               <p className="text-body-sm text-on-surface-variant">
                 {isLoading ? 'Fetching records from the server.' : 'No horses match the current search keyword or status filter.'}
               </p>
-            </div>
+            </motion.div>
           )}
-        </div>
+        </motion.div>
       </div>
 
       {isFormOpen && (
         <Modal title={selectedHorse ? 'Update Horse Information' : 'Register Horse'} subtitle={selectedHorse?.id ?? 'New Horse'} onClose={closeFormModal}>
-          <form onSubmit={handleSubmit} className="p-6 space-y-8">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-              <Field label="Horse Name" error={formErrors.name}>
-                <input type="text" value={formData.name} onChange={(event) => handleFieldChange('name', event.target.value)} className={inputClassName} />
-              </Field>
-              <Field label="Breed" error={formErrors.breed}>
-                <input type="text" value={formData.breed} onChange={(event) => handleFieldChange('breed', event.target.value)} className={inputClassName} />
-              </Field>
-              <Field label="Age" error={formErrors.age}>
-                <input type="number" min="0" value={formData.age || ''} onChange={(event) => handleFieldChange('age', Number(event.target.value))} className={inputClassName} />
-              </Field>
-              <Field label="Weight (kg)" error={formErrors.weightKg}>
-                <input type="number" min="0" step="0.1" value={formData.weightKg || ''} onChange={(event) => handleFieldChange('weightKg', Number(event.target.value))} className={inputClassName} />
-              </Field>
-              <Field label="Rank Group" error={formErrors.rankGroup}>
-                <input type="text" value={formData.rankGroup} onChange={(event) => handleFieldChange('rankGroup', event.target.value)} className={inputClassName} />
-              </Field>
-              <Field label="Ranking Points">
-                <input type="number" min="0" value={formData.rankingPoints} onChange={(event) => handleFieldChange('rankingPoints', Number(event.target.value))} className={inputClassName} />
-              </Field>
-              <Field label="Total Wins">
-                <input type="number" min="0" value={formData.totalWins} onChange={(event) => handleFieldChange('totalWins', Number(event.target.value))} className={inputClassName} />
-              </Field>
-              <Field label="Status">
-                <select value={formData.status} onChange={(event) => handleFieldChange('status', event.target.value)} className={inputClassName}>
-                  {statusOptions.map((status) => <option key={status} value={status}>{status}</option>)}
-                </select>
-              </Field>
-              <Field label="Avatar URL">
-                <input type="url" value={formData.avatarUrl} onChange={(event) => handleFieldChange('avatarUrl', event.target.value)} className={inputClassName} />
-              </Field>
-            </div>
+          <motion.form 
+            onSubmit={handleSubmit} 
+            className="p-6 space-y-8"
+            initial="hidden"
+            animate="visible"
+            variants={revealContainer}
+          >
+            <motion.div className="grid grid-cols-1 md:grid-cols-2 gap-5" variants={revealContainer}>
+              <motion.div variants={revealUp}>
+                <Field label="Horse Name" error={formErrors.name}>
+                  <input type="text" value={formData.name} onChange={(event) => handleFieldChange('name', event.target.value)} className={inputClassName} />
+                </Field>
+              </motion.div>
+              <motion.div variants={revealUp}>
+                <Field label="Breed" error={formErrors.breed}>
+                  <input type="text" value={formData.breed} onChange={(event) => handleFieldChange('breed', event.target.value)} className={inputClassName} />
+                </Field>
+              </motion.div>
+              <motion.div variants={revealUp}>
+                <Field label="Age" error={formErrors.age}>
+                  <input type="number" min="0" value={formData.age || ''} onChange={(event) => handleFieldChange('age', Number(event.target.value))} className={inputClassName} />
+                </Field>
+              </motion.div>
+              <motion.div variants={revealUp}>
+                <Field label="Weight (kg)" error={formErrors.weightKg}>
+                  <input type="number" min="0" step="0.1" value={formData.weightKg || ''} onChange={(event) => handleFieldChange('weightKg', Number(event.target.value))} className={inputClassName} />
+                </Field>
+              </motion.div>
+              <motion.div variants={revealUp}>
+                <Field label="Rank Group" error={formErrors.rankGroup}>
+                  <input type="text" value={formData.rankGroup} onChange={(event) => handleFieldChange('rankGroup', event.target.value)} className={inputClassName} />
+                </Field>
+              </motion.div>
+              <motion.div variants={revealUp}>
+                <Field label="Ranking Points">
+                  <input type="number" min="0" value={formData.rankingPoints} onChange={(event) => handleFieldChange('rankingPoints', Number(event.target.value))} className={inputClassName} />
+                </Field>
+              </motion.div>
+              <motion.div variants={revealUp}>
+                <Field label="Total Wins">
+                  <input type="number" min="0" value={formData.totalWins} onChange={(event) => handleFieldChange('totalWins', Number(event.target.value))} className={inputClassName} />
+                </Field>
+              </motion.div>
+              <motion.div variants={revealUp}>
+                <Field label="Status">
+                  <select value={formData.status} onChange={(event) => handleFieldChange('status', event.target.value)} className={inputClassName}>
+                    {statusOptions.map((status) => <option key={status} value={status}>{status}</option>)}
+                  </select>
+                </Field>
+              </motion.div>
+              <motion.div variants={revealUp}>
+                <Field label="Avatar URL">
+                  <input type="url" value={formData.avatarUrl} onChange={(event) => handleFieldChange('avatarUrl', event.target.value)} className={inputClassName} />
+                </Field>
+              </motion.div>
+            </motion.div>
 
-            <div className="flex flex-col-reverse sm:flex-row justify-end gap-3 pt-4 border-t border-outline-variant">
-              <button type="button" onClick={closeFormModal} className="px-6 py-3 rounded-md border border-outline-variant text-body-sm font-bold text-on-surface-variant hover:text-primary hover:border-primary transition-colors">
+            <motion.div 
+              className="flex flex-col-reverse sm:flex-row justify-end gap-3 pt-4 border-t border-outline-variant"
+              variants={revealUp}
+            >
+              <motion.button 
+                type="button" 
+                onClick={closeFormModal} 
+                className="px-6 py-3 rounded-md border border-outline-variant text-body-sm font-bold text-on-surface-variant hover:text-primary hover:border-primary transition-colors"
+                whileHover={{ y: -1, scale: 1.01 }}
+                whileTap={{ scale: 0.98 }}
+              >
                 Cancel
-              </button>
-              <button type="submit" disabled={isSaving} className="px-6 py-3 rounded-md bg-secondary text-white text-body-sm font-bold hover:bg-opacity-90 transition-all disabled:opacity-70">
+              </motion.button>
+              <motion.button 
+                type="submit" 
+                disabled={isSaving} 
+                className="px-6 py-3 rounded-md bg-secondary text-white text-body-sm font-bold hover:bg-opacity-90 transition-all disabled:opacity-70"
+                whileHover={{ y: -1, scale: 1.01 }}
+                whileTap={{ scale: 0.98 }}
+              >
                 {isSaving ? 'Saving...' : selectedHorse ? 'Save Changes' : 'Add New Horse'}
-              </button>
-            </div>
-          </form>
+              </motion.button>
+            </motion.div>
+          </motion.form>
         </Modal>
       )}
 
       {viewingHorse && (
         <Modal title={viewingHorse.name} subtitle={viewingHorse.id} onClose={() => setViewingHorse(null)}>
-          <div className="p-6">
-            <img src={viewingHorse.avatarUrl || fallbackHorseImage} alt={viewingHorse.name} className="w-full h-64 object-cover rounded-lg border border-outline-variant mb-6" />
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <DetailItem label="Breed" value={viewingHorse.breed} />
-              <DetailItem label="Age" value={`${viewingHorse.age}`} />
-              <DetailItem label="Weight" value={`${viewingHorse.weightKg} kg`} />
-              <DetailItem label="Rank Group" value={viewingHorse.rankGroup} />
-              <DetailItem label="Ranking Points" value={`${viewingHorse.rankingPoints}`} />
-              <DetailItem label="Total Wins" value={`${viewingHorse.totalWins}`} />
-              <DetailItem label="Owner" value={viewingHorse.ownerFullName ?? '-'} />
-              <DetailItem label="Stable" value={viewingHorse.ownerStableName ?? '-'} />
-              <DetailItem label="Owner Email" value={viewingHorse.ownerEmail ?? '-'} />
-              <DetailItem label="Owner Phone" value={viewingHorse.ownerPhone ?? '-'} />
-              <DetailItem label="Status" value={viewingHorse.status} />
-              <DetailItem label="Registered At" value={formatDate(viewingHorse.registeredAt)} />
-            </div>
-          </div>
+          <motion.div 
+            className="p-6"
+            initial="hidden"
+            animate="visible"
+            variants={revealContainer}
+          >
+            <motion.img 
+              src={viewingHorse.avatarUrl || fallbackHorseImage} 
+              alt={viewingHorse.name} 
+              className="w-full h-64 object-cover rounded-lg border border-outline-variant mb-6"
+              variants={revealUp}
+            />
+            <motion.div className="grid grid-cols-1 sm:grid-cols-2 gap-4" variants={revealContainer}>
+              <motion.div variants={revealUp}>
+                <DetailItem label="Breed" value={viewingHorse.breed} />
+              </motion.div>
+              <motion.div variants={revealUp}>
+                <DetailItem label="Age" value={`${viewingHorse.age}`} />
+              </motion.div>
+              <motion.div variants={revealUp}>
+                <DetailItem label="Weight" value={`${viewingHorse.weightKg} kg`} />
+              </motion.div>
+              <motion.div variants={revealUp}>
+                <DetailItem label="Rank Group" value={viewingHorse.rankGroup} />
+              </motion.div>
+              <motion.div variants={revealUp}>
+                <DetailItem label="Ranking Points" value={`${viewingHorse.rankingPoints}`} />
+              </motion.div>
+              <motion.div variants={revealUp}>
+                <DetailItem label="Total Wins" value={`${viewingHorse.totalWins}`} />
+              </motion.div>
+              <motion.div variants={revealUp}>
+                <DetailItem label="Owner" value={viewingHorse.ownerFullName ?? '-'} />
+              </motion.div>
+              <motion.div variants={revealUp}>
+                <DetailItem label="Stable" value={viewingHorse.ownerStableName ?? '-'} />
+              </motion.div>
+              <motion.div variants={revealUp}>
+                <DetailItem label="Owner Email" value={viewingHorse.ownerEmail ?? '-'} />
+              </motion.div>
+              <motion.div variants={revealUp}>
+                <DetailItem label="Owner Phone" value={viewingHorse.ownerPhone ?? '-'} />
+              </motion.div>
+              <motion.div variants={revealUp}>
+                <DetailItem label="Status" value={viewingHorse.status} />
+              </motion.div>
+              <motion.div variants={revealUp}>
+                <DetailItem label="Registered At" value={formatDate(viewingHorse.registeredAt)} />
+              </motion.div>
+            </motion.div>
+          </motion.div>
         </Modal>
       )}
     </div>
