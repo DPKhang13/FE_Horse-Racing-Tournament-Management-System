@@ -165,6 +165,7 @@ const LandingTopBar = ({
   profile?: UserProfile;
 }) => {
   const [isScrolled, setIsScrolled] = useState(false);
+  const [activeSection, setActiveSection] = useState('#home');
   const dashboardRoute = profile?.roleType === 'spectator'
     ? '/spectator-dashboard'
     : getDefaultRouteForRole(profile?.roleType);
@@ -172,6 +173,20 @@ const LandingTopBar = ({
   useEffect(() => {
     const handleScroll = () => {
       setIsScrolled(window.scrollY > 80);
+
+      const sections = landingNavItems.map(item => document.querySelector(item.to));
+      const scrollPosition = window.scrollY + 100;
+
+      for (const section of sections) {
+        if (
+          section &&
+          section.offsetTop <= scrollPosition &&
+          section.offsetTop + section.offsetHeight > scrollPosition
+        ) {
+          setActiveSection(`#${section.id}`);
+          break;
+        }
+      }
     };
 
     handleScroll();
@@ -185,8 +200,8 @@ const LandingTopBar = ({
   return (
     <motion.header
       layout
-      transition={{ type: 'spring', stiffness: 260, damping: 28 }}
-      className={`fixed z-50 transition-all duration-500 ease-out ${
+      transition={{ type: 'spring', stiffness: 350, damping: 28 }}
+      className={`fixed z-50 transition-all duration-2000 ease-out ${
         isScrolled
           ? 'left-4 right-4 top-4 mx-auto h-14 max-w-5xl rounded-full border border-outline-variant/40 bg-surface-container-low/75 px-5 shadow-2xl shadow-black/30 backdrop-blur-2xl md:px-7'
           : 'left-0 top-0 h-16 w-full border-b border-outline-variant/30 bg-surface-container-low/80 px-8 shadow-sm backdrop-blur-md md:px-32'
@@ -203,8 +218,8 @@ const LandingTopBar = ({
               key={item.label}
               href={item.to}
               className={`text-label-md font-semibold transition-colors ${
-                item.label === 'Home'
-                  ? 'border-b-2 border-primary pb-1 text-primary'
+                item.to === activeSection
+                  ? 'text-primary'
                   : 'text-on-surface-variant hover:text-on-surface'
               }`}
             >
