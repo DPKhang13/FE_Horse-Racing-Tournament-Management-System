@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Bell, LogIn, LogOut, Trophy, User } from 'lucide-react';
-import { motion } from 'motion/react';
 import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { getAccessToken } from '../services/apiClient';
 import { authService } from '../services/authService';
@@ -151,10 +150,9 @@ const MainLayout = ({ children }: { children: ReactNode }) => {
 };
 
 const landingNavItems = [
-  { label: 'Home', to: '#home' },
   { label: 'Tournaments', to: '#tournaments' },
-  { label: 'Live Odds', to: '#live-odds' },
-  { label: 'Rankings', to: '#rankings' },
+  { label: 'Jockey', to: '#jockey' },
+  { label: 'Horse', to: '#horse' },
 ];
 
 const LandingTopBar = ({
@@ -164,6 +162,7 @@ const LandingTopBar = ({
   isAuthenticated: boolean;
   profile?: UserProfile;
 }) => {
+  const navigate = useNavigate();
   const [isScrolled, setIsScrolled] = useState(false);
   const [activeSection, setActiveSection] = useState('#home');
   const dashboardRoute = profile?.roleType === 'spectator'
@@ -174,7 +173,7 @@ const LandingTopBar = ({
     const handleScroll = () => {
       setIsScrolled(window.scrollY > 80);
 
-      const sections = landingNavItems.map(item => document.querySelector(item.to));
+      const sections = landingNavItems.map(item => document.querySelector(item.to) as HTMLElement | null);
       const scrollPosition = window.scrollY + 100;
 
       for (const section of sections) {
@@ -198,21 +197,34 @@ const LandingTopBar = ({
   }, []);
 
   return (
-    <motion.header
-      layout
-      transition={{ type: 'spring', stiffness: 350, damping: 28 }}
-      className={`fixed z-50 transition-all duration-2000 ease-out ${
-        isScrolled
-          ? 'left-4 right-4 top-4 mx-auto h-14 max-w-5xl rounded-full border border-outline-variant/40 bg-surface-container-low/75 px-5 shadow-2xl shadow-black/30 backdrop-blur-2xl md:px-7'
-          : 'left-0 top-0 h-16 w-full border-b border-outline-variant/30 bg-surface-container-low/80 px-8 shadow-sm backdrop-blur-md md:px-32'
-      }`}
-    >
-      <div className="flex h-full items-center justify-between gap-4">
+    <div className="fixed left-0 top-0 z-[100] flex w-full pointer-events-none justify-center transition-all duration-400 ease-in-out">
+      <header
+        className={`
+          pointer-events-auto flex w-full items-center justify-between transition-all duration-400 ease-in-out
+          ${isScrolled
+            ? 'mt-4 h-14 max-w-[95%] rounded-full border border-outline-variant/40 bg-surface-container-low/75 px-5 shadow-2xl shadow-black/30 backdrop-blur-2xl md:px-7 lg:max-w-5xl'
+            : 'mt-0 h-16 max-w-full rounded-[0px] border-b border-outline-variant/30 bg-surface-container-low/80 px-8 shadow-sm backdrop-blur-md md:px-32'
+          }
+        `}
+      >
         <a href="#home" className={`font-display font-bold text-primary transition-all ${isScrolled ? 'text-lg' : 'text-xl'}`}>
           HTMS
         </a>
 
         <nav className={`hidden items-center transition-all md:flex ${isScrolled ? 'space-x-5' : 'space-x-8'}`}>
+          <button
+            type="button"
+            onClick={() => {
+              if (isAuthenticated) {
+                navigate(dashboardRoute);
+              } else {
+                navigate('/login', { state: { mode: 'login' } });
+              }
+            }}
+            className="text-label-md font-semibold text-on-surface-variant transition-colors hover:text-on-surface"
+          >
+            Dashboard
+          </button>
           {landingNavItems.map((item) => (
             <a
               key={item.label}
@@ -265,8 +277,8 @@ const LandingTopBar = ({
             </>
           )}
         </div>
-      </div>
-    </motion.header>
+      </header>
+    </div>
   );
 };
 
