@@ -9,6 +9,7 @@ const AdminOperationsPage = () => {
   const [tournaments, setTournaments] = useState<Tournament[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState('');
+  const [globalTournamentCount, setGlobalTournamentCount] = useState<number | null>(null);
 
   useEffect(() => {
     let isMounted = true;
@@ -18,10 +19,14 @@ const AdminOperationsPage = () => {
       setErrorMessage('');
 
       try {
-        const data = await tournamentService.getAllTournaments();
+        const [data, count] = await Promise.all([
+          tournamentService.getAllTournaments(false),
+          tournamentService.getGlobalTournamentCount().catch(() => null),
+        ]);
 
         if (isMounted) {
           setTournaments(data);
+          setGlobalTournamentCount(count ?? data.length);
         }
       } catch (error) {
         if (isMounted) {
@@ -52,6 +57,7 @@ const AdminOperationsPage = () => {
   }, [tournaments]);
 
   const latestTournaments = tournaments.slice(0, 6);
+  const totalTournamentCount = globalTournamentCount ?? tournaments.length;
 
   return (
     <div className="min-h-screen bg-surface py-8">
@@ -75,7 +81,7 @@ const AdminOperationsPage = () => {
         {errorMessage && <StatusBanner tone="error" text={errorMessage} />}
 
         <section className="mb-6 grid gap-4 md:grid-cols-2 xl:grid-cols-5">
-          <MetricCard icon={<Trophy className="h-5 w-5" />} label="Tournaments" value={isLoading ? '...' : String(tournaments.length).padStart(2, '0')} />
+          <MetricCard icon={<Trophy className="h-5 w-5" />} label="Tournaments" value={isLoading ? '...' : String(totalTournamentCount).padStart(2, '0')} />
           <MetricCard icon={<CalendarDays className="h-5 w-5" />} label="Upcoming" value={isLoading ? '...' : String(stats.upcoming).padStart(2, '0')} />
           <MetricCard icon={<Activity className="h-5 w-5" />} label="Ongoing" value={isLoading ? '...' : String(stats.ongoing).padStart(2, '0')} />
           <MetricCard icon={<Flag className="h-5 w-5" />} label="Races" value={isLoading ? '...' : String(stats.raceCount).padStart(2, '0')} />

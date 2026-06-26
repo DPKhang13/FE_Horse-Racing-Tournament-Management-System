@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react';
-import { CalendarDays, ClipboardList, Eye, Filter, Flag, Layers, ListChecks, Pencil, Plus, Search, Trash2, Trophy, Users, X } from 'lucide-react';
+import { Ban, CalendarDays, ClipboardList, Eye, Filter, Flag, Layers, ListChecks, Pencil, Plus, Search, Trash2, Trophy, Users, X } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { getApiErrorMessage } from '../../services/apiClient';
 import { raceCrudService, type RaceCrudItem, type RaceFormData, type RaceRoundFormData, type RaceRoundItem } from '../../services/raceCrudService';
@@ -225,6 +225,7 @@ const TournamentManagementPage = () => {
   const [isSaving, setIsSaving] = useState(false);
   const [message, setMessage] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
+  const [globalTournamentCount, setGlobalTournamentCount] = useState<number | null>(null);
 
   useEffect(() => {
     let isMounted = true;
@@ -234,10 +235,14 @@ const TournamentManagementPage = () => {
       setErrorMessage('');
 
       try {
-        const data = await tournamentService.getAllTournaments();
+        const [data, count] = await Promise.all([
+          tournamentService.getAllTournaments(false),
+          tournamentService.getGlobalTournamentCount().catch(() => null),
+        ]);
 
         if (isMounted) {
           setTournaments(data);
+          setGlobalTournamentCount(count ?? data.length);
         }
       } catch (error) {
         if (isMounted) {
@@ -286,6 +291,7 @@ const TournamentManagementPage = () => {
   const ongoingCount = tournaments.filter((tournament) => tournament.status === 'Ongoing').length;
   const upcomingCount = tournaments.filter((tournament) => tournament.status === 'Upcoming').length;
   const totalParticipants = tournaments.reduce((total, tournament) => total + tournament.currentParticipants, 0);
+  const totalTournamentCount = globalTournamentCount ?? tournaments.length;
 
   const openCreateModal = () => {
     setSelectedTournament(null);
@@ -354,6 +360,7 @@ const TournamentManagementPage = () => {
       } else {
         const newTournament = await tournamentService.createTournament(payload);
         setTournaments((current) => [newTournament, ...current]);
+        setGlobalTournamentCount((current) => (current === null ? current : current + 1));
         setMessage('Tournament created.');
       }
 
@@ -365,8 +372,12 @@ const TournamentManagementPage = () => {
     }
   };
 
-  const handleDelete = async (tournament: Tournament) => {
-    const confirmed = window.confirm(`Delete "${tournament.tournamentName}" from the tournament list?`);
+  const handleCancelTournament = async (tournament: Tournament) => {
+    if (tournament.status === 'Cancelled') {
+      return;
+    }
+
+    const confirmed = window.confirm(`Cancel "${tournament.tournamentName}"?`);
 
     if (!confirmed) {
       return;
@@ -376,12 +387,22 @@ const TournamentManagementPage = () => {
     setErrorMessage('');
 
     try {
-      await tournamentService.deleteTournament(tournament.tournamentId);
-      setTournaments((current) => current.filter((item) => item.tournamentId !== tournament.tournamentId));
-      setViewingTournament((current) => (current?.tournamentId === tournament.tournamentId ? null : current));
-      setMessage('Tournament deleted.');
+      const cancelledTournament = await tournamentService.cancelTournament(tournament.tournamentId);
+      setTournaments((current) =>
+        current.map((item) =>
+          item.tournamentId === tournament.tournamentId
+            ? { ...item, status: cancelledTournament.status, updatedAt: cancelledTournament.updatedAt ?? item.updatedAt }
+            : item,
+        ),
+      );
+      setViewingTournament((current) =>
+        current?.tournamentId === tournament.tournamentId
+          ? { ...current, status: cancelledTournament.status, updatedAt: cancelledTournament.updatedAt ?? current.updatedAt }
+          : current,
+      );
+      setMessage('Tournament cancelled.');
     } catch (error) {
-      setErrorMessage(getApiErrorMessage(error, 'Unable to delete tournament.'));
+      setErrorMessage(getApiErrorMessage(error, 'Unable to cancel tournament.'));
     }
   };
 
@@ -399,7 +420,7 @@ const TournamentManagementPage = () => {
             </div>
 
             <div className="grid min-w-full gap-3 sm:grid-cols-2 xl:min-w-[560px] xl:grid-cols-4">
-              <MetricCard icon={<Trophy className="h-4 w-4" />} label="Total" value={String(tournaments.length).padStart(2, '0')} />
+              <MetricCard icon={<Trophy className="h-4 w-4" />} label="Total" value={String(totalTournamentCount).padStart(2, '0')} />
               <MetricCard icon={<CalendarDays className="h-4 w-4" />} label="Upcoming" value={String(upcomingCount).padStart(2, '0')} />
               <MetricCard icon={<ListChecks className="h-4 w-4" />} label="Ongoing" value={String(ongoingCount).padStart(2, '0')} />
               <MetricCard icon={<Users className="h-4 w-4" />} label="Participants" value={String(totalParticipants)} />
@@ -510,8 +531,13 @@ const TournamentManagementPage = () => {
                         <IconButton label={`Edit ${tournament.tournamentName}`} onClick={() => openEditModal(tournament)}>
                           <Pencil className="h-4 w-4" />
                         </IconButton>
-                        <IconButton label={`Delete ${tournament.tournamentName}`} onClick={() => void handleDelete(tournament)} danger>
-                          <Trash2 className="h-4 w-4" />
+                        <IconButton
+                          label={tournament.status === 'Cancelled' ? `${tournament.tournamentName} is already cancelled` : `Cancel ${tournament.tournamentName}`}
+                          onClick={() => void handleCancelTournament(tournament)}
+                          danger
+                          disabled={tournament.status === 'Cancelled'}
+                        >
+                          <Ban className="h-4 w-4" />
                         </IconButton>
                         <Link
                           to={`/tournaments/${tournament.tournamentId}/schedule`}
@@ -1278,17 +1304,20 @@ const IconButton = ({
   onClick,
   children,
   danger = false,
+  disabled = false,
 }: {
   label: string;
   onClick: () => void;
   children: ReactNode;
   danger?: boolean;
+  disabled?: boolean;
 }) => (
   <button
     type="button"
     onClick={onClick}
+    disabled={disabled}
     className={`flex h-9 w-9 items-center justify-center rounded-md border border-outline-variant text-on-surface-variant transition-colors ${
-      danger ? 'hover:border-error hover:text-error' : 'hover:border-primary hover:text-primary'
+      disabled ? 'cursor-not-allowed opacity-40' : danger ? 'hover:border-error hover:text-error' : 'hover:border-primary hover:text-primary'
     }`}
     aria-label={label}
     title={label}
