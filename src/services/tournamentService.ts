@@ -39,6 +39,11 @@ export type RefereeAssignmentItem = {
 type TournamentPayloadData = TournamentFormData | TournamentMutationData;
 type RawTournament = TournamentApiItem & { [key: string]: unknown };
 type RawRecord = { [key: string]: unknown };
+type TournamentCountResponse = {
+  globalTournamentCount?: number;
+  count?: number;
+  total?: number;
+};
 
 const isManagementTournamentData = (data: TournamentPayloadData): data is TournamentMutationData =>
   'tournamentName' in data;
@@ -486,7 +491,7 @@ const updateMockTournament = (tournamentId: number | string, data: TournamentPay
   return cloneTournament(tournament);
 };
 
-const cancelMockTournament = (tournamentId: number | string): TournamentApiItem => {
+const cancelMockTournament = (tournamentId: number | string): Tournament => {
   const index = findMockTournamentIndex(tournamentId);
 
   if (index === -1) {
@@ -500,16 +505,7 @@ const cancelMockTournament = (tournamentId: number | string): TournamentApiItem 
   };
   mockTournaments = mockTournaments.map((item, itemIndex) => (itemIndex === index ? tournament : item));
 
-  return {
-    tournamentId: tournament.tournamentId,
-    id: tournament.tournamentId,
-    name: tournament.tournamentName,
-    location: tournament.location,
-    startDate: tournament.startDate,
-    endDate: tournament.endDate,
-    prizePool: parseCurrencyAmount(tournament.prize),
-    status: tournament.status,
-  };
+  return cloneTournament(tournament);
 };
 
 export const tournamentService = {
@@ -518,6 +514,25 @@ export const tournamentService = {
       params: status ? { status } : undefined,
     });
     return unwrapApiList<TournamentApiItem>(response);
+  },
+
+  async getGlobalTournamentCount(useMockFallback = false): Promise<number> {
+    try {
+      const response = await apiClient.get('/api/tournaments/get-global-tournament-count');
+      const data = unwrapApiData<TournamentCountResponse | number>(response);
+
+      if (typeof data === 'number') {
+        return asNumber(data);
+      }
+
+      return asNumber(data.globalTournamentCount ?? data.count ?? data.total);
+    } catch (error) {
+      if (useMockFallback) {
+        return mockTournaments.length;
+      }
+
+      throw error;
+    }
   },
 
   async getAllTournaments(useMockFallback = true): Promise<Tournament[]> {
@@ -562,22 +577,30 @@ export const tournamentService = {
     }
   },
 
-  async createTournament(data: TournamentPayloadData): Promise<Tournament> {
+  async createTournament(data: TournamentPayloadData, useMockFallback = false): Promise<Tournament> {
     try {
       const response = await apiClient.post('/api/tournaments/create-tournament', cleanTournamentPayload(data));
       const apiTournament = mapApiTournament(unwrapApiData<RawTournament>(response), 0);
       return buildTournamentFromData(data, apiTournament.tournamentId, apiTournament);
-    } catch {
+    } catch (error) {
+      if (!useMockFallback) {
+        throw error;
+      }
+
       return createMockTournament(data);
     }
   },
 
-  async updateTournament(tournamentId: number | string, data: TournamentPayloadData): Promise<Tournament> {
+  async updateTournament(tournamentId: number | string, data: TournamentPayloadData, useMockFallback = false): Promise<Tournament> {
     try {
       const response = await apiClient.put(`/api/tournaments/update-tournament/${tournamentId}`, cleanTournamentPayload(data));
       const apiTournament = mapApiTournament(unwrapApiData<RawTournament>(response), 0);
       return buildTournamentFromData(data, apiTournament.tournamentId, apiTournament);
-    } catch {
+    } catch (error) {
+      if (!useMockFallback) {
+        throw error;
+      }
+
       return updateMockTournament(tournamentId, data);
     }
   },
@@ -593,11 +616,15 @@ export const tournamentService = {
     throw new Error('Delete tournament API is not available in the backend.');
   },
 
-  async cancelTournament(tournamentId: number | string): Promise<TournamentApiItem> {
+  async cancelTournament(tournamentId: number | string, useMockFallback = false): Promise<Tournament> {
     try {
       const response = await apiClient.patch(`/api/tournaments/cancel-tournament/${tournamentId}`);
-      return unwrapApiData<TournamentApiItem>(response);
-    } catch {
+      return mapApiTournament(unwrapApiData<RawTournament>(response), 0);
+    } catch (error) {
+      if (!useMockFallback) {
+        throw error;
+      }
+
       return cancelMockTournament(tournamentId);
     }
   },
