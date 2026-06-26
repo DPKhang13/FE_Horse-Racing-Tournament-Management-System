@@ -6,7 +6,7 @@ type RawHorse = Partial<Horse> & {
 };
 
 const fallbackHorseImage =
-  'https://images.unsplash.com/photo-1553284965-83fd3e82fa5a?auto=format&fit=crop&q=80&w=300';
+  'https://picsum.photos/300/300?random=horse';
 
 const asString = (value: unknown, fallback = '') => {
   if (value === null || value === undefined) {
