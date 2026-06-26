@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
-import { Clock3, Send, UserCheck, Users } from 'lucide-react';
+import { CheckCircle2, Clock3, Send, UserCheck, Users } from 'lucide-react';
 import { getApiErrorMessage } from '../../services/apiClient';
 import { authService } from '../../services/authService';
 import { jockeyAssignmentService, type JockeyAssignmentItem, type JockeyInvitationFormData } from '../../services/jockeyAssignmentService';
@@ -86,6 +86,19 @@ const JockeyAssignmentsPage = () => {
     }
   };
 
+  const handleConfirm = async (id: number | string) => {
+    setMessage('');
+    setErrorMessage('');
+
+    try {
+      await jockeyAssignmentService.confirm(id);
+      setMessage('Horse and jockey assignment confirmed.');
+      await loadAssignments();
+    } catch (error) {
+      setErrorMessage(getApiErrorMessage(error, 'Could not confirm assignment.'));
+    }
+  };
+
   const handleDelete = async (id: number | string) => {
     setMessage('');
     setErrorMessage('');
@@ -100,6 +113,13 @@ const JockeyAssignmentsPage = () => {
   };
 
   const pendingAssignments = assignments.filter((item) => String(item.status ?? '').toLowerCase() === 'pending').length;
+  const acceptedAssignments = assignments.filter((item) => String(item.status ?? '').toLowerCase() === 'accepted').length;
+  const confirmedAssignments = assignments.filter((item) => String(item.status ?? '').toLowerCase() === 'confirmed').length;
+  const approvedRegistrations = registrations.filter((registration) => {
+    const status = String(registration.status ?? '').toLowerCase();
+    const confirmationStatus = String(registration.ownerConfirmationStatus ?? '').toLowerCase();
+    return status === 'approved' && confirmationStatus !== 'confirmed';
+  });
   const raceOptions = registrations.filter((registration, index, source) => {
     const raceId = registration.raceId;
     return Boolean(raceId) && source.findIndex((item) => item.raceId === raceId) === index;
@@ -117,10 +137,11 @@ const JockeyAssignmentsPage = () => {
                 Send, review, accept, and reject jockey invitations in a wide queue layout.
               </p>
             </div>
-            <div className="grid min-w-full gap-3 sm:grid-cols-3 xl:min-w-[480px]">
+            <div className="grid min-w-full gap-3 sm:grid-cols-4 xl:min-w-[640px]">
               <MetricCard icon={<UserCheck className="h-4 w-4" />} label="Invitations" value={String(assignments.length).padStart(2, '0')} />
               <MetricCard icon={<Clock3 className="h-4 w-4" />} label="Pending" value={String(pendingAssignments).padStart(2, '0')} />
-              <MetricCard icon={<Users className="h-4 w-4" />} label="Jockeys" value={String(jockeys.length).padStart(2, '0')} />
+              <MetricCard icon={<CheckCircle2 className="h-4 w-4" />} label="Accepted" value={String(acceptedAssignments).padStart(2, '0')} />
+              <MetricCard icon={<Users className="h-4 w-4" />} label="Confirmed" value={String(confirmedAssignments).padStart(2, '0')} />
             </div>
           </div>
         </div>
@@ -150,7 +171,7 @@ const JockeyAssignmentsPage = () => {
                   required
                 >
                   <option value="">Select registration</option>
-                  {registrations.map((registration) => {
+                  {approvedRegistrations.map((registration) => {
                     const id = registration.regId ?? registration.id;
 
                     if (!id) {
@@ -159,14 +180,16 @@ const JockeyAssignmentsPage = () => {
 
                     return (
                       <option key={id} value={id}>
-                        {registration.horseName ?? `Horse ${registration.horseId ?? '-'}`} / {registration.raceName ?? `Race ${registration.raceId ?? '-'}`} / {registration.status ?? 'pending'}
+                        {registration.horseName ?? `Horse ${registration.horseId ?? '-'}`} / {registration.raceName ?? `Race ${registration.raceId ?? '-'}`} / approved
                       </option>
                     );
                   })}
                 </SelectInput>
                 <SelectInput label="Race" value={form.raceId} onChange={(value) => setForm((current) => ({ ...current, raceId: Number(value) }))} required>
                   <option value="">Select race</option>
-                  {raceOptions.map((registration) => (
+                  {raceOptions
+                    .filter((registration) => approvedRegistrations.some((approvedRegistration) => approvedRegistration.raceId === registration.raceId))
+                    .map((registration) => (
                     <option key={registration.raceId} value={registration.raceId}>
                       {registration.raceName ?? `Race ${registration.raceId}`} / {registration.tournamentName ?? `Tournament ${registration.tournamentId ?? '-'}`}
                     </option>
@@ -207,6 +230,7 @@ const JockeyAssignmentsPage = () => {
                     <tr><td colSpan={5} className="px-4 py-8 text-center text-body-sm text-on-surface-variant">Loading invitations...</td></tr>
                   ) : assignments.map((item) => {
                     const id = item.assignmentId ?? item.id ?? '';
+                    const status = String(item.status ?? '').toLowerCase();
                     return (
                       <tr key={id}>
                         <td className="px-4 py-4 text-body-sm font-semibold text-primary">{item.raceName ?? `Race ${item.raceId ?? '-'}`}</td>
@@ -222,7 +246,14 @@ const JockeyAssignmentsPage = () => {
                               </>
                             )}
                             {isOwner && (
-                              <button type="button" onClick={() => handleDelete(id)} className="rounded-md border border-outline-variant px-3 py-2 text-label-sm font-bold text-primary">Delete</button>
+                              <>
+                                {status === 'accepted' && (
+                                  <button type="button" onClick={() => handleConfirm(id)} className="rounded-md bg-secondary px-3 py-2 text-label-sm font-bold text-on-secondary">Confirm</button>
+                                )}
+                                {status !== 'confirmed' && (
+                                  <button type="button" onClick={() => handleDelete(id)} className="rounded-md border border-outline-variant px-3 py-2 text-label-sm font-bold text-primary">Delete</button>
+                                )}
+                              </>
                             )}
                           </div>
                         </td>

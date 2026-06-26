@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react';
 import { Ban, CalendarDays, ClipboardList, Eye, Filter, Flag, Layers, ListChecks, Pencil, Plus, Search, Trash2, Trophy, Users, X } from 'lucide-react';
+import { motion } from 'motion/react';
 import { Link } from 'react-router-dom';
 import { getApiErrorMessage } from '../../services/apiClient';
 import { raceCrudService, type RaceCrudItem, type RaceFormData, type RaceRoundFormData, type RaceRoundItem } from '../../services/raceCrudService';
@@ -7,6 +8,7 @@ import { tournamentService } from '../../services/tournamentService';
 import type {
   MatchStatus,
   Tournament,
+  TournamentMatch,
   TournamentMutationData,
   TournamentParticipant,
   TournamentStatus,
@@ -29,9 +31,14 @@ const revealUp = {
 
 type TournamentFormErrors = Partial<Record<keyof TournamentMutationData, string>>;
 
-const tournamentStatusOptions: TournamentStatus[] = ['Upcoming', 'Ongoing', 'Completed', 'Cancelled'];
-const tournamentTypeOptions = ['Derby', 'Sprint', 'Endurance', 'Classic', 'Championship'];
-
+const tournamentStatusOptions: TournamentStatus[] = [
+  'Upcoming',
+  'Registration Open',
+  'Registration Closed',
+  'Ongoing',
+  'Completed',
+  'Cancelled',
+];
 const emptyFormData: TournamentMutationData = {
   tournamentName: '',
   tournamentType: '',
@@ -42,8 +49,10 @@ const emptyFormData: TournamentMutationData = {
   registrationDeadline: '',
   maximumParticipants: 16,
   entryFee: 0,
-  prize: '',
+  prize: '0',
   status: 'Upcoming',
+  registrationOpenAt: '',
+  registrationCloseAt: '',
   rulesNotes: '',
 };
 
@@ -83,16 +92,13 @@ const formatDate = (value: string) => {
   });
 };
 
-const formatCurrency = (value: number) => {
-  if (!Number.isFinite(value) || value === 0) {
-    return '-';
+const parsePrizePoolInput = (value: unknown) => {
+  if (typeof value === 'number') {
+    return Number.isFinite(value) ? value : 0;
   }
 
-  return new Intl.NumberFormat('vi-VN', {
-    style: 'currency',
-    currency: 'VND',
-    maximumFractionDigits: 0,
-  }).format(value);
+  const numericValue = Number(String(value ?? '').replace(/[^\d.-]/g, ''));
+  return Number.isFinite(numericValue) ? numericValue : 0;
 };
 
 const formatDateTime = (value?: string) => {
@@ -135,6 +141,14 @@ const getStatusClassName = (status: TournamentStatus) => {
     return 'bg-secondary/10 text-secondary';
   }
 
+  if (status === 'Registration Open') {
+    return 'bg-emerald-100 text-emerald-700';
+  }
+
+  if (status === 'Registration Closed') {
+    return 'bg-amber-100 text-amber-700';
+  }
+
   if (status === 'Upcoming') {
     return 'bg-primary/10 text-primary';
   }
@@ -169,10 +183,6 @@ const validateTournamentForm = (data: TournamentMutationData) => {
     errors.tournamentName = 'Tournament name is required.';
   }
 
-  if (!data.tournamentType.trim()) {
-    errors.tournamentType = 'Tournament type is required.';
-  }
-
   if (!data.startDate) {
     errors.startDate = 'Start date is required.';
   }
@@ -185,24 +195,24 @@ const validateTournamentForm = (data: TournamentMutationData) => {
     errors.location = 'Location is required.';
   }
 
-  if (Number(data.maximumParticipants) <= 0) {
-    errors.maximumParticipants = 'Maximum participants must be greater than 0.';
-  }
-
-  if (Number(data.entryFee) < 0) {
-    errors.entryFee = 'Entry fee cannot be negative.';
+  if (parsePrizePoolInput(data.prize) < 0) {
+    errors.prize = 'Prize pool cannot be negative.';
   }
 
   if (data.startDate && data.endDate && new Date(data.endDate) < new Date(data.startDate)) {
     errors.endDate = 'End date cannot be before start date.';
   }
 
+  if (data.status === 'Registration Open' && !data.registrationCloseAt) {
+    errors.registrationCloseAt = 'Registration close time is required.';
+  }
+
   if (
-    data.registrationDeadline &&
-    data.startDate &&
-    new Date(data.registrationDeadline) > new Date(data.startDate)
+    data.registrationOpenAt &&
+    data.registrationCloseAt &&
+    new Date(data.registrationCloseAt) <= new Date(data.registrationOpenAt)
   ) {
-    errors.registrationDeadline = 'Registration deadline cannot be after start date.';
+    errors.registrationCloseAt = 'Registration close time must be after open time.';
   }
 
   return errors;
@@ -218,16 +228,27 @@ const toFormData = (tournament: Tournament): TournamentMutationData => ({
   registrationDeadline: tournament.registrationDeadline,
   maximumParticipants: tournament.maximumParticipants,
   entryFee: tournament.entryFee,
-  prize: tournament.prize,
+  prize: String(parsePrizePoolInput(tournament.prize)),
   status: tournament.status,
+  registrationOpenAt: toDateTimeInputValue(tournament.registrationOpenAt),
+  registrationCloseAt: toDateTimeInputValue(tournament.registrationCloseAt),
   rulesNotes: tournament.rulesNotes,
 });
+
+const isRegistrationWorkflowStatus = (status: TournamentStatus) =>
+  status === 'Registration Open' || status === 'Registration Closed';
+
+const hasTournamentCoreChanges = (current: TournamentMutationData, original: Tournament) =>
+  current.tournamentName.trim() !== original.tournamentName
+  || current.location.trim() !== original.location
+  || current.startDate !== original.startDate
+  || current.endDate !== original.endDate
+  || String(parsePrizePoolInput(current.prize)) !== String(parsePrizePoolInput(original.prize));
 
 const TournamentManagementPage = () => {
   const [tournaments, setTournaments] = useState<Tournament[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('All');
-  const [typeFilter, setTypeFilter] = useState('All');
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
   const [isFormOpen, setIsFormOpen] = useState(false);
@@ -240,6 +261,10 @@ const TournamentManagementPage = () => {
   const [message, setMessage] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
   const [globalTournamentCount, setGlobalTournamentCount] = useState<number | null>(null);
+  const [showTournamentSuccess, setShowTournamentSuccess] = useState(false);
+  const [lastCreatedTournament, setLastCreatedTournament] = useState<Tournament | null>(null);
+  const [raceModalTournament, setRaceModalTournament] = useState<Tournament | null>(null);
+  const [isRaceModalOpen, setIsRaceModalOpen] = useState(false);
 
   useEffect(() => {
     let isMounted = true;
@@ -276,11 +301,6 @@ const TournamentManagementPage = () => {
     };
   }, []);
 
-  const typeOptions = useMemo(() => {
-    const values = tournaments.map((tournament) => tournament.tournamentType).filter(Boolean);
-    return Array.from(new Set([...tournamentTypeOptions, ...values]));
-  }, [tournaments]);
-
   const filteredTournaments = useMemo(() => {
     const query = searchTerm.toLowerCase().trim();
 
@@ -288,19 +308,17 @@ const TournamentManagementPage = () => {
       const searchableValues = [
         tournament.id,
         tournament.tournamentName,
-        tournament.tournamentType,
         tournament.location,
         tournament.status,
       ];
       const matchesSearch = !query || searchableValues.some((value) => value.toLowerCase().includes(query));
       const matchesStatus = statusFilter === 'All' || tournament.status === statusFilter;
-      const matchesType = typeFilter === 'All' || tournament.tournamentType === typeFilter;
       const matchesDateFrom = !dateFrom || tournament.endDate >= dateFrom;
       const matchesDateTo = !dateTo || tournament.startDate <= dateTo;
 
-      return matchesSearch && matchesStatus && matchesType && matchesDateFrom && matchesDateTo;
+      return matchesSearch && matchesStatus && matchesDateFrom && matchesDateTo;
     });
-  }, [dateFrom, dateTo, searchTerm, statusFilter, tournaments, typeFilter]);
+  }, [dateFrom, dateTo, searchTerm, statusFilter, tournaments]);
 
   const ongoingCount = tournaments.filter((tournament) => tournament.status === 'Ongoing').length;
   const upcomingCount = tournaments.filter((tournament) => tournament.status === 'Upcoming').length;
@@ -312,6 +330,8 @@ const TournamentManagementPage = () => {
     setFormData(emptyFormData);
     setFormErrors({});
     setMessage('');
+    setShowTournamentSuccess(false);
+    setLastCreatedTournament(null);
     setIsFormOpen(true);
   };
 
@@ -320,6 +340,8 @@ const TournamentManagementPage = () => {
     setFormData(toFormData(tournament));
     setFormErrors({});
     setMessage('');
+    setShowTournamentSuccess(false);
+    setLastCreatedTournament(null);
     setIsFormOpen(true);
   };
 
@@ -327,6 +349,8 @@ const TournamentManagementPage = () => {
     setIsFormOpen(false);
     setSelectedTournament(null);
     setFormErrors({});
+    setShowTournamentSuccess(false);
+    setLastCreatedTournament(null);
   };
 
   const handleFieldChange = <K extends keyof TournamentMutationData>(field: K, value: TournamentMutationData[K]) => {
@@ -354,28 +378,41 @@ const TournamentManagementPage = () => {
     setErrorMessage('');
 
     try {
-      const payload = {
-        ...formData,
-        maximumParticipants: Number(formData.maximumParticipants),
-        entryFee: Number(formData.entryFee),
-      };
-
       if (selectedTournament) {
-        const updatedTournament = await tournamentService.updateTournament(selectedTournament.tournamentId, payload);
+        const shouldUseWorkflow = formData.status !== selectedTournament.status && isRegistrationWorkflowStatus(formData.status);
+        const shouldUpdateCoreFields = hasTournamentCoreChanges(formData, selectedTournament);
+        const updatedTournament = shouldUpdateCoreFields || !shouldUseWorkflow
+          ? await tournamentService.updateTournament(selectedTournament.tournamentId, {
+            ...formData,
+            status: shouldUseWorkflow ? selectedTournament.status : formData.status,
+          })
+          : selectedTournament;
+        const finalTournament = shouldUseWorkflow && formData.status === 'Registration Open'
+          ? await tournamentService.openRegistration(selectedTournament.tournamentId, {
+            registrationOpenAt: formData.registrationOpenAt || undefined,
+            registrationCloseAt: formData.registrationCloseAt ?? '',
+          })
+          : shouldUseWorkflow && formData.status === 'Registration Closed'
+            ? await tournamentService.closeRegistration(selectedTournament.tournamentId)
+            : updatedTournament;
+
         setTournaments((current) =>
           current.map((tournament) =>
-            tournament.tournamentId === selectedTournament.tournamentId ? updatedTournament : tournament,
+            tournament.tournamentId === selectedTournament.tournamentId ? finalTournament : tournament,
           ),
         );
         setViewingTournament((current) =>
-          current?.tournamentId === selectedTournament.tournamentId ? updatedTournament : current,
+          current?.tournamentId === selectedTournament.tournamentId ? finalTournament : current,
         );
-        setMessage('Tournament updated.');
+        setMessage(shouldUseWorkflow ? `Tournament moved to ${formData.status}.` : 'Tournament updated.');
       } else {
-        const newTournament = await tournamentService.createTournament(payload);
+        const newTournament = await tournamentService.createTournament(formData);
         setTournaments((current) => [newTournament, ...current]);
         setGlobalTournamentCount((current) => (current === null ? current : current + 1));
-        setMessage('Tournament created.');
+        setLastCreatedTournament(newTournament);
+        setShowTournamentSuccess(true);
+        setMessage('');
+        return;
       }
 
       closeFormModal();
@@ -443,7 +480,7 @@ const TournamentManagementPage = () => {
               variants={revealContainer}
             >
               <motion.div variants={revealUp}>
-                <MetricCard icon={<Trophy className="h-4 w-4" />} label="Total" value={String(tournaments.length).padStart(2, '0')} />
+                <MetricCard icon={<Trophy className="h-4 w-4" />} label="Total" value={String(totalTournamentCount).padStart(2, '0')} />
               </motion.div>
               <motion.div variants={revealUp}>
                 <MetricCard icon={<CalendarDays className="h-4 w-4" />} label="Upcoming" value={String(upcomingCount).padStart(2, '0')} />
@@ -468,7 +505,7 @@ const TournamentManagementPage = () => {
             className="glass-panel flex-1 rounded-xl p-4"
             variants={revealUp}
           >
-            <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(220px,1fr)_180px_200px_180px_180px]">
+            <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(220px,1fr)_180px_180px_180px]">
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-outline" />
                 <input
@@ -486,16 +523,6 @@ const TournamentManagementPage = () => {
                   <option value="All">All statuses</option>
                   {tournamentStatusOptions.map((status) => (
                     <option key={status} value={status}>{status}</option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="relative">
-                <Trophy className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-outline" />
-                <select value={typeFilter} onChange={(event) => setTypeFilter(event.target.value)} className={filterInputClassName}>
-                  <option value="All">All tournament types</option>
-                  {typeOptions.map((type) => (
-                    <option key={type} value={type}>{type}</option>
                   ))}
                 </select>
               </div>
@@ -542,16 +569,15 @@ const TournamentManagementPage = () => {
           variants={revealUp}
         >
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[1180px] text-left">
+            <table className="w-full min-w-[980px] text-left">
               <thead className="border-b border-outline-variant bg-surface-container">
                 <tr>
                   <th className="px-5 py-4 text-label-sm uppercase tracking-wider text-outline">Tournament ID</th>
                   <th className="px-5 py-4 text-label-sm uppercase tracking-wider text-outline">Tournament Name</th>
-                  <th className="px-5 py-4 text-label-sm uppercase tracking-wider text-outline">Tournament Type</th>
                   <th className="px-5 py-4 text-label-sm uppercase tracking-wider text-outline">Start Date</th>
                   <th className="px-5 py-4 text-label-sm uppercase tracking-wider text-outline">End Date</th>
                   <th className="px-5 py-4 text-label-sm uppercase tracking-wider text-outline">Location</th>
-                  <th className="px-5 py-4 text-label-sm uppercase tracking-wider text-outline">Participants</th>
+                  <th className="px-5 py-4 text-label-sm uppercase tracking-wider text-outline">Prize Pool</th>
                   <th className="px-5 py-4 text-label-sm uppercase tracking-wider text-outline">Status</th>
                   <th className="px-5 py-4 text-label-sm uppercase tracking-wider text-outline text-right">Actions</th>
                 </tr>
@@ -566,13 +592,10 @@ const TournamentManagementPage = () => {
                   >
                     <td className="px-5 py-4 text-body-sm font-bold text-primary">{tournament.id}</td>
                     <td className="px-5 py-4 text-body-sm font-bold text-primary">{tournament.tournamentName}</td>
-                    <td className="px-5 py-4 text-body-sm font-medium text-on-surface-variant">{tournament.tournamentType}</td>
                     <td className="px-5 py-4 text-body-sm font-medium text-on-surface-variant">{formatDate(tournament.startDate)}</td>
                     <td className="px-5 py-4 text-body-sm font-medium text-on-surface-variant">{formatDate(tournament.endDate)}</td>
                     <td className="px-5 py-4 text-body-sm font-medium text-on-surface-variant">{tournament.location}</td>
-                    <td className="px-5 py-4 text-body-sm font-bold text-primary">
-                      {tournament.currentParticipants}/{tournament.maximumParticipants}
-                    </td>
+                    <td className="px-5 py-4 text-body-sm font-bold text-primary">{tournament.prize || '-'}</td>
                     <td className="px-5 py-4">
                       <TournamentStatusBadge status={tournament.status} />
                     </td>
@@ -778,13 +801,8 @@ const TournamentForm = ({
             </Field>
           </motion.div>
           <motion.div variants={revealUp}>
-            <Field label="Tournament Type" error={formErrors.tournamentType}>
-              <select value={formData.tournamentType} onChange={(event) => onChange('tournamentType', event.target.value)} className={inputClassName}>
-                <option value="">Select type</option>
-                {tournamentTypeOptions.map((type) => (
-                  <option key={type} value={type}>{type}</option>
-                ))}
-              </select>
+            <Field label="Location" error={formErrors.location}>
+              <input type="text" value={formData.location} onChange={(event) => onChange('location', event.target.value)} className={inputClassName} />
             </Field>
           </motion.div>
           <motion.div variants={revealUp}>
@@ -798,28 +816,8 @@ const TournamentForm = ({
             </Field>
           </motion.div>
           <motion.div variants={revealUp}>
-            <Field label="Location" error={formErrors.location}>
-              <input type="text" value={formData.location} onChange={(event) => onChange('location', event.target.value)} className={inputClassName} />
-            </Field>
-          </motion.div>
-          <motion.div variants={revealUp}>
-            <Field label="Registration Deadline" error={formErrors.registrationDeadline}>
-              <input type="date" value={formData.registrationDeadline} onChange={(event) => onChange('registrationDeadline', event.target.value)} className={inputClassName} />
-            </Field>
-          </motion.div>
-          <motion.div variants={revealUp}>
-            <Field label="Maximum Participants" error={formErrors.maximumParticipants}>
-              <input type="number" min="1" value={formData.maximumParticipants || ''} onChange={(event) => onChange('maximumParticipants', Number(event.target.value))} className={inputClassName} />
-            </Field>
-          </motion.div>
-          <motion.div variants={revealUp}>
-            <Field label="Entry Fee" error={formErrors.entryFee}>
-              <input type="number" min="0" value={formData.entryFee} onChange={(event) => onChange('entryFee', Number(event.target.value))} className={inputClassName} />
-            </Field>
-          </motion.div>
-          <motion.div variants={revealUp}>
-            <Field label="Prize">
-              <input type="text" value={formData.prize} onChange={(event) => onChange('prize', event.target.value)} className={inputClassName} />
+            <Field label="Prize Pool" error={formErrors.prize}>
+              <input type="number" min="0" value={formData.prize || ''} onChange={(event) => onChange('prize', event.target.value)} className={inputClassName} />
             </Field>
           </motion.div>
           <motion.div variants={revealUp}>
@@ -831,16 +829,30 @@ const TournamentForm = ({
               </select>
             </Field>
           </motion.div>
-          <motion.div className="md:col-span-2" variants={revealUp}>
-            <Field label="Description">
-              <textarea value={formData.description} onChange={(event) => onChange('description', event.target.value)} className={textareaClassName} />
-            </Field>
-          </motion.div>
-          <motion.div className="md:col-span-2" variants={revealUp}>
-            <Field label="Rules / Notes">
-              <textarea value={formData.rulesNotes} onChange={(event) => onChange('rulesNotes', event.target.value)} className={textareaClassName} />
-            </Field>
-          </motion.div>
+          {formData.status === 'Registration Open' && (
+            <>
+              <motion.div variants={revealUp}>
+                <Field label="Registration Open At">
+                  <input
+                    type="datetime-local"
+                    value={formData.registrationOpenAt ?? ''}
+                    onChange={(event) => onChange('registrationOpenAt', event.target.value)}
+                    className={inputClassName}
+                  />
+                </Field>
+              </motion.div>
+              <motion.div variants={revealUp}>
+                <Field label="Registration Close At" error={formErrors.registrationCloseAt}>
+                  <input
+                    type="datetime-local"
+                    value={formData.registrationCloseAt ?? ''}
+                    onChange={(event) => onChange('registrationCloseAt', event.target.value)}
+                    className={inputClassName}
+                  />
+                </Field>
+              </motion.div>
+            </>
+          )}
         </div>
 
         <motion.div 
@@ -1568,57 +1580,6 @@ const RaceFormPanel = ({
   );
 };
 
-const LapTable = ({
-  rounds,
-  isLoading,
-  onEdit,
-  onDelete,
-}: {
-  rounds: RaceRoundItem[];
-  isLoading: boolean;
-  onEdit: (round: RaceRoundItem) => void;
-  onDelete: (round: RaceRoundItem) => void;
-}) => (
-  <div className="overflow-x-auto">
-    <table className="w-full min-w-[640px] text-left">
-      <thead className="border-b border-outline-variant bg-surface-container">
-        <tr>
-          <th className="px-3 py-3 text-label-sm uppercase tracking-wider text-outline">Lap</th>
-          <th className="px-3 py-3 text-label-sm uppercase tracking-wider text-outline">Horse</th>
-          <th className="px-3 py-3 text-label-sm uppercase tracking-wider text-outline">Position</th>
-          <th className="px-3 py-3 text-label-sm uppercase tracking-wider text-outline">Time</th>
-          <th className="px-3 py-3 text-label-sm uppercase tracking-wider text-outline text-right">Actions</th>
-        </tr>
-      </thead>
-      <tbody className="divide-y divide-outline-variant">
-        {isLoading ? (
-          <tr><td colSpan={5} className="px-3 py-8 text-center text-body-sm text-on-surface-variant">Loading laps...</td></tr>
-        ) : rounds.map((round) => (
-          <tr key={round.roundId}>
-            <td className="px-3 py-3 text-body-sm font-bold text-primary">{round.roundNumber}</td>
-            <td className="px-3 py-3 text-body-sm text-on-surface-variant">{round.horseName ?? round.horseId ?? '-'}</td>
-            <td className="px-3 py-3 text-body-sm text-on-surface-variant">{round.position ?? '-'}</td>
-            <td className="px-3 py-3 text-body-sm text-on-surface-variant">{round.lapTimeSec}s</td>
-            <td className="px-3 py-3">
-              <div className="flex justify-end gap-2">
-                <IconButton label={`Update lap ${round.roundNumber}`} onClick={() => onEdit(round)}>
-                  <Pencil className="h-4 w-4" />
-                </IconButton>
-                <IconButton label={`Delete lap ${round.roundNumber}`} onClick={() => onDelete(round)} danger>
-                  <Trash2 className="h-4 w-4" />
-                </IconButton>
-              </div>
-            </td>
-          </tr>
-        ))}
-        {!isLoading && rounds.length === 0 && (
-          <tr><td colSpan={5} className="px-3 py-8 text-center text-body-sm text-on-surface-variant">No laps for this race yet.</td></tr>
-        )}
-      </tbody>
-    </table>
-  </div>
-);
-
 const LapFormPanel = ({
   form,
   disabled,
@@ -1706,22 +1667,15 @@ const TournamentDetailModal = ({
   <Modal title={tournament.tournamentName} subtitle={tournament.id} onClose={onClose}>
     <div className="space-y-6 p-6">
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
-        <DetailItem label="Tournament Type" value={tournament.tournamentType} />
         <DetailItem label="Start Date" value={formatDate(tournament.startDate)} />
         <DetailItem label="End Date" value={formatDate(tournament.endDate)} />
         <DetailItem label="Location" value={tournament.location} />
-        <DetailItem label="Registration Deadline" value={formatDate(tournament.registrationDeadline)} />
-        <DetailItem label="Participants" value={`${tournament.currentParticipants}/${tournament.maximumParticipants}`} />
-        <DetailItem label="Entry Fee" value={formatCurrency(tournament.entryFee)} />
-        <DetailItem label="Prize" value={tournament.prize || '-'} />
+        <DetailItem label="Prize Pool" value={tournament.prize || '-'} />
         <div className="rounded-md border border-outline-variant bg-surface-container-low p-4">
           <p className="mb-1 text-label-sm font-bold uppercase tracking-wider text-outline">Status</p>
           <TournamentStatusBadge status={tournament.status} />
         </div>
       </div>
-
-      <DetailTextBlock label="Description" value={tournament.description || '-'} />
-      <DetailTextBlock label="Rules / Notes" value={tournament.rulesNotes || '-'} />
 
       <DetailSection
         title="Participants List"
@@ -1910,13 +1864,6 @@ const DetailItem = ({ label, value }: { label: string; value: string }) => (
   <div className="rounded-md border border-outline-variant bg-surface-container-low p-4">
     <p className="mb-1 text-label-sm font-bold uppercase tracking-wider text-outline">{label}</p>
     <p className="break-words text-body-sm font-semibold text-primary">{value}</p>
-  </div>
-);
-
-const DetailTextBlock = ({ label, value }: { label: string; value: string }) => (
-  <div className="rounded-md border border-outline-variant bg-surface-container-low p-4">
-    <p className="mb-2 text-label-sm font-bold uppercase tracking-wider text-outline">{label}</p>
-    <p className="text-body-sm text-on-surface-variant">{value}</p>
   </div>
 );
 

@@ -134,7 +134,15 @@ const parseCurrencyAmount = (value: unknown) => {
 };
 
 const normalizeTournamentStatus = (value: unknown): TournamentStatus => {
-  const normalizedValue = asString(value, 'Upcoming').trim().toLowerCase();
+  const normalizedValue = asString(value, 'Upcoming').trim().toLowerCase().replace(/[_-]+/g, ' ');
+
+  if (normalizedValue.includes('registration') && normalizedValue.includes('open')) {
+    return 'Registration Open';
+  }
+
+  if (normalizedValue.includes('registration') && normalizedValue.includes('closed')) {
+    return 'Registration Closed';
+  }
 
   if (normalizedValue.includes('ongoing') || normalizedValue === 'active') {
     return 'Ongoing';
@@ -250,6 +258,8 @@ const mapApiTournament = (raw: RawTournament, index: number): Tournament => {
     entryFee: asNumber(raw.entryFee),
     prize: asString(raw.prize ?? raw.prizeName, formatCurrency(prizePool)),
     status: normalizeTournamentStatus(raw.status),
+    registrationOpenAt: raw.registrationOpenAt ? asString(raw.registrationOpenAt) : undefined,
+    registrationCloseAt: raw.registrationCloseAt ? asString(raw.registrationCloseAt) : undefined,
     rulesNotes: asString(raw.rulesNotes ?? raw.note, '-'),
     participants,
     schedule: mapApiMatches(raw.schedule ?? raw.schedules ?? raw.matches, startDate),
@@ -462,6 +472,8 @@ const buildTournamentFromData = (
     entryFee: isManagementTournamentData(data) ? Number(data.entryFee) : existingTournament?.entryFee ?? 0,
     prize: isManagementTournamentData(data) ? data.prize.trim() : formatCurrency(prizePool),
     status: normalizeTournamentStatus(data.status),
+    registrationOpenAt: isManagementTournamentData(data) ? data.registrationOpenAt : existingTournament?.registrationOpenAt,
+    registrationCloseAt: isManagementTournamentData(data) ? data.registrationCloseAt : existingTournament?.registrationCloseAt,
     rulesNotes: isManagementTournamentData(data) ? data.rulesNotes.trim() : existingTournament?.rulesNotes ?? '',
     participants: existingTournament?.participants.map((participant) => ({ ...participant })) ?? [],
     schedule: existingTournament?.schedule.map((match) => ({ ...match })) ?? [],
@@ -627,6 +639,28 @@ export const tournamentService = {
 
       return cancelMockTournament(tournamentId);
     }
+  },
+
+  async openRegistration(
+    tournamentId: number | string,
+    data: { registrationOpenAt?: string; registrationCloseAt: string },
+  ): Promise<Tournament> {
+    await apiClient.patch(`/api/v1/admin/tournaments/${tournamentId}/open-registration`, {
+      registrationOpenAt: data.registrationOpenAt || undefined,
+      registrationCloseAt: data.registrationCloseAt,
+    });
+    return this.getTournamentById(tournamentId);
+  },
+
+  async closeRegistration(
+    tournamentId: number | string,
+    data: { autoRejectPending?: boolean; autoCancelUnconfirmed?: boolean } = {},
+  ): Promise<Tournament> {
+    await apiClient.patch(`/api/v1/admin/tournaments/${tournamentId}/close-registration`, {
+      autoRejectPending: data.autoRejectPending ?? false,
+      autoCancelUnconfirmed: data.autoCancelUnconfirmed ?? false,
+    });
+    return this.getTournamentById(tournamentId);
   },
 
   async getTournamentSchedule(tournamentId: number | string): Promise<TournamentMatch[]> {

@@ -1,4 +1,10 @@
-export type TournamentStatus = 'Upcoming' | 'Ongoing' | 'Completed' | 'Cancelled';
+export type TournamentStatus =
+  | 'Upcoming'
+  | 'Registration Open'
+  | 'Registration Closed'
+  | 'Ongoing'
+  | 'Completed'
+  | 'Cancelled';
 
 export type MatchStatus = 'Scheduled' | 'Ongoing' | 'Finished' | 'Cancelled';
 
@@ -39,6 +45,8 @@ export type Tournament = {
   entryFee: number;
   prize: string;
   status: TournamentStatus;
+  registrationOpenAt?: string;
+  registrationCloseAt?: string;
   rulesNotes: string;
   participants: TournamentParticipant[];
   schedule: TournamentMatch[];
@@ -58,5 +66,7 @@ export type TournamentMutationData = {
   entryFee: number;
   prize: string;
   status: TournamentStatus;
+  registrationOpenAt?: string;
+  registrationCloseAt?: string;
   rulesNotes: string;
 };

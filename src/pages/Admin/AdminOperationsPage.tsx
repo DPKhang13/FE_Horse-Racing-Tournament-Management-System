@@ -118,7 +118,7 @@ const AdminOperationsPage = () => {
           variants={revealContainer}
         >
           <motion.div variants={revealUp}>
-            <MetricCard icon={<Trophy className="h-5 w-5" />} label="Tournaments" value={isLoading ? '...' : String(tournaments.length).padStart(2, '0')} />
+            <MetricCard icon={<Trophy className="h-5 w-5" />} label="Tournaments" value={isLoading ? '...' : String(totalTournamentCount).padStart(2, '0')} />
           </motion.div>
           <motion.div variants={revealUp}>
             <MetricCard icon={<CalendarDays className="h-5 w-5" />} label="Upcoming" value={isLoading ? '...' : String(stats.upcoming).padStart(2, '0')} />

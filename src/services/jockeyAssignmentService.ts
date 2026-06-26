@@ -11,6 +11,8 @@ export type JockeyAssignmentItem = {
   status?: string;
   invitedAt?: string;
   respondedAt?: string;
+  cancelledAt?: string;
+  expiredAt?: string;
   raceName?: string;
   raceNumber?: number;
   horseId?: number;
@@ -74,6 +76,11 @@ export const jockeyAssignmentService = {
     const response = await apiClient.put(`/api/jockey-assignments/respond/${id}`, {
       status,
     });
+    return unwrapApiData<JockeyAssignmentItem>(response);
+  },
+
+  async confirm(id: number | string): Promise<JockeyAssignmentItem> {
+    const response = await apiClient.put(`/api/horse-jockey-assignments/confirm/${id}`);
     return unwrapApiData<JockeyAssignmentItem>(response);
   },
 

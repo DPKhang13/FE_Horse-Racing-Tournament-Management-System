@@ -26,7 +26,6 @@ export type RaceRegistrationFormData = {
   tournamentId: number;
   raceId: number;
   horseId: number;
-  jockeyId?: number;
   status?: string;
   ownerConfirmationStatus?: string;
 };
@@ -35,7 +34,6 @@ const toPayload = (data: RaceRegistrationFormData) => ({
   tournamentId: Number(data.tournamentId),
   raceId: Number(data.raceId),
   horseId: Number(data.horseId),
-  jockeyId: data.jockeyId ? Number(data.jockeyId) : undefined,
 });
 
 const toUpdatePayload = (data: RaceRegistrationFormData) => ({

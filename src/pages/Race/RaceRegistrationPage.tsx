@@ -3,7 +3,6 @@ import { CheckCircle2, ClipboardList, Trash2 } from 'lucide-react';
 import { getApiErrorMessage } from '../../services/apiClient';
 import { authService } from '../../services/authService';
 import { HorseService } from '../../services/HorseService';
-import { jockeyService, type JockeyItem } from '../../services/jockeyService';
 import { raceRegistrationService, type RaceRegistrationFormData, type RaceRegistrationItem } from '../../services/raceRegistrationService';
 import { scheduleService, type RaceScheduleItem, type TournamentApiItem } from '../../services/scheduleService';
 import type { Horse } from '../../types/horse';
@@ -13,14 +12,12 @@ const initialForm: RaceRegistrationFormData = {
   tournamentId: 0,
   raceId: 0,
   horseId: 0,
-  jockeyId: undefined,
 };
 
 const RaceRegistrationPage = () => {
   const [profile, setProfile] = useState<UserProfile | undefined>(() => authService.getStoredUserProfile());
   const [items, setItems] = useState<RaceRegistrationItem[]>([]);
   const [horses, setHorses] = useState<Horse[]>([]);
-  const [jockeys, setJockeys] = useState<JockeyItem[]>([]);
   const [races, setRaces] = useState<RaceScheduleItem[]>([]);
   const [tournaments, setTournaments] = useState<TournamentApiItem[]>([]);
   const [form, setForm] = useState<RaceRegistrationFormData>(initialForm);
@@ -39,17 +36,15 @@ const RaceRegistrationPage = () => {
       const currentProfile = profile ?? await authService.getCurrentUser();
       setProfile(currentProfile);
       if (currentProfile.roleType === 'horse_owner') {
-        const [registrations, horseList, jockeyList, raceList, tournamentList] = await Promise.all([
+        const [registrations, horseList, raceList, tournamentList] = await Promise.all([
           raceRegistrationService.getMine(),
           HorseService.getHorses(),
-          jockeyService.getJockeys('available'),
           scheduleService.getRaceSchedule(),
           scheduleService.getTournaments(),
         ]);
 
         setItems(registrations);
         setHorses(horseList);
-        setJockeys(jockeyList);
         setRaces(raceList);
         setTournaments(tournamentList);
       } else {
@@ -175,14 +170,6 @@ const RaceRegistrationPage = () => {
                   {horses.map((horse) => (
                     <option key={horse.horseId} value={horse.horseId}>
                       {horse.name} / {horse.breed} / Group {horse.rankGroup}
-                    </option>
-                  ))}
-                </SelectInput>
-                <SelectInput label="Jockey" value={form.jockeyId ?? ''} onChange={(value) => setForm((current) => ({ ...current, jockeyId: value ? Number(value) : undefined }))}>
-                  <option value="">Select jockey (optional)</option>
-                  {jockeys.map((jockey) => (
-                    <option key={jockey.jockeyId} value={jockey.jockeyId}>
-                      {jockey.fullName ?? jockey.username ?? `Jockey ${jockey.jockeyId}`}
                     </option>
                   ))}
                 </SelectInput>
