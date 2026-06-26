@@ -25,6 +25,7 @@ const AdminOperationsPage = () => {
   const [tournaments, setTournaments] = useState<Tournament[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState('');
+  const [globalTournamentCount, setGlobalTournamentCount] = useState<number | null>(null);
 
   useEffect(() => {
     let isMounted = true;
@@ -34,10 +35,14 @@ const AdminOperationsPage = () => {
       setErrorMessage('');
 
       try {
-        const data = await tournamentService.getAllTournaments();
+        const [data, count] = await Promise.all([
+          tournamentService.getAllTournaments(false),
+          tournamentService.getGlobalTournamentCount().catch(() => null),
+        ]);
 
         if (isMounted) {
           setTournaments(data);
+          setGlobalTournamentCount(count ?? data.length);
         }
       } catch (error) {
         if (isMounted) {
@@ -68,6 +73,7 @@ const AdminOperationsPage = () => {
   }, [tournaments]);
 
   const latestTournaments = tournaments.slice(0, 6);
+  const totalTournamentCount = globalTournamentCount ?? tournaments.length;
 
   return (
     <div className="min-h-screen bg-surface py-8">
