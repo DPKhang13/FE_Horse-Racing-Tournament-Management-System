@@ -202,10 +202,6 @@ const mapRankingEntry = (raw: RawObject, index: number, category: RankingCategor
 
 export const raceResultService = {
   async getRaceResultList(filters: RaceResultFilters = {}): Promise<RaceResultListItem[]> {
-    if (import.meta.env.DEV) {
-      return filterResults(mockRaceResults.map(toListItem), filters);
-    }
-
     try {
       const response = await apiClient.get('/api/race-results/get-all');
       const items = unwrapApiList<RawObject>(response).map(mapSummary).map(toListItem);
@@ -217,10 +213,6 @@ export const raceResultService = {
 
   async getRaceResultById(id: string): Promise<RaceResultSummary> {
     const mockResult = mockRaceResults.find((result) => result.id === id);
-
-    if (import.meta.env.DEV && mockResult) {
-      return mockResult;
-    }
 
     try {
       const response = await apiClient.get(`/api/race-results/get-by-id/${id}`);
@@ -235,10 +227,6 @@ export const raceResultService = {
   },
 
   async getRankingBoard(category: RankingCategory): Promise<RankingBoard | undefined> {
-    if (import.meta.env.DEV) {
-      return mockRankingBoards[category];
-    }
-
     try {
       if (category === 'owner') {
         return mockRankingBoards.owner;
