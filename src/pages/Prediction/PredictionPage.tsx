@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { Clock3, Ticket, TrendingUp, X } from 'lucide-react';
-import { mockOpenRacePredictions, mockPredictionWallet } from '../../mocks/predictionMockData';
 import { getApiErrorMessage } from '../../services/apiClient';
 import { betService, type BetItem } from '../../services/betService';
-import { predictionMockService } from '../../services/predictionMockService';
+import { predictionService } from '../../services/predictionService';
+import type { OpenRacePrediction } from '../../types/prediction';
 
 const formatPoints = (value: number) => new Intl.NumberFormat('en-US', {
   maximumFractionDigits: 0,
@@ -30,12 +30,13 @@ const statusClassName = (status: string) => {
 
 const PredictionPage = () => {
   const [bets, setBets] = useState<BetItem[]>([]);
+  const [openRacePredictions, setOpenRacePredictions] = useState<OpenRacePrediction[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState('');
-  const [walletBalance, setWalletBalance] = useState<number>(mockPredictionWallet.balance);
+  const [walletBalance, setWalletBalance] = useState(0);
   const [isPredictionModalOpen, setIsPredictionModalOpen] = useState(false);
-  const [selectedRaceId, setSelectedRaceId] = useState(mockOpenRacePredictions[0]?.id ?? 0);
-  const [selectedHorseId, setSelectedHorseId] = useState(mockOpenRacePredictions[0]?.options[0]?.horseId ?? 0);
+  const [selectedRaceId, setSelectedRaceId] = useState(0);
+  const [selectedHorseId, setSelectedHorseId] = useState(0);
   const [stake, setStake] = useState('100');
   const [formError, setFormError] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
@@ -43,26 +44,37 @@ const PredictionPage = () => {
   useEffect(() => {
     let isMounted = true;
 
-    const loadBets = async () => {
+    const loadPredictionPage = async () => {
       setIsLoading(true);
       setErrorMessage('');
 
       try {
-        const data = await betService.getBets();
+        const [data, overview] = await Promise.all([
+          betService.getBets(),
+          predictionService.getPredictionOverview(),
+        ]);
 
         if (isMounted) {
-          if (data.length === 0) {
-            setBets(predictionMockService.getBets());
-            setWalletBalance(predictionMockService.getWalletBalance());
-          } else {
-            setBets(data);
+          const nextOpenRaces = overview.openRaces;
+
+          setOpenRacePredictions(nextOpenRaces);
+          setSelectedRaceId(nextOpenRaces[0]?.id ?? 0);
+          setSelectedHorseId(nextOpenRaces[0]?.options[0]?.horseId ?? 0);
+
+          if (overview.walletBalance !== undefined) {
+            setWalletBalance(overview.walletBalance);
           }
+
+          setBets(data);
         }
       } catch (error) {
         if (isMounted) {
           setErrorMessage(getApiErrorMessage(error, 'Unable to load predictions.'));
-          setBets(predictionMockService.getBets());
-          setWalletBalance(predictionMockService.getWalletBalance());
+          setOpenRacePredictions([]);
+          setSelectedRaceId(0);
+          setSelectedHorseId(0);
+          setBets([]);
+          setWalletBalance(0);
         }
       } finally {
         if (isMounted) {
@@ -71,7 +83,7 @@ const PredictionPage = () => {
       }
     };
 
-    void loadBets();
+    void loadPredictionPage();
 
     return () => {
       isMounted = false;
@@ -81,10 +93,10 @@ const PredictionPage = () => {
   const stats = useMemo(() => {
     const pending = bets.filter((bet) => bet.status.toLowerCase() === 'pending').length;
     const settled = bets.length - pending;
-    const openRaces = mockOpenRacePredictions.filter((race) => race.status === 'Open').length;
+    const openRaces = openRacePredictions.filter((race) => race.status === 'Open').length;
 
     return { openRaces, pending, settled };
-  }, [bets]);
+  }, [bets, openRacePredictions]);
 
   const activePredictions = useMemo(
     () => bets.filter((bet) => bet.status.toLowerCase() === 'pending'),
@@ -92,8 +104,8 @@ const PredictionPage = () => {
   );
 
   const selectedRace = useMemo(
-    () => mockOpenRacePredictions.find((race) => race.id === selectedRaceId) ?? mockOpenRacePredictions[0],
-    [selectedRaceId],
+    () => openRacePredictions.find((race) => race.id === selectedRaceId) ?? openRacePredictions[0],
+    [openRacePredictions, selectedRaceId],
   );
 
   const selectedOption = useMemo(
@@ -106,8 +118,8 @@ const PredictionPage = () => {
     ? Math.round(stakeValue * selectedOption.odds)
     : 0;
 
-  const openPredictionModal = (raceId = mockOpenRacePredictions[0]?.id ?? 0) => {
-    const race = mockOpenRacePredictions.find((item) => item.id === raceId) ?? mockOpenRacePredictions[0];
+  const openPredictionModal = (raceId = openRacePredictions[0]?.id ?? 0) => {
+    const race = openRacePredictions.find((item) => item.id === raceId) ?? openRacePredictions[0];
 
     setSelectedRaceId(race?.id ?? 0);
     setSelectedHorseId(race?.options[0]?.horseId ?? 0);
@@ -118,7 +130,7 @@ const PredictionPage = () => {
   };
 
   const handleRaceChange = (raceId: number) => {
-    const race = mockOpenRacePredictions.find((item) => item.id === raceId);
+    const race = openRacePredictions.find((item) => item.id === raceId);
     setSelectedRaceId(raceId);
     setSelectedHorseId(race?.options[0]?.horseId ?? 0);
   };
@@ -145,21 +157,13 @@ const PredictionPage = () => {
         });
 
         setBets((current) => [prediction, ...current]);
+        setWalletBalance((current) => Math.max(0, current - prediction.amount));
         setSuccessMessage(`Prediction placed on ${prediction.horseName} for ${formatPoints(prediction.amount)} pts.`);
         setIsPredictionModalOpen(false);
         return;
       }
 
-      const prediction = predictionMockService.createPrediction({
-        race: selectedRace,
-        option: selectedOption,
-        amount: stakeValue,
-      });
-
-      setBets((current) => [prediction, ...current]);
-      setWalletBalance(predictionMockService.getWalletBalance());
-      setSuccessMessage(`Prediction placed on ${prediction.horseName} for ${formatPoints(prediction.amount)} pts.`);
-      setIsPredictionModalOpen(false);
+      setFormError('This prediction option is missing an API optionId.');
     } catch (error) {
       setFormError(error instanceof Error ? error.message : 'Unable to create prediction.');
     }
@@ -192,7 +196,7 @@ const PredictionPage = () => {
               <div className="flex items-center justify-between gap-4 mb-6">
                 <div>
                   <p className="text-xs font-semibold uppercase tracking-[0.2em] text-secondary">Wallet</p>
-                  <h2 className="mt-2 text-3xl font-bold text-primary">{formatPoints(walletBalance)} {mockPredictionWallet.currency}</h2>
+                  <h2 className="mt-2 text-3xl font-bold text-primary">{formatPoints(walletBalance)} pts</h2>
                 </div>
                 <div className="rounded-2xl bg-secondary-container px-4 py-3 text-sm font-semibold text-secondary">Available balance</div>
               </div>
@@ -217,12 +221,12 @@ const PredictionPage = () => {
                   <h2 className="mt-2 text-2xl font-bold text-primary">Prediction windows</h2>
                 </div>
                 <div className="inline-flex items-center gap-2 rounded-full bg-surface-container px-4 py-2 text-sm font-semibold text-on-surface-variant">
-                  <Clock3 className="w-4 h-4" /> {mockOpenRacePredictions.length} open
+                  <Clock3 className="w-4 h-4" /> {openRacePredictions.length} open
                 </div>
               </div>
 
               <div className="grid gap-4 md:grid-cols-2">
-                {mockOpenRacePredictions.map((race) => (
+                {openRacePredictions.map((race) => (
                   <article key={race.id} className="rounded-2xl border border-outline-variant bg-surface-container-low p-5 transition hover:border-secondary">
                     <div className="flex items-start justify-between gap-4">
                       <div>
@@ -252,6 +256,12 @@ const PredictionPage = () => {
                     </button>
                   </article>
                 ))}
+
+                {!isLoading && openRacePredictions.length === 0 && (
+                  <div className="rounded-2xl border border-outline-variant bg-surface-container-low p-4 text-sm font-semibold text-on-surface-variant">
+                    No open prediction races found.
+                  </div>
+                )}
               </div>
             </section>
           </div>
@@ -358,7 +368,7 @@ const PredictionPage = () => {
                   onChange={(event) => handleRaceChange(Number(event.target.value))}
                   className="w-full rounded-md border border-outline-variant bg-surface-container-low px-4 py-3 focus:border-primary focus:outline-none"
                 >
-                  {mockOpenRacePredictions.map((race) => (
+                  {openRacePredictions.map((race) => (
                     <option key={race.id} value={race.id}>{race.raceName} — closes {formatCloseTime(race.closesAt)}</option>
                   ))}
                 </select>

@@ -80,10 +80,6 @@ export const betService = {
       optionId: Number(data.optionId),
       betType: data.betType,
       betPoints: Number(data.betPoints),
-      betRate: Number(data.betRate),
-      rewardPoints: data.rewardPoints ? Number(data.rewardPoints) : undefined,
-      status: data.status,
-      placedAt: new Date().toISOString(),
     });
     return mapBet(response.data?.data ?? response.data);
   },
