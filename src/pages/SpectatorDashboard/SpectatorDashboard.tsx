@@ -9,8 +9,6 @@ import { scheduleService, type RaceScheduleItem } from '../../services/scheduleS
 import type { RaceResultListItem } from '../../types/raceResult';
 import { spectatorDashboardMockData } from './mockData';
 
-const shouldUseMockData = import.meta.env.DEV;
-
 const formatTime = (value: string) => new Intl.DateTimeFormat('en-US', {
   hour: '2-digit',
   minute: '2-digit',
@@ -76,7 +74,7 @@ const SpectatorDashboard: React.FC = () => {
             nextLatestResults.length > 0 ||
             nextNotifications.length > 0;
 
-          if (shouldUseMockData || !hasAnyRealData) {
+          if (!hasAnyRealData) {
             setUpcomingRaces(spectatorDashboardMockData.upcomingRaces);
             setMyPredictions(spectatorDashboardMockData.myPredictions);
             setLatestResults(spectatorDashboardMockData.latestResults);
