@@ -186,6 +186,14 @@ const cleanTournamentPayload = (data: TournamentPayloadData) => ({
   status: data.status.trim(),
 });
 
+const cleanTournamentUpdatePayload = (data: TournamentPayloadData) => ({
+  name: (isManagementTournamentData(data) ? data.tournamentName : data.name).trim(),
+  location: data.location.trim(),
+  startDate: data.startDate,
+  endDate: data.endDate,
+  prizePool: isManagementTournamentData(data) ? parseCurrencyAmount(data.prize) : Number(data.prizePool),
+});
+
 const mapParticipants = (value: unknown): TournamentParticipant[] => {
   if (!Array.isArray(value)) {
     return [];
@@ -605,7 +613,7 @@ export const tournamentService = {
 
   async updateTournament(tournamentId: number | string, data: TournamentPayloadData, useMockFallback = false): Promise<Tournament> {
     try {
-      const response = await apiClient.put(`/api/tournaments/update-tournament/${tournamentId}`, cleanTournamentPayload(data));
+      const response = await apiClient.put(`/api/tournaments/update-tournament/${tournamentId}`, cleanTournamentUpdatePayload(data));
       const apiTournament = mapApiTournament(unwrapApiData<RawTournament>(response), 0);
       return buildTournamentFromData(data, apiTournament.tournamentId, apiTournament);
     } catch (error) {
@@ -660,6 +668,16 @@ export const tournamentService = {
       autoRejectPending: data.autoRejectPending ?? false,
       autoCancelUnconfirmed: data.autoCancelUnconfirmed ?? false,
     });
+    return this.getTournamentById(tournamentId);
+  },
+
+  async startTournament(tournamentId: number | string): Promise<Tournament> {
+    await apiClient.patch(`/api/v1/admin/tournaments/${tournamentId}/start`);
+    return this.getTournamentById(tournamentId);
+  },
+
+  async completeTournament(tournamentId: number | string): Promise<Tournament> {
+    await apiClient.patch(`/api/v1/admin/tournaments/${tournamentId}/complete`);
     return this.getTournamentById(tournamentId);
   },
 

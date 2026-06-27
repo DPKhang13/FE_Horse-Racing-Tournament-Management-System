@@ -80,7 +80,7 @@ export const jockeyAssignmentService = {
   },
 
   async confirm(id: number | string): Promise<JockeyAssignmentItem> {
-    const response = await apiClient.put(`/api/horse-jockey-assignments/confirm/${id}`);
+    const response = await apiClient.patch(`/api/v1/owner/jockey-assignments/${id}/confirm`);
     return unwrapApiData<JockeyAssignmentItem>(response);
   },
 

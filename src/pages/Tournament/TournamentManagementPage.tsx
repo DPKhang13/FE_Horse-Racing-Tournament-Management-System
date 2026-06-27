@@ -136,6 +136,15 @@ const toDateTimeInputValue = (value?: string) => {
   return new Date(date.getTime() - offsetMs).toISOString().slice(0, 16);
 };
 
+const toInstantString = (value?: string) => {
+  if (!value) {
+    return undefined;
+  }
+
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? undefined : date.toISOString();
+};
+
 const getStatusClassName = (status: TournamentStatus) => {
   if (status === 'Ongoing') {
     return 'bg-secondary/10 text-secondary';
@@ -235,8 +244,35 @@ const toFormData = (tournament: Tournament): TournamentMutationData => ({
   rulesNotes: tournament.rulesNotes,
 });
 
-const isRegistrationWorkflowStatus = (status: TournamentStatus) =>
-  status === 'Registration Open' || status === 'Registration Closed';
+const isTournamentWorkflowStatus = (status: TournamentStatus) =>
+  status === 'Registration Open'
+  || status === 'Registration Closed'
+  || status === 'Ongoing'
+  || status === 'Completed';
+
+const getEditableTournamentStatuses = (selectedTournament: Tournament | null): TournamentStatus[] => {
+  if (!selectedTournament) {
+    return ['Upcoming'];
+  }
+
+  if (selectedTournament.status === 'Upcoming') {
+    return ['Upcoming', 'Registration Open'];
+  }
+
+  if (selectedTournament.status === 'Registration Open') {
+    return ['Registration Open', 'Registration Closed'];
+  }
+
+  if (selectedTournament.status === 'Registration Closed') {
+    return ['Registration Closed', 'Ongoing'];
+  }
+
+  if (selectedTournament.status === 'Ongoing') {
+    return ['Ongoing', 'Completed'];
+  }
+
+  return [selectedTournament.status];
+};
 
 const hasTournamentCoreChanges = (current: TournamentMutationData, original: Tournament) =>
   current.tournamentName.trim() !== original.tournamentName
@@ -324,6 +360,7 @@ const TournamentManagementPage = () => {
   const upcomingCount = tournaments.filter((tournament) => tournament.status === 'Upcoming').length;
   const totalParticipants = tournaments.reduce((total, tournament) => total + tournament.currentParticipants, 0);
   const totalTournamentCount = globalTournamentCount ?? tournaments.length;
+  const editableTournamentStatuses = getEditableTournamentStatuses(selectedTournament);
 
   const openCreateModal = () => {
     setSelectedTournament(null);
@@ -379,21 +416,24 @@ const TournamentManagementPage = () => {
 
     try {
       if (selectedTournament) {
-        const shouldUseWorkflow = formData.status !== selectedTournament.status && isRegistrationWorkflowStatus(formData.status);
+        const shouldUseWorkflow = formData.status !== selectedTournament.status && isTournamentWorkflowStatus(formData.status);
         const shouldUpdateCoreFields = hasTournamentCoreChanges(formData, selectedTournament);
         const updatedTournament = shouldUpdateCoreFields || !shouldUseWorkflow
           ? await tournamentService.updateTournament(selectedTournament.tournamentId, {
             ...formData,
-            status: shouldUseWorkflow ? selectedTournament.status : formData.status,
           })
           : selectedTournament;
         const finalTournament = shouldUseWorkflow && formData.status === 'Registration Open'
           ? await tournamentService.openRegistration(selectedTournament.tournamentId, {
-            registrationOpenAt: formData.registrationOpenAt || undefined,
-            registrationCloseAt: formData.registrationCloseAt ?? '',
+            registrationOpenAt: toInstantString(formData.registrationOpenAt),
+            registrationCloseAt: toInstantString(formData.registrationCloseAt) ?? '',
           })
           : shouldUseWorkflow && formData.status === 'Registration Closed'
             ? await tournamentService.closeRegistration(selectedTournament.tournamentId)
+            : shouldUseWorkflow && formData.status === 'Ongoing'
+              ? await tournamentService.startTournament(selectedTournament.tournamentId)
+              : shouldUseWorkflow && formData.status === 'Completed'
+                ? await tournamentService.completeTournament(selectedTournament.tournamentId)
             : updatedTournament;
 
         setTournaments((current) =>
@@ -652,6 +692,7 @@ const TournamentManagementPage = () => {
             formErrors={formErrors}
             isSaving={isSaving}
             isEditing={Boolean(selectedTournament)}
+            editableStatuses={editableTournamentStatuses}
             selectedTournament={selectedTournament}
             onChange={handleFieldChange}
             onSubmit={handleSubmit}
@@ -719,6 +760,7 @@ const TournamentForm = ({
   formErrors,
   isSaving,
   isEditing,
+  editableStatuses,
   selectedTournament,
   onChange,
   onSubmit,
@@ -733,6 +775,7 @@ const TournamentForm = ({
   formErrors: TournamentFormErrors;
   isSaving: boolean;
   isEditing: boolean;
+  editableStatuses: TournamentStatus[];
   selectedTournament: Tournament | null;
   onChange: <K extends keyof TournamentMutationData>(field: K, value: TournamentMutationData[K]) => void;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
@@ -823,7 +866,7 @@ const TournamentForm = ({
           <motion.div variants={revealUp}>
             <Field label="Status">
               <select value={formData.status} onChange={(event) => onChange('status', event.target.value as TournamentStatus)} className={inputClassName}>
-                {tournamentStatusOptions.map((status) => (
+                {editableStatuses.map((status: TournamentStatus) => (
                   <option key={status} value={status}>{status}</option>
                 ))}
               </select>
