@@ -202,7 +202,7 @@ const PredictionPage = () => {
               </div>
               <div className="grid gap-4 sm:grid-cols-3">
                 {[
-                  { label: 'Open races', value: String(stats.openRaces).padStart(2, '0'), color: 'bg-surface-container-highest text-primary' },
+                  { label: 'Open prediction races', value: String(stats.openRaces).padStart(2, '0'), color: 'bg-surface-container-highest text-primary' },
                   { label: 'Pending', value: String(stats.pending).padStart(2, '0'), color: 'text-primary' },
                   { label: 'Settled', value: String(stats.settled).padStart(2, '0'), color: 'text-secondary' },
                 ].map((item) => (
@@ -217,8 +217,8 @@ const PredictionPage = () => {
             <section className="rounded-3xl border border-outline-variant bg-white p-6 shadow-sm">
               <div className="mb-6 flex items-center justify-between gap-4">
                 <div>
-                  <p className="text-xs font-semibold uppercase tracking-[0.2em] text-secondary">Open races</p>
-                  <h2 className="mt-2 text-2xl font-bold text-primary">Prediction windows</h2>
+                  <p className="text-xs font-semibold uppercase tracking-[0.2em] text-secondary">Open prediction races</p>
+                  <h2 className="mt-2 text-2xl font-bold text-primary">Open prediction windows</h2>
                 </div>
                 <div className="inline-flex items-center gap-2 rounded-full bg-surface-container px-4 py-2 text-sm font-semibold text-on-surface-variant">
                   <Clock3 className="w-4 h-4" /> {openRacePredictions.length} open
