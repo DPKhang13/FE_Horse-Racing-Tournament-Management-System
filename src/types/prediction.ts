@@ -1,4 +1,5 @@
 export interface PredictionOption {
+  optionId?: number;
   horseId: number;
   horseName: string;
   jockeyName: string;

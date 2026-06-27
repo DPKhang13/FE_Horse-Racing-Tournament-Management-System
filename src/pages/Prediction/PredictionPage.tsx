@@ -5,8 +5,6 @@ import { getApiErrorMessage } from '../../services/apiClient';
 import { betService, type BetItem } from '../../services/betService';
 import { predictionMockService } from '../../services/predictionMockService';
 
-const shouldUseMockData = import.meta.env.DEV;
-
 const formatPoints = (value: number) => new Intl.NumberFormat('en-US', {
   maximumFractionDigits: 0,
 }).format(value);
@@ -53,7 +51,7 @@ const PredictionPage = () => {
         const data = await betService.getBets();
 
         if (isMounted) {
-          if (shouldUseMockData || data.length === 0) {
+          if (data.length === 0) {
             setBets(predictionMockService.getBets());
             setWalletBalance(predictionMockService.getWalletBalance());
           } else {
@@ -125,9 +123,10 @@ const PredictionPage = () => {
     setSelectedHorseId(race?.options[0]?.horseId ?? 0);
   };
 
-  const handleCreatePrediction = (event: FormEvent<HTMLFormElement>) => {
+  const handleCreatePrediction = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setFormError('');
+    setSuccessMessage('');
 
     if (!selectedRace || !selectedOption) {
       setFormError('Please select a race and horse.');
@@ -135,6 +134,22 @@ const PredictionPage = () => {
     }
 
     try {
+      if (selectedOption.optionId) {
+        const prediction = await betService.createBet({
+          optionId: selectedOption.optionId,
+          betType: true,
+          betPoints: stakeValue,
+          betRate: selectedOption.odds,
+          rewardPoints: potentialPayout,
+          status: 'pending',
+        });
+
+        setBets((current) => [prediction, ...current]);
+        setSuccessMessage(`Prediction placed on ${prediction.horseName} for ${formatPoints(prediction.amount)} pts.`);
+        setIsPredictionModalOpen(false);
+        return;
+      }
+
       const prediction = predictionMockService.createPrediction({
         race: selectedRace,
         option: selectedOption,

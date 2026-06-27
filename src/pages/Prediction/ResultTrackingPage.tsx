@@ -4,8 +4,6 @@ import { getApiErrorMessage } from '../../services/apiClient';
 import { betService, type BetItem } from '../../services/betService';
 import { predictionMockService } from '../../services/predictionMockService';
 
-const shouldUseMockData = import.meta.env.DEV;
-
 const formatPoints = (value: number) => new Intl.NumberFormat('en-US', {
   maximumFractionDigits: 0,
 }).format(value);
@@ -40,7 +38,7 @@ const ResultTrackingPage = () => {
         const data = await betService.getBets();
 
         if (isMounted) {
-          if (shouldUseMockData || data.length === 0) {
+          if (data.length === 0) {
             setTrackedResults(predictionMockService.getBets());
           } else {
             setTrackedResults(data);
