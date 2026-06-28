@@ -23,6 +23,7 @@ import NotificationsPage from '../pages/Notifications/NotificationsPage';
 import WalletPaymentPage from '../pages/Wallet/WalletPaymentPage';
 import TournamentManagementPage from '../pages/Tournament/TournamentManagementPage';
 import TournamentSchedulePage from '../pages/Tournament/TournamentSchedulePage';
+import OwnerDashboardPage from '../pages/Owner/OwnerDashboardPage';
 
 const withLayout = (page: ReactNode) => <MainLayout>{page}</MainLayout>;
 
@@ -48,6 +49,7 @@ const AppRoutes = () => {
       <Route path="/results/rankings" element={protectedPage(<RankingPage />)} />
       <Route path="/results/:resultId" element={protectedPage(<RaceResultDetail />)} />
       <Route path="/horses" element={protectedPage(<HorseManagementPage />, ['horse_owner'])} />
+      <Route path="/owner-dashboard" element={protectedPage(<OwnerDashboardPage />, ['horse_owner'])} />
       <Route path="/spectator-dashboard" element={protectedPage(<SpectatorDashboard />, ['spectator'])} />
       <Route path="/prediction" element={protectedPage(<PredictionPage />, ['spectator'])} />
       <Route path="/tracking" element={protectedPage(<ResultTrackingPage />, ['spectator'])} />

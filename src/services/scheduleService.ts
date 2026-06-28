@@ -84,7 +84,7 @@ const mapRace = (raw: RawRace, tournament: TournamentApiItem): RaceScheduleItem 
 
 export const scheduleService = {
   async getTournaments(status?: string): Promise<TournamentApiItem[]> {
-    const response = await apiClient.get('/api/tournaments/getAll', {
+    const response = await apiClient.get('/api/tournaments/get-tournament-list', {
       params: status ? { status } : undefined,
     });
     return unwrapApiList<TournamentApiItem>(response);
@@ -100,7 +100,7 @@ export const scheduleService = {
           return [];
         }
 
-        const response = await apiClient.get(`/api/races/get-by-tournament/${tournamentId}`);
+        const response = await apiClient.get(`/api/tournaments/${tournamentId}/get-race-list`);
         return unwrapApiList<RawRace>(response).map((race) => mapRace(race, tournament));
       }),
     );

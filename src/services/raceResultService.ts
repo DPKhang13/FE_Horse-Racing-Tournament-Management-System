@@ -204,6 +204,23 @@ export const raceResultService = {
     const response = await apiClient.get('/api/race-results/get-all');
     const items = unwrapApiList<RawObject>(response).map(mapSummary).map(toListItem);
     return filterResults(items, filters);
+  async getRaceResultSummaries(): Promise<RaceResultSummary[]> {
+    if (import.meta.env.DEV) {
+      return mockRaceResults;
+    }
+
+    try {
+      const response = await apiClient.get('/api/race-results/get-all');
+      const items = unwrapApiList<RawObject>(response).map(mapSummary);
+      return items.length > 0 ? items : mockRaceResults;
+    } catch {
+      return mockRaceResults;
+    }
+  },
+
+  async getRaceResultList(filters: RaceResultFilters = {}): Promise<RaceResultListItem[]> {
+    const summaries = await this.getRaceResultSummaries();
+    return filterResults(summaries.map(toListItem), filters);
   },
 
   async getRaceResultById(id: string): Promise<RaceResultSummary> {

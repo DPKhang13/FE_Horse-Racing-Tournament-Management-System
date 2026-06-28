@@ -1,8 +1,24 @@
 import { useMemo, useState, type FormEvent } from 'react';
+import { motion } from 'motion/react';
 import { ArrowLeft, ArrowRight, CheckCircle2, Eye, Gavel, Medal, Shield, UserRound } from 'lucide-react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 
 type RegistrationRole = 'horse_owner' | 'jockey' | 'race_referee' | 'spectator';
+
+// Animation variants
+const revealContainer = {
+  hidden: {},
+  visible: {
+    transition: {
+      staggerChildren: 0.12,
+    },
+  },
+};
+
+const revealUp = {
+  hidden: { opacity: 0, y: 28 },
+  visible: { opacity: 1, y: 0 },
+};
 
 const roles: Array<{
   id: RegistrationRole;
@@ -70,8 +86,13 @@ const RegistrationPage = () => {
       </header>
 
       <section className="mx-auto flex min-h-screen max-w-5xl items-center justify-center px-4 pb-12 pt-28 md:px-8">
-        <div className="w-full">
-          <div className="mb-10">
+        <motion.div 
+          className="w-full"
+          initial="hidden"
+          animate="visible"
+          variants={revealContainer}
+        >
+          <motion.div className="mb-10" variants={revealUp}>
             <div className="mb-4 flex justify-between px-1">
               <span className={`text-label-md font-bold ${step === 1 ? 'text-primary' : 'text-on-surface-variant'}`}>01 Role</span>
               <span className={`text-label-md font-bold ${step === 2 ? 'text-primary' : 'text-on-surface-variant'}`}>02 Identity</span>
@@ -79,30 +100,33 @@ const RegistrationPage = () => {
             <div className="h-1.5 overflow-hidden rounded-full bg-surface-container-highest">
               <div className="h-full bg-primary transition-all duration-500" style={{ width: progressWidth }} />
             </div>
-          </div>
+          </motion.div>
 
           <form onSubmit={handleSubmit}>
             {step === 1 ? (
-              <section>
-                <div className="mb-10 text-center">
+              <motion.section variants={revealContainer}>
+                <motion.div className="mb-10 text-center" variants={revealUp}>
                   <h1 className="font-display text-4xl font-extrabold text-on-surface md:text-5xl">Select Your Arena</h1>
                   <p className="mt-3 text-on-surface-variant">Choose the workspace you want to complete after email verification.</p>
                   {state?.email && <p className="mt-2 text-label-md font-bold text-secondary">{state.email}</p>}
-                </div>
+                </motion.div>
 
-                <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                <motion.div className="grid grid-cols-1 gap-4 md:grid-cols-2" variants={revealContainer}>
                   {roles.map((role) => {
                     const Icon = role.icon;
                     const isSelected = selectedRole === role.id;
 
                     return (
-                      <button
+                      <motion.button
                         key={role.id}
                         type="button"
                         onClick={() => setSelectedRole(role.id)}
                         className={`glass-panel relative min-h-[180px] rounded-xl p-6 text-left transition-all hover:border-primary/60 ${
                           isSelected ? 'border-primary bg-surface-container-highest/30' : ''
                         }`}
+                        variants={revealUp}
+                        whileHover={{ y: -2, scale: 1.01 }}
+                        whileTap={{ scale: 0.98 }}
                       >
                         {isSelected && <CheckCircle2 className="absolute right-5 top-5 h-5 w-5 text-primary" />}
                         <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-lg bg-primary/10 text-primary">
@@ -110,19 +134,19 @@ const RegistrationPage = () => {
                         </div>
                         <h2 className="font-display text-xl font-bold text-on-surface">{role.title}</h2>
                         <p className="mt-3 text-sm leading-6 text-on-surface-variant">{role.description}</p>
-                      </button>
+                      </motion.button>
                     );
                   })}
-                </div>
-              </section>
+                </motion.div>
+              </motion.section>
             ) : (
-              <section>
-                <div className="mb-10 text-center">
+              <motion.section variants={revealContainer}>
+                <motion.div className="mb-10 text-center" variants={revealUp}>
                   <h1 className="font-display text-4xl font-extrabold text-on-surface">Verify Identity</h1>
                   <p className="mt-3 text-on-surface-variant">Complete your {selectedRoleMeta.title.toLowerCase()} profile details.</p>
-                </div>
+                </motion.div>
 
-                <div className="glass-panel mx-auto max-w-xl space-y-6 rounded-2xl p-8">
+                <motion.div className="glass-panel mx-auto max-w-xl space-y-6 rounded-2xl p-8" variants={revealUp}>
                   <RegistrationInput label="Display name" value={displayName} onChange={setDisplayName} placeholder="Your professional display name" />
                   <RegistrationInput label="License number" value={licenseNumber} onChange={setLicenseNumber} placeholder="Optional license or credential ID" />
                   <RegistrationInput label={selectedRole === 'horse_owner' ? 'Stable name' : 'Organization'} value={organization} onChange={setOrganization} placeholder="Stable, team, venue, or organization" />
@@ -136,39 +160,48 @@ const RegistrationPage = () => {
                       Your email verification is complete. Sign in to continue to your dashboard.
                     </p>
                   </div>
-                </div>
-              </section>
+                </motion.div>
+              </motion.section>
             )}
 
-            <div className="mx-auto mt-12 flex max-w-xl items-center justify-between">
-              <button
+            <motion.div className="mx-auto mt-12 flex max-w-xl items-center justify-between" variants={revealUp}>
+              <motion.button
                 type="button"
                 onClick={() => setStep(1)}
                 className={`inline-flex items-center gap-2 rounded-lg border border-outline-variant/50 px-6 py-3 text-label-md font-bold text-on-surface-variant transition-all hover:bg-surface-container-highest ${
                   step === 1 ? 'invisible' : ''
                 }`}
+                whileHover={{ y: -1, scale: 1.01 }}
+                whileTap={{ scale: 0.98 }}
               >
                 <ArrowLeft className="h-4 w-4" />
                 Back
-              </button>
+              </motion.button>
               {step === 1 ? (
-                <button
+                <motion.button
                   type="button"
                   onClick={() => setStep(2)}
                   className="gold-gradient inline-flex items-center gap-2 rounded-lg px-8 py-3 text-label-md font-extrabold text-on-primary"
+                  whileHover={{ y: -1, scale: 1.01 }}
+                  whileTap={{ scale: 0.98 }}
                 >
                   Continue
                   <ArrowRight className="h-4 w-4" />
-                </button>
+                </motion.button>
               ) : (
-                <button type="submit" className="gold-gradient inline-flex items-center gap-2 rounded-lg px-8 py-3 text-label-md font-extrabold text-on-primary">
+                <motion.button 
+                  type="submit" 
+                  className="gold-gradient inline-flex items-center gap-2 rounded-lg px-8 py-3 text-label-md font-extrabold text-on-primary"
+                  whileHover={{ y: -1, scale: 1.01 }}
+                  whileTap={{ scale: 0.98 }}
+                >
                   Continue to Login
                   <ArrowRight className="h-4 w-4" />
-                </button>
+                </motion.button>
               )}
-            </div>
+            </motion.div>
           </form>
-        </div>
+        </motion.div>
       </section>
     </main>
   );

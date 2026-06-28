@@ -4,18 +4,16 @@ const jockeys = [
   {
     id: 1,
     name: 'Julian Castano',
-    stats: 'Win Rate: 24.5% / 142 Wins',
-    earnings: '$4.2M',
-    rank: 1,
-    image: 'https://images.unsplash.com/photo-1552058544-f2b08422138a?auto=format&fit=crop&q=80&w=200',
+    stats: 'Assigned to Derby operations',
+    earnings: '12 events',
+    image: 'https://picsum.photos/200/200?random=jockey1',
   },
   {
     id: 2,
     name: 'Sarah Miller',
-    stats: 'Win Rate: 21.8% / 128 Wins',
-    earnings: '$3.8M',
-    rank: 2,
-    image: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&q=80&w=200',
+    stats: 'Assigned to endurance operations',
+    earnings: '09 events',
+    image: 'https://picsum.photos/200/200?random=jockey2',
   },
 ];
 
@@ -24,17 +22,17 @@ const horses = [
     id: 1,
     name: 'Iron Vanguard',
     grade: 'G1',
-    lastResults: '1-1-2-1-1',
+    lastResults: 'Cleared for Saigon Summer Derby',
     rating: 92,
-    image: 'https://images.unsplash.com/photo-1553284965-83fd3e82fa5a?auto=format&fit=crop&q=80&w=400',
+    image: 'https://picsum.photos/400/300?random=horse1',
   },
   {
     id: 2,
     name: 'Eclipse Dancer',
     grade: 'G1',
-    lastResults: '1-2-1-3-1',
+    lastResults: 'Registered for Northern Sprint Invitational',
     rating: 88,
-    image: 'https://images.unsplash.com/photo-1598974357801-cbca100e65d3?auto=format&fit=crop&q=80&w=400',
+    image: 'https://picsum.photos/400/300?random=horse2',
   },
 ];
 
@@ -44,19 +42,14 @@ const StatsSection = () => {
       <div className="mx-auto grid max-w-[1440px] grid-cols-1 gap-12 px-4 md:px-8 lg:grid-cols-2">
         <div>
           <div className="mb-8 flex items-center justify-between">
-            <h2 className="font-display text-headline-md font-extrabold text-primary">Top Jockeys</h2>
+            <h2 className="font-display text-headline-md font-extrabold text-primary">Operations Team</h2>
             <span className="text-label-sm font-bold uppercase tracking-[0.16em] text-outline">Season 2026</span>
           </div>
           <div className="space-y-4">
             {jockeys.map((jockey) => (
               <div key={jockey.id} className="glass-panel group flex items-center justify-between rounded-xl p-4 transition-colors hover:border-secondary">
                 <div className="flex items-center gap-4">
-                  <div className="relative">
-                    <img src={jockey.image} alt={jockey.name} className="h-14 w-14 rounded-lg border border-outline-variant/50 object-cover" />
-                    <span className="gold-gradient absolute -bottom-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full border-2 border-surface-container text-[10px] font-bold text-on-primary">
-                      {jockey.rank}
-                    </span>
-                  </div>
+                  <img src={jockey.image} alt={jockey.name} className="h-14 w-14 rounded-lg border border-outline-variant/50 object-cover" />
                   <div>
                     <h4 className="font-display text-body-md font-bold text-on-surface">{jockey.name}</h4>
                     <p className="text-label-md text-on-surface-variant">{jockey.stats}</p>
@@ -64,7 +57,7 @@ const StatsSection = () => {
                 </div>
                 <div className="text-right">
                   <p className="font-display text-body-md font-bold text-secondary">{jockey.earnings}</p>
-                  <p className="text-[10px] font-bold uppercase tracking-wider text-outline">Earnings</p>
+                  <p className="text-[10px] font-bold uppercase tracking-wider text-outline">Assignments</p>
                 </div>
               </div>
             ))}
@@ -73,8 +66,8 @@ const StatsSection = () => {
 
         <div>
           <div className="mb-8 flex items-center justify-between">
-            <h2 className="font-display text-headline-md font-extrabold text-primary">Champion Horses</h2>
-            <span className="text-label-sm font-bold uppercase tracking-[0.16em] text-outline">Power Rankings</span>
+            <h2 className="font-display text-headline-md font-extrabold text-primary">Registered Horses</h2>
+            <span className="text-label-sm font-bold uppercase tracking-[0.16em] text-outline">Tournament Field</span>
           </div>
           <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
             {horses.map((horse) => (
@@ -87,7 +80,7 @@ const StatsSection = () => {
                   </div>
                   <div className="mb-4 flex items-center gap-2">
                     <Trophy className="h-3 w-3 text-primary" />
-                    <p className="text-[10px] font-medium text-on-surface-variant">Last 5: {horse.lastResults}</p>
+                    <p className="text-[10px] font-medium text-on-surface-variant">{horse.lastResults}</p>
                   </div>
                   <div className="space-y-1">
                     <div className="flex justify-between text-[10px] font-bold">
