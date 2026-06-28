@@ -165,7 +165,7 @@ const PredictionPage = () => {
 
       setFormError('This prediction option is missing an API optionId.');
     } catch (error) {
-      setFormError(error instanceof Error ? error.message : 'Unable to create prediction.');
+      setFormError(getApiErrorMessage(error, 'Unable to create prediction.'));
     }
   };
 
@@ -202,7 +202,7 @@ const PredictionPage = () => {
               </div>
               <div className="grid gap-4 sm:grid-cols-3">
                 {[
-                  { label: 'Open prediction races', value: String(stats.openRaces).padStart(2, '0'), color: 'bg-surface-container-highest text-primary' },
+                  { label: 'Open prediction races', value: String(stats.pending).padStart(2, '0'), color: 'bg-surface-container-highest text-primary' },
                   { label: 'Pending', value: String(stats.pending).padStart(2, '0'), color: 'text-primary' },
                   { label: 'Settled', value: String(stats.settled).padStart(2, '0'), color: 'text-secondary' },
                 ].map((item) => (
