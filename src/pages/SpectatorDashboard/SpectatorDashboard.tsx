@@ -3,10 +3,10 @@ import { Bell, CalendarDays, Clock3, Trophy } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import { getApiErrorMessage } from '../../services/apiClient';
-import { betService, type BetItem } from '../../services/betService';
-import { notificationService, type NotificationItem } from '../../services/notificationService';
-import { raceResultService } from '../../services/raceResultService';
-import { scheduleService, type RaceScheduleItem } from '../../services/scheduleService';
+import type { BetItem } from '../../services/betService';
+import { dashboardService, type DashboardSummaryCount } from '../../services/dashboardService';
+import type { NotificationItem } from '../../services/notificationService';
+import type { RaceScheduleItem } from '../../services/scheduleService';
 import type { RaceResultListItem } from '../../types/raceResult';
 import { spectatorDashboardMockData } from './mockData';
 
@@ -55,6 +55,7 @@ const SpectatorDashboard: React.FC = () => {
   const [myPredictions, setMyPredictions] = useState<BetItem[]>([]);
   const [latestResults, setLatestResults] = useState<RaceResultListItem[]>([]);
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
+  const [summaryCount, setSummaryCount] = useState<DashboardSummaryCount>();
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState('');
 
@@ -66,47 +67,19 @@ const SpectatorDashboard: React.FC = () => {
       setErrorMessage('');
 
       try {
-        const [races, bets, results, notificationList] = await Promise.allSettled([
-          scheduleService.getRaceSchedule(),
-          betService.getBets(),
-          raceResultService.getRaceResultList(),
-          notificationService.getNotifications(),
-        ]);
+        const dashboard = await dashboardService.getSpectatorDashboard();
 
         if (isMounted) {
-          const nextUpcomingRaces = races.status === 'fulfilled'
-            ? races.value.filter((race) => new Date(race.scheduledAt).getTime() >= Date.now()).slice(0, 6)
-            : [];
-          const nextMyPredictions = bets.status === 'fulfilled' ? bets.value.slice(0, 5) : [];
-          const nextLatestResults = results.status === 'fulfilled' ? results.value.slice(0, 5) : [];
-          const nextNotifications = notificationList.status === 'fulfilled' ? notificationList.value.slice(0, 5) : [];
-
-          setUpcomingRaces(nextUpcomingRaces);
-          setMyPredictions(nextMyPredictions);
-          setLatestResults(nextLatestResults);
-          setNotifications(nextNotifications);
-
-          const hasAnyRealData =
-            nextUpcomingRaces.length > 0 ||
-            nextMyPredictions.length > 0 ||
-            nextLatestResults.length > 0 ||
-            nextNotifications.length > 0;
-
-          if (shouldUseMockData || !hasAnyRealData) {
-            setUpcomingRaces(spectatorDashboardMockData.upcomingRaces);
-            setMyPredictions(spectatorDashboardMockData.myPredictions);
-            setLatestResults(spectatorDashboardMockData.latestResults);
-            setNotifications(spectatorDashboardMockData.notifications);
-          } else {
-            setUpcomingRaces(nextUpcomingRaces);
-            setMyPredictions(nextMyPredictions);
-            setLatestResults(nextLatestResults);
-            setNotifications(nextNotifications);
-          }
+          setSummaryCount(dashboard.summaryCount);
+          setUpcomingRaces(dashboard.upcomingRaces.slice(0, 6));
+          setMyPredictions(dashboard.activeBets.slice(0, 5));
+          setLatestResults(dashboard.latestResults.slice(0, 5));
+          setNotifications(dashboard.notifications.slice(0, 5));
         }
       } catch (error) {
         if (isMounted) {
           setErrorMessage(getApiErrorMessage(error, 'Unable to load spectator dashboard.'));
+          setSummaryCount(undefined);
           setUpcomingRaces(spectatorDashboardMockData.upcomingRaces);
           setMyPredictions(spectatorDashboardMockData.myPredictions);
           setLatestResults(spectatorDashboardMockData.latestResults);
@@ -128,24 +101,24 @@ const SpectatorDashboard: React.FC = () => {
 
   const metrics = useMemo(() => [
     {
-      label: 'Live Races',
-      value: String(upcomingRaces.filter((race) => race.status.toLowerCase() === 'live').length).padStart(2, '0'),
+      label: 'Upcoming Races',
+      value: String(summaryCount?.upcomingRaceCount ?? upcomingRaces.length).padStart(2, '0'),
       tone: 'text-secondary',
       action: () => document.getElementById('race-schedule')?.scrollIntoView({ behavior: 'smooth', block: 'start' }),
     },
     {
-      label: 'Open Predictions',
-      value: String(myPredictions.filter((item) => item.status.toLowerCase() === 'pending').length).padStart(2, '0'),
+      label: 'Active Bets',
+      value: String(summaryCount?.activeBetCount ?? myPredictions.length).padStart(2, '0'),
       tone: 'text-primary',
       action: () => navigate('/prediction'),
     },
     {
-      label: 'Notifications',
-      value: String(notifications.length).padStart(2, '0'),
+      label: 'Unread Notifications',
+      value: String(summaryCount?.unreadNotificationCount ?? notifications.length).padStart(2, '0'),
       tone: 'text-on-surface',
       action: () => navigate('/notifications'),
     },
-  ], [myPredictions, navigate, notifications, upcomingRaces]);
+  ], [myPredictions.length, navigate, notifications.length, summaryCount, upcomingRaces.length]);
 
   return (
     <main className="min-h-screen bg-surface text-on-surface">
