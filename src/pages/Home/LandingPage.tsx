@@ -118,6 +118,42 @@ const viewportReveal = { once: true, amount: 0.18 };
 const getTournamentParticipants = (tournament: Tournament | undefined) =>
   tournament?.participants.length ? tournament.participants : [];
 
+const formatLandingDate = (value: string | undefined) => {
+  if (!value) {
+    return 'To be announced';
+  }
+
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    return value;
+  }
+
+  return new Intl.DateTimeFormat('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  }).format(parsed);
+};
+
+const getTournamentStatusClassName = (status: string | undefined) => {
+  switch (status) {
+    case 'Ongoing':
+      return 'bg-secondary-container/70 text-secondary';
+    case 'Upcoming':
+      return 'bg-primary-container/70 text-primary';
+    case 'Registration Open':
+      return 'bg-tertiary-container/70 text-tertiary';
+    case 'Registration Closed':
+      return 'bg-surface-container-highest text-on-surface';
+    case 'Completed':
+      return 'bg-on-surface-variant/20 text-on-surface-variant';
+    case 'Cancelled':
+      return 'bg-error-container/30 text-error';
+    default:
+      return 'bg-surface-container-highest text-on-surface';
+  }
+};
+
 const LandingPage = () => {
   const [tournaments, setTournaments] = useState<Tournament[]>([]);
   const [isLoadingTournaments, setIsLoadingTournaments] = useState(true);
@@ -174,14 +210,12 @@ const LandingPage = () => {
     }));
   }, [tournaments]);
 
-  const jockeys = useMemo(() => {
-    // For now, use fallback data since we don't have a jockey API yet
-    return fallbackJockeys;
-  }, []);
+  const jockeys = useMemo(() => fallbackJockeys, []);
 
   const featuredTournament = useMemo(
     () =>
       tournaments.find((tournament) => tournament.status === 'Ongoing') ??
+      tournaments.find((tournament) => tournament.status === 'Registration Open') ??
       tournaments.find((tournament) => tournament.status === 'Upcoming') ??
       tournaments[0],
     [tournaments],
@@ -192,9 +226,28 @@ const LandingPage = () => {
     [featuredTournament],
   );
 
+  const landingTournamentList = useMemo(() => {
+    const priority = ['Ongoing', 'Registration Open', 'Upcoming', 'Registration Closed', 'Completed'];
+
+    return [...tournaments]
+      .sort((left, right) => {
+        const leftRank = priority.indexOf(left.status);
+        const rightRank = priority.indexOf(right.status);
+        const normalizedLeftRank = leftRank === -1 ? priority.length : leftRank;
+        const normalizedRightRank = rightRank === -1 ? priority.length : rightRank;
+
+        if (normalizedLeftRank !== normalizedRightRank) {
+          return normalizedLeftRank - normalizedRightRank;
+        }
+
+        return new Date(left.startDate).getTime() - new Date(right.startDate).getTime();
+      })
+      .slice(0, 4);
+  }, [tournaments]);
+
   return (
     <div className="overflow-x-hidden bg-background text-body-md text-on-surface">
-      <section id="home" className="relative flex min-h-screen scroll-mt-24 items-center overflow-hidden pt-16">
+      <section id="home" data-landing-section className="relative flex min-h-screen scroll-mt-24 items-center overflow-hidden pt-16">
         <div className="absolute inset-0 z-0">
           <img
             className="h-full w-full object-cover opacity-40 blur-[2px]"
@@ -259,13 +312,13 @@ const LandingPage = () => {
               </span>
             </div>
             {isLoadingTournaments ? (
-              <FloatingCardMessage text="Đang tải danh sách tournament..." />
+              <FloatingCardMessage text="Loading tournament lineup..." />
             ) : tournamentError ? (
               <FloatingCardMessage tone="error" text={tournamentError} />
             ) : !featuredTournament ? (
-              <FloatingCardMessage text="Chưa có tournament nào được lên lịch." />
+              <FloatingCardMessage text="No tournament is scheduled yet." />
             ) : featuredParticipants.length === 0 ? (
-              <FloatingCardMessage text="Tournament chưa có ngựa tham gia." />
+              <FloatingCardMessage text="This tournament does not have registered horses yet." />
             ) : (
               <div className="space-y-3">
                 {featuredParticipants.map((item, index) => (
@@ -291,9 +344,13 @@ const LandingPage = () => {
         </div>
       </section>
 
-      <section id="tournaments" className="scroll-mt-28 bg-background px-8 py-24 md:px-32">
+      <section
+        id="tournaments"
+        data-landing-section
+        className="scroll-mt-28 bg-background px-8 py-20 md:min-h-[calc(100vh-88px)] md:px-32 md:py-24"
+      >
         <motion.div
-          className="mb-16 text-center"
+          className="mb-14 text-center"
           initial="hidden"
           whileInView="visible"
           viewport={viewportReveal}
@@ -305,9 +362,80 @@ const LandingPage = () => {
             Explore our most exciting upcoming and ongoing tournaments.
           </p>
         </motion.div>
+
+        {isLoadingTournaments ? (
+          <div className="mx-auto max-w-5xl">
+            <FloatingCardMessage text="Loading tournament lineup..." />
+          </div>
+        ) : tournamentError ? (
+          <div className="mx-auto max-w-5xl">
+            <FloatingCardMessage tone="error" text={tournamentError} />
+          </div>
+        ) : (
+          <motion.div
+            className="mx-auto grid max-w-6xl gap-5 lg:grid-cols-2"
+            initial="hidden"
+            whileInView="visible"
+            viewport={{ once: true, amount: 0.28 }}
+            variants={revealContainer}
+          >
+            {landingTournamentList.map((tournament) => (
+              <motion.article
+                key={tournament.tournamentId}
+                variants={revealUp}
+                className="glass-card flex min-h-[232px] flex-col justify-between rounded-2xl border border-outline-variant/20 p-6"
+              >
+                <div className="space-y-4">
+                  <div className="flex items-start justify-between gap-4">
+                    <div>
+                      <p className="mb-2 text-label-sm font-bold uppercase tracking-[0.16em] text-outline">
+                        {tournament.id}
+                      </p>
+                      <h3 className="font-display text-title-large font-bold text-on-surface">
+                        {tournament.tournamentName}
+                      </h3>
+                    </div>
+                    <span className={`rounded-full px-3 py-1 text-label-sm font-bold ${getTournamentStatusClassName(tournament.status)}`}>
+                      {tournament.status}
+                    </span>
+                  </div>
+
+                  <p className="line-clamp-2 text-body-md text-on-surface-variant">
+                    {tournament.description}
+                  </p>
+                </div>
+
+                <div className="mt-6 grid grid-cols-2 gap-3 text-body-sm text-on-surface-variant">
+                  <div className="rounded-xl bg-surface-container-high/40 px-4 py-3">
+                    <p className="mb-1 text-label-sm font-bold uppercase tracking-[0.12em] text-outline">Location</p>
+                    <p className="font-semibold text-on-surface">{tournament.location}</p>
+                  </div>
+                  <div className="rounded-xl bg-surface-container-high/40 px-4 py-3">
+                    <p className="mb-1 text-label-sm font-bold uppercase tracking-[0.12em] text-outline">Start Date</p>
+                    <p className="font-semibold text-on-surface">{formatLandingDate(tournament.startDate)}</p>
+                  </div>
+                  <div className="rounded-xl bg-surface-container-high/40 px-4 py-3">
+                    <p className="mb-1 text-label-sm font-bold uppercase tracking-[0.12em] text-outline">Field</p>
+                    <p className="font-semibold text-on-surface">
+                      {tournament.currentParticipants}/{tournament.maximumParticipants} horses
+                    </p>
+                  </div>
+                  <div className="rounded-xl bg-surface-container-high/40 px-4 py-3">
+                    <p className="mb-1 text-label-sm font-bold uppercase tracking-[0.12em] text-outline">Prize Pool</p>
+                    <p className="font-semibold text-primary">{tournament.prize}</p>
+                  </div>
+                </div>
+              </motion.article>
+            ))}
+          </motion.div>
+        )}
       </section>
 
-      <section id="jockey" className="scroll-mt-28 bg-surface-container-low px-8 py-24 md:px-32">
+      <section
+        id="jockey"
+        data-landing-section
+        className="scroll-mt-28 bg-surface-container-low px-8 py-20 md:min-h-[calc(100vh-88px)] md:px-32 md:py-24"
+      >
         <motion.div
           className="mb-12 flex flex-col gap-6 md:flex-row md:items-end md:justify-between"
           initial="hidden"
@@ -329,10 +457,10 @@ const LandingPage = () => {
 
         <motion.div
           className="glass-card overflow-hidden rounded-2xl"
-          initial={{ opacity: 0, y: 28 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={viewportReveal}
-          transition={{ duration: 0.6 }}
+          initial={{ opacity: 0, y: 28, scale: 0.98 }}
+          whileInView={{ opacity: 1, y: 0, scale: 1 }}
+          viewport={{ once: true, amount: 0.45 }}
+          transition={{ duration: 0.65 }}
         >
           <div className="overflow-x-auto">
             <table className="w-full min-w-[860px] text-left">
@@ -378,7 +506,11 @@ const LandingPage = () => {
         </motion.div>
       </section>
 
-      <section id="horse" className="scroll-mt-28 bg-background px-8 py-24 md:px-32">
+      <section
+        id="horse"
+        data-landing-section
+        className="scroll-mt-28 bg-background px-8 py-20 md:min-h-[calc(100vh-88px)] md:px-32 md:py-24"
+      >
         <motion.div
           className="mb-12 flex flex-col gap-6 md:flex-row md:items-end md:justify-between"
           initial="hidden"
@@ -400,10 +532,10 @@ const LandingPage = () => {
 
         <motion.div
           className="glass-card overflow-hidden rounded-2xl"
-          initial={{ opacity: 0, y: 28 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={viewportReveal}
-          transition={{ duration: 0.6 }}
+          initial={{ opacity: 0, y: 28, scale: 0.98 }}
+          whileInView={{ opacity: 1, y: 0, scale: 1 }}
+          viewport={{ once: true, amount: 0.45 }}
+          transition={{ duration: 0.65 }}
         >
           <div className="overflow-x-auto">
             <table className="w-full min-w-[860px] text-left">
@@ -540,7 +672,7 @@ const LandingPage = () => {
           <div className="flex items-center gap-4">
             <span className="rounded border border-error px-2 py-0.5 text-label-md font-bold text-error">18+</span>
             <p className="text-label-md font-semibold uppercase tracking-tight text-on-surface-variant">
-              Gamble Responsibly. If you or someone you know has a gambling problem, call 1-800-GAMBLER.
+              Gamble responsibly. If you or someone you know has a gambling problem, call 1-800-GAMBLER.
             </p>
           </div>
           <p className="text-label-md text-on-surface-variant">© 2024 HTMS GLOBAL SYSTEMS. ALL RIGHTS RESERVED.</p>

@@ -155,6 +155,24 @@ const landingNavItems = [
   { label: 'Horse', to: '#horse' },
 ];
 
+const landingSectionIds = ['#home', ...landingNavItems.map((item) => item.to)];
+const landingSectionThresholds = [0.45, 0.6, 0.75, 0.9];
+
+const scrollToLandingSection = (selector: string) => {
+  const section = document.querySelector(selector) as HTMLElement | null;
+  if (!section) {
+    return;
+  }
+
+  const headerOffset = 110;
+  const top = window.scrollY + section.getBoundingClientRect().top - headerOffset;
+  window.scrollTo({
+    top: Math.max(0, top),
+    behavior: 'smooth',
+  });
+  window.history.replaceState(null, '', selector);
+};
+
 const LandingTopBar = ({
   isAuthenticated,
   profile,
@@ -172,20 +190,6 @@ const LandingTopBar = ({
   useEffect(() => {
     const handleScroll = () => {
       setIsScrolled(window.scrollY > 80);
-
-      const sections = landingNavItems.map(item => document.querySelector(item.to) as HTMLElement | null);
-      const scrollPosition = window.scrollY + 100;
-
-      for (const section of sections) {
-        if (
-          section &&
-          section.offsetTop <= scrollPosition &&
-          section.offsetTop + section.offsetHeight > scrollPosition
-        ) {
-          setActiveSection(`#${section.id}`);
-          break;
-        }
-      }
     };
 
     handleScroll();
@@ -193,6 +197,57 @@ const LandingTopBar = ({
 
     return () => {
       window.removeEventListener('scroll', handleScroll);
+    };
+  }, []);
+
+  useEffect(() => {
+    const sections = landingSectionIds
+      .map((selector) => document.querySelector(selector) as HTMLElement | null)
+      .filter((section): section is HTMLElement => Boolean(section));
+
+    if (sections.length === 0) {
+      return;
+    }
+
+    const visibleRatios = new Map<string, number>();
+    const updateActiveSection = () => {
+      const bestMatch = Array.from(visibleRatios.entries())
+        .sort((left, right) => right[1] - left[1])[0];
+
+      if (bestMatch && bestMatch[1] >= 0.45) {
+        setActiveSection(bestMatch[0]);
+        return;
+      }
+
+      if (window.scrollY < 120) {
+        setActiveSection('#home');
+      }
+    };
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          const key = `#${entry.target.id}`;
+          if (entry.isIntersecting) {
+            visibleRatios.set(key, entry.intersectionRatio);
+          } else {
+            visibleRatios.delete(key);
+          }
+        });
+
+        updateActiveSection();
+      },
+      {
+        threshold: landingSectionThresholds,
+        rootMargin: '-96px 0px -12% 0px',
+      },
+    );
+
+    sections.forEach((section) => observer.observe(section));
+    updateActiveSection();
+
+    return () => {
+      observer.disconnect();
     };
   }, []);
 
@@ -207,7 +262,15 @@ const LandingTopBar = ({
           }
         `}
       >
-        <a href="#home" className={`font-display font-bold text-primary transition-all ${isScrolled ? 'text-lg' : 'text-xl'}`}>
+        <a
+          href="#home"
+          onClick={(event) => {
+            event.preventDefault();
+            setActiveSection('#home');
+            scrollToLandingSection('#home');
+          }}
+          className={`font-display font-bold text-primary transition-all ${isScrolled ? 'text-lg' : 'text-xl'}`}
+        >
           HTMS
         </a>
 
@@ -229,6 +292,11 @@ const LandingTopBar = ({
             <a
               key={item.label}
               href={item.to}
+              onClick={(event) => {
+                event.preventDefault();
+                setActiveSection(item.to);
+                scrollToLandingSection(item.to);
+              }}
               className={`text-label-md font-semibold transition-colors ${
                 item.to === activeSection
                   ? 'text-primary'
