@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
-import { Bell, LogOut, Shield, Trophy, User } from 'lucide-react';
+import { Bell, LogIn, LogOut, Trophy, User } from 'lucide-react';
 import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { getAccessToken } from '../services/apiClient';
 import { authService } from '../services/authService';
-import { canAccessRole, navigationItems } from '../utils/permissions';
+import { canAccessRole, getDefaultRouteForRole, navigationItems } from '../utils/permissions';
 import type { UserProfile } from '../types/user';
 
 const MainLayout = ({ children }: { children: ReactNode }) => {
@@ -69,7 +69,7 @@ const MainLayout = ({ children }: { children: ReactNode }) => {
   if (isLanding) {
     return (
       <div className="min-h-screen bg-surface text-on-surface">
-        <LandingTopBar />
+        <LandingTopBar isAuthenticated={isAuthenticated} profile={profile} />
         {children}
       </div>
     );
@@ -149,29 +149,137 @@ const MainLayout = ({ children }: { children: ReactNode }) => {
   );
 };
 
-const LandingTopBar = () => (
-  <header className="sticky top-0 z-50 border-b border-outline-variant/40 bg-surface-container-low/70 px-4 py-4 backdrop-blur-xl md:px-8">
-    <div className="mx-auto flex max-w-[1440px] items-center justify-between gap-4">
-      <Link to="/" className="font-display text-xl font-extrabold text-primary">HTMS</Link>
-      <div className="flex items-center gap-3">
-        <Link
-          to="/login"
-          state={{ mode: 'login' }}
-          className="rounded-lg border border-outline-variant/50 px-5 py-2 text-sm font-bold text-on-surface-variant transition-colors hover:border-primary hover:text-primary"
-        >
-          Login
-        </Link>
-        <Link
-          to="/login"
-          state={{ mode: 'signup' }}
-          className="gold-gradient inline-flex items-center gap-2 rounded-lg px-5 py-2 text-sm font-extrabold text-on-primary transition-all"
-        >
-          <Shield className="h-4 w-4" />
-          Sign Up
-        </Link>
-      </div>
+const landingNavItems = [
+  { label: 'Tournaments', to: '#tournaments' },
+  { label: 'Jockey', to: '#jockey' },
+  { label: 'Horse', to: '#horse' },
+];
+
+const LandingTopBar = ({
+  isAuthenticated,
+  profile,
+}: {
+  isAuthenticated: boolean;
+  profile?: UserProfile;
+}) => {
+  const navigate = useNavigate();
+  const [isScrolled, setIsScrolled] = useState(false);
+  const [activeSection, setActiveSection] = useState('#home');
+  const dashboardRoute = profile?.roleType === 'spectator'
+    ? '/spectator-dashboard'
+    : getDefaultRouteForRole(profile?.roleType);
+
+  useEffect(() => {
+    const handleScroll = () => {
+      setIsScrolled(window.scrollY > 80);
+
+      const sections = landingNavItems.map(item => document.querySelector(item.to) as HTMLElement | null);
+      const scrollPosition = window.scrollY + 100;
+
+      for (const section of sections) {
+        if (
+          section &&
+          section.offsetTop <= scrollPosition &&
+          section.offsetTop + section.offsetHeight > scrollPosition
+        ) {
+          setActiveSection(`#${section.id}`);
+          break;
+        }
+      }
+    };
+
+    handleScroll();
+    window.addEventListener('scroll', handleScroll, { passive: true });
+
+    return () => {
+      window.removeEventListener('scroll', handleScroll);
+    };
+  }, []);
+
+  return (
+    <div className="fixed left-0 top-0 z-[100] flex w-full pointer-events-none justify-center transition-all duration-400 ease-in-out">
+      <header
+        className={`
+          pointer-events-auto flex w-full items-center justify-between transition-all duration-400 ease-in-out
+          ${isScrolled
+            ? 'mt-4 h-14 max-w-[95%] rounded-full border border-outline-variant/40 bg-surface-container-low/75 px-5 shadow-2xl shadow-black/30 backdrop-blur-2xl md:px-7 lg:max-w-5xl'
+            : 'mt-0 h-16 max-w-full rounded-[0px] border-b border-outline-variant/30 bg-surface-container-low/80 px-8 shadow-sm backdrop-blur-md md:px-32'
+          }
+        `}
+      >
+        <a href="#home" className={`font-display font-bold text-primary transition-all ${isScrolled ? 'text-lg' : 'text-xl'}`}>
+          HTMS
+        </a>
+
+        <nav className={`hidden items-center transition-all md:flex ${isScrolled ? 'space-x-5' : 'space-x-8'}`}>
+          <button
+            type="button"
+            onClick={() => {
+              if (isAuthenticated) {
+                navigate(dashboardRoute);
+              } else {
+                navigate('/login', { state: { mode: 'login' } });
+              }
+            }}
+            className="text-label-md font-semibold text-on-surface-variant transition-colors hover:text-on-surface"
+          >
+            Dashboard
+          </button>
+          {landingNavItems.map((item) => (
+            <a
+              key={item.label}
+              href={item.to}
+              className={`text-label-md font-semibold transition-colors ${
+                item.to === activeSection
+                  ? 'text-primary'
+                  : 'text-on-surface-variant hover:text-on-surface'
+              }`}
+            >
+              {item.label}
+            </a>
+          ))}
+        </nav>
+
+        <div className="flex items-center gap-3">
+          {isAuthenticated ? (
+            <>
+              <Bell className="h-5 w-5 text-on-surface-variant" />
+              <Link
+                to={dashboardRoute}
+                className="gold-gradient rounded-lg px-6 py-2 text-label-md font-bold text-on-primary transition-transform active:scale-95"
+                aria-label="Open dashboard"
+              >
+                Join the Race
+              </Link>
+            </>
+          ) : (
+            <>
+              <Link
+                to="/login"
+                state={{ mode: 'login' }}
+                className={`inline-flex items-center justify-center rounded-lg font-bold text-on-surface-variant transition-all hover:bg-surface-container-highest/50 hover:text-primary ${
+                  isScrolled ? 'h-10 w-10 rounded-full p-0' : 'px-5 py-2 text-sm'
+                }`}
+                aria-label="Login"
+                title="Login"
+              >
+                {isScrolled ? <LogIn className="h-5 w-5" /> : 'Login'}
+              </Link>
+              <Link
+                to="/login"
+                state={{ mode: 'signup' }}
+                className={`gold-gradient rounded-lg text-label-md font-bold text-on-primary transition-all active:scale-95 ${
+                  isScrolled ? 'px-4 py-2' : 'px-6 py-2'
+                }`}
+              >
+                Join the Race
+              </Link>
+            </>
+          )}
+        </div>
+      </header>
     </div>
-  </header>
-);
+  );
+};
 
 export default MainLayout;

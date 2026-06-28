@@ -58,9 +58,9 @@ export const canAccessRole = (roleType: UserRoleType | undefined, allowedRoles?:
 export const getDefaultRouteForRole = (roleType: UserRoleType | undefined) => {
   switch (roleType) {
     case 'horse_owner':
-      return '/horses';
+      return '/owner-dashboard';
     case 'spectator':
-      return '/spectator-dashboard';
+      return '/';
     case 'admin':
       return '/admin-ops';
     case 'race_referee':
@@ -82,7 +82,9 @@ export type NavigationItem = {
 export const navigationItems: NavigationItem[] = [
   { label: 'Home', to: '/' },
   { label: 'Dashboard', to: '/spectator-dashboard', allowedRoles: ['spectator'], requiresAuth: true },
-  { label: 'Admin Ops', to: '/admin-ops', allowedRoles: ['admin'], requiresAuth: true },
+  { label: 'Dashboard', to: '/admin-ops', allowedRoles: ['admin'], requiresAuth: true },
+  { label: 'Dashboard', to: '/owner-dashboard', allowedRoles: ['horse_owner'], requiresAuth: true },
+  { label: 'Tournaments', to: '/tournaments', allowedRoles: ['admin'], requiresAuth: true },
   { label: 'Race Control', to: '/race-control', allowedRoles: ['admin', 'race_referee'], requiresAuth: true },
   { label: 'Schedule', to: '/schedule', allowedRoles: ['horse_owner'], requiresAuth: true },
   { label: 'Registrations', to: '/registrations', allowedRoles: ['horse_owner', 'admin', 'race_referee'], requiresAuth: true },

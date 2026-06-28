@@ -1,7 +1,7 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { ArrowRight, Clock3, Ticket, TrendingUp } from 'lucide-react';
 import { getApiErrorMessage } from '../../services/apiClient';
-import { betService, type BetItem } from '../../services/betService';
+import { betService, type BetItem, type BetOptionItem } from '../../services/betService';
 
 const formatPoints = (value: number) => new Intl.NumberFormat('en-US', {
   maximumFractionDigits: 0,
@@ -23,39 +23,71 @@ const statusClassName = (status: string) => {
 
 const PredictionPage = () => {
   const [bets, setBets] = useState<BetItem[]>([]);
+  const [betOptions, setBetOptions] = useState<BetOptionItem[]>([]);
+  const [selectedOptionId, setSelectedOptionId] = useState('');
+  const [betPoints, setBetPoints] = useState(100);
+  const [betType, setBetType] = useState(true);
   const [isLoading, setIsLoading] = useState(true);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [message, setMessage] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
 
+  const loadPredictionData = async () => {
+    setIsLoading(true);
+    setErrorMessage('');
+
+    try {
+      const [betList, optionList] = await Promise.all([
+        betService.getBets(),
+        betService.getBetOptions(),
+      ]);
+
+      setBets(betList);
+      setBetOptions(optionList);
+      setSelectedOptionId((current) => current || (optionList[0]?.optionId ? String(optionList[0].optionId) : ''));
+    } catch (error) {
+      setErrorMessage(getApiErrorMessage(error, 'Unable to load predictions.'));
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   useEffect(() => {
-    let isMounted = true;
-
-    const loadBets = async () => {
-      setIsLoading(true);
-      setErrorMessage('');
-
-      try {
-        const data = await betService.getBets();
-
-        if (isMounted) {
-          setBets(data);
-        }
-      } catch (error) {
-        if (isMounted) {
-          setErrorMessage(getApiErrorMessage(error, 'Unable to load predictions.'));
-        }
-      } finally {
-        if (isMounted) {
-          setIsLoading(false);
-        }
-      }
-    };
-
-    void loadBets();
-
-    return () => {
-      isMounted = false;
-    };
+    void loadPredictionData();
   }, []);
+
+  const selectedOption = useMemo(
+    () => betOptions.find((option) => option.optionId === Number(selectedOptionId)),
+    [betOptions, selectedOptionId],
+  );
+
+  const handleCreateBet = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setMessage('');
+    setErrorMessage('');
+
+    if (!selectedOption) {
+      setErrorMessage('Please choose a betting option first.');
+      return;
+    }
+
+    setIsSubmitting(true);
+
+    try {
+      await betService.createBet({
+        optionId: selectedOption.optionId,
+        betType,
+        betPoints,
+        betRate: selectedOption.currentRate,
+      });
+      setMessage('Prediction placed.');
+      await loadPredictionData();
+    } catch (error) {
+      setErrorMessage(getApiErrorMessage(error, 'Could not place prediction.'));
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
 
   const stats = useMemo(() => {
     const pending = bets.filter((bet) => bet.status.toLowerCase() === 'pending').length;
@@ -81,6 +113,11 @@ const PredictionPage = () => {
         {errorMessage && (
           <div className="mb-8 rounded-md border border-error/30 bg-error-container/20 px-4 py-3 text-body-sm font-semibold text-error">
             {errorMessage}
+          </div>
+        )}
+        {message && (
+          <div className="mb-8 rounded-md border border-secondary/30 bg-secondary-container/30 px-4 py-3 text-body-sm font-semibold text-secondary">
+            {message}
           </div>
         )}
 
@@ -115,13 +152,59 @@ const PredictionPage = () => {
                   <h2 className="mt-2 text-2xl font-bold text-primary">Prediction windows</h2>
                 </div>
                 <div className="inline-flex items-center gap-2 rounded-full bg-surface-container px-4 py-2 text-sm font-semibold text-on-surface-variant">
-                  <Clock3 className="w-4 h-4" /> Awaiting API
+                  <Clock3 className="w-4 h-4" /> {betOptions.length} options
                 </div>
               </div>
 
-              <div className="rounded-2xl border border-dashed border-outline-variant bg-surface-container-low p-6 text-sm text-on-surface-variant">
-                Current API documentation exposes saved bets through <span className="font-semibold text-primary">/api/bets/get-all</span>, but it does not include an open race prediction-window endpoint or bet creation endpoint in lines 1-495.
-              </div>
+              <form onSubmit={handleCreateBet} className="grid gap-4">
+                <label className="grid gap-2">
+                  <span className="text-xs font-semibold uppercase tracking-[0.18em] text-on-surface-variant">Bet option</span>
+                  <select
+                    value={selectedOptionId}
+                    onChange={(event) => setSelectedOptionId(event.target.value)}
+                    required
+                    className="rounded-xl border border-outline-variant bg-surface-container-low px-4 py-3 text-sm focus:border-primary focus:outline-none"
+                  >
+                    <option value="">Select option</option>
+                    {betOptions.map((option) => (
+                      <option key={option.optionId} value={option.optionId}>
+                        {option.raceName} / {option.horseName} / rate {option.currentRate}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+
+                {selectedOption && (
+                  <div className="rounded-2xl border border-outline-variant bg-surface-container-low p-4 text-sm text-on-surface-variant">
+                    <p className="font-semibold text-primary">{selectedOption.horseName}</p>
+                    <p>{selectedOption.jockeyFullName ?? 'No jockey assigned'} / {selectedOption.raceName}</p>
+                    <p className="mt-2">Current rate {selectedOption.currentRate} / {formatPoints(selectedOption.totalBetPoints)} pts / {selectedOption.totalBetCount} bets</p>
+                  </div>
+                )}
+
+                <div className="grid gap-4 sm:grid-cols-[1fr_auto]">
+                  <label className="grid gap-2">
+                    <span className="text-xs font-semibold uppercase tracking-[0.18em] text-on-surface-variant">Bet points</span>
+                    <input
+                      type="number"
+                      min={1}
+                      value={betPoints || ''}
+                      onChange={(event) => setBetPoints(Number(event.target.value))}
+                      required
+                      className="rounded-xl border border-outline-variant bg-surface-container-low px-4 py-3 text-sm focus:border-primary focus:outline-none"
+                    />
+                  </label>
+                  <label className="flex items-end gap-3 rounded-xl border border-outline-variant bg-surface-container-low px-4 py-3 text-sm font-semibold text-on-surface-variant">
+                    <input type="checkbox" checked={betType} onChange={(event) => setBetType(event.target.checked)} className="mb-1 h-4 w-4" />
+                    Win bet
+                  </label>
+                </div>
+
+                <button disabled={isSubmitting || !selectedOption} className="inline-flex items-center justify-center gap-2 rounded-md bg-secondary px-6 py-3 text-sm font-semibold text-white transition hover:bg-secondary-container/90 disabled:cursor-not-allowed disabled:opacity-60">
+                  {isSubmitting ? 'Placing...' : 'Place Prediction'}
+                  <ArrowRight className="w-4 h-4" />
+                </button>
+              </form>
             </section>
           </div>
 

@@ -1,4 +1,5 @@
 import { apiClient, unwrapApiData, unwrapApiList } from './apiClient';
+import { mockRaceResults, mockRankingBoards } from '../mocks/raceResultMockData';
 import type {
   RaceResultEntry,
   RaceResultFilters,
@@ -95,6 +96,8 @@ const mapEntry = (raw: RawObject): RaceResultEntry => ({
   pointsAwarded: asNumber(raw.pointsAwarded),
   isDisqualified: Boolean(raw.isDisqualified),
   disqualificationReason: raw.disqualifyReason ? asString(raw.disqualifyReason) : undefined,
+  prizeAmount: raw.prizeAmount ? formatCurrency(raw.prizeAmount) : undefined,
+  odds: raw.odds ? asString(raw.odds) : undefined,
 });
 
 const mapSummary = (raw: RawObject): RaceResultSummary => {
@@ -154,6 +157,7 @@ const toListItem = (summary: RaceResultSummary): RaceResultListItem => ({
       horseName: entry.horseName,
       jockeyName: entry.jockeyName,
       finishTime: entry.finishTime ?? '-',
+      odds: entry.odds,
     })),
 });
 
@@ -197,35 +201,72 @@ const mapRankingEntry = (raw: RawObject, index: number, category: RankingCategor
 });
 
 export const raceResultService = {
+  async getRaceResultSummaries(): Promise<RaceResultSummary[]> {
+    if (import.meta.env.DEV) {
+      return mockRaceResults;
+    }
+
+    try {
+      const response = await apiClient.get('/api/race-results/get-all');
+      const items = unwrapApiList<RawObject>(response).map(mapSummary);
+      return items.length > 0 ? items : mockRaceResults;
+    } catch {
+      return mockRaceResults;
+    }
+  },
+
   async getRaceResultList(filters: RaceResultFilters = {}): Promise<RaceResultListItem[]> {
-    const response = await apiClient.get('/api/race-results/get-all');
-    const items = unwrapApiList<RawObject>(response).map(mapSummary).map(toListItem);
-    return filterResults(items, filters);
+    const summaries = await this.getRaceResultSummaries();
+    return filterResults(summaries.map(toListItem), filters);
   },
 
   async getRaceResultById(id: string): Promise<RaceResultSummary> {
-    const response = await apiClient.get(`/api/race-results/get-by-id/${id}`);
-    return mapSummary(unwrapApiData<RawObject>(response));
+    const mockResult = mockRaceResults.find((result) => result.id === id);
+
+    if (import.meta.env.DEV && mockResult) {
+      return mockResult;
+    }
+
+    try {
+      const response = await apiClient.get(`/api/race-results/get-by-id/${id}`);
+      return mapSummary(unwrapApiData<RawObject>(response));
+    } catch (error) {
+      if (mockResult) {
+        return mockResult;
+      }
+
+      throw error;
+    }
   },
 
   async getRankingBoard(category: RankingCategory): Promise<RankingBoard | undefined> {
-    if (category === 'owner') {
-      return undefined;
+    if (import.meta.env.DEV) {
+      return mockRankingBoards[category];
     }
 
-    const endpoint = category === 'horse' ? '/api/horses/ranking' : '/api/jockeys/ranking';
-    const response = await apiClient.get(endpoint);
-    const entries = unwrapApiList<RawObject>(response).map((entry, index) =>
-      mapRankingEntry(entry, index, category),
-    );
+    try {
+      if (category === 'owner') {
+        return mockRankingBoards.owner;
+      }
 
-    return {
-      category,
-      tournamentName: 'Overall',
-      season: String(new Date().getFullYear()),
-      lastUpdated: new Date().toISOString(),
-      entries,
-    };
+      const endpoint = category === 'horse' ? '/api/horses/ranking' : '/api/jockeys/ranking';
+      const response = await apiClient.get(endpoint);
+      const entries = unwrapApiList<RawObject>(response).map((entry, index) =>
+        mapRankingEntry(entry, index, category),
+      );
+
+      return entries.length > 0
+        ? {
+            category,
+            tournamentName: 'Overall',
+            season: String(new Date().getFullYear()),
+            lastUpdated: new Date().toISOString(),
+            entries,
+          }
+        : mockRankingBoards[category];
+    } catch {
+      return mockRankingBoards[category];
+    }
   },
 
   getTournamentFilterOptions(results: RaceResultListItem[] = []): string[] {

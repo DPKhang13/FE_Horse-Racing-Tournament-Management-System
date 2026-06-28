@@ -69,9 +69,6 @@ const RankingPage = () => {
             <div>
               <p className="text-label-md text-secondary uppercase tracking-widest mb-2">Result Screen</p>
               <h1 className="text-headline-lg font-bold text-primary mb-2">Rankings</h1>
-              <p className="text-body-md text-on-surface-variant max-w-2xl">
-                Leaderboards calculated from ranking points, total wins, and race results across the season.
-              </p>
             </div>
             <ResultNav />
           </div>
