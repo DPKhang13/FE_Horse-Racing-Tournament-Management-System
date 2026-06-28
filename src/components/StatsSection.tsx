@@ -6,14 +6,14 @@ const jockeys = [
     name: 'Julian Castano',
     stats: 'Assigned to Derby operations',
     earnings: '12 events',
-    image: 'https://images.unsplash.com/photo-1552058544-f2b08422138a?auto=format&fit=crop&q=80&w=200',
+    image: 'https://picsum.photos/200/200?random=jockey1',
   },
   {
     id: 2,
     name: 'Sarah Miller',
     stats: 'Assigned to endurance operations',
     earnings: '09 events',
-    image: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&q=80&w=200',
+    image: 'https://picsum.photos/200/200?random=jockey2',
   },
 ];
 
@@ -24,7 +24,7 @@ const horses = [
     grade: 'G1',
     lastResults: 'Cleared for Saigon Summer Derby',
     rating: 92,
-    image: 'https://images.unsplash.com/photo-1553284965-83fd3e82fa5a?auto=format&fit=crop&q=80&w=400',
+    image: 'https://picsum.photos/400/300?random=horse1',
   },
   {
     id: 2,
@@ -32,7 +32,7 @@ const horses = [
     grade: 'G1',
     lastResults: 'Registered for Northern Sprint Invitational',
     rating: 88,
-    image: 'https://images.unsplash.com/photo-1598974357801-cbca100e65d3?auto=format&fit=crop&q=80&w=400',
+    image: 'https://picsum.photos/400/300?random=horse2',
   },
 ];
 

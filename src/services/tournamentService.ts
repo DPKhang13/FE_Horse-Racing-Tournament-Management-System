@@ -39,6 +39,11 @@ export type RefereeAssignmentItem = {
 type TournamentPayloadData = TournamentFormData | TournamentMutationData;
 type RawTournament = TournamentApiItem & { [key: string]: unknown };
 type RawRecord = { [key: string]: unknown };
+type TournamentCountResponse = {
+  globalTournamentCount?: number;
+  count?: number;
+  total?: number;
+};
 
 const isManagementTournamentData = (data: TournamentPayloadData): data is TournamentMutationData =>
   'tournamentName' in data;
@@ -129,7 +134,15 @@ const parseCurrencyAmount = (value: unknown) => {
 };
 
 const normalizeTournamentStatus = (value: unknown): TournamentStatus => {
-  const normalizedValue = asString(value, 'Upcoming').trim().toLowerCase();
+  const normalizedValue = asString(value, 'Upcoming').trim().toLowerCase().replace(/[_-]+/g, ' ');
+
+  if (normalizedValue.includes('registration') && normalizedValue.includes('open')) {
+    return 'Registration Open';
+  }
+
+  if (normalizedValue.includes('registration') && normalizedValue.includes('closed')) {
+    return 'Registration Closed';
+  }
 
   if (normalizedValue.includes('ongoing') || normalizedValue === 'active') {
     return 'Ongoing';
@@ -171,6 +184,14 @@ const cleanTournamentPayload = (data: TournamentPayloadData) => ({
   endDate: data.endDate,
   prizePool: isManagementTournamentData(data) ? parseCurrencyAmount(data.prize) : Number(data.prizePool),
   status: data.status.trim(),
+});
+
+const cleanTournamentUpdatePayload = (data: TournamentPayloadData) => ({
+  name: (isManagementTournamentData(data) ? data.tournamentName : data.name).trim(),
+  location: data.location.trim(),
+  startDate: data.startDate,
+  endDate: data.endDate,
+  prizePool: isManagementTournamentData(data) ? parseCurrencyAmount(data.prize) : Number(data.prizePool),
 });
 
 const mapParticipants = (value: unknown): TournamentParticipant[] => {
@@ -245,6 +266,8 @@ const mapApiTournament = (raw: RawTournament, index: number): Tournament => {
     entryFee: asNumber(raw.entryFee),
     prize: asString(raw.prize ?? raw.prizeName, formatCurrency(prizePool)),
     status: normalizeTournamentStatus(raw.status),
+    registrationOpenAt: raw.registrationOpenAt ? asString(raw.registrationOpenAt) : undefined,
+    registrationCloseAt: raw.registrationCloseAt ? asString(raw.registrationCloseAt) : undefined,
     rulesNotes: asString(raw.rulesNotes ?? raw.note, '-'),
     participants,
     schedule: mapApiMatches(raw.schedule ?? raw.schedules ?? raw.matches, startDate),
@@ -457,6 +480,8 @@ const buildTournamentFromData = (
     entryFee: isManagementTournamentData(data) ? Number(data.entryFee) : existingTournament?.entryFee ?? 0,
     prize: isManagementTournamentData(data) ? data.prize.trim() : formatCurrency(prizePool),
     status: normalizeTournamentStatus(data.status),
+    registrationOpenAt: isManagementTournamentData(data) ? data.registrationOpenAt : existingTournament?.registrationOpenAt,
+    registrationCloseAt: isManagementTournamentData(data) ? data.registrationCloseAt : existingTournament?.registrationCloseAt,
     rulesNotes: isManagementTournamentData(data) ? data.rulesNotes.trim() : existingTournament?.rulesNotes ?? '',
     participants: existingTournament?.participants.map((participant) => ({ ...participant })) ?? [],
     schedule: existingTournament?.schedule.map((match) => ({ ...match })) ?? [],
@@ -486,7 +511,7 @@ const updateMockTournament = (tournamentId: number | string, data: TournamentPay
   return cloneTournament(tournament);
 };
 
-const cancelMockTournament = (tournamentId: number | string): TournamentApiItem => {
+const cancelMockTournament = (tournamentId: number | string): Tournament => {
   const index = findMockTournamentIndex(tournamentId);
 
   if (index === -1) {
@@ -500,16 +525,7 @@ const cancelMockTournament = (tournamentId: number | string): TournamentApiItem 
   };
   mockTournaments = mockTournaments.map((item, itemIndex) => (itemIndex === index ? tournament : item));
 
-  return {
-    tournamentId: tournament.tournamentId,
-    id: tournament.tournamentId,
-    name: tournament.tournamentName,
-    location: tournament.location,
-    startDate: tournament.startDate,
-    endDate: tournament.endDate,
-    prizePool: parseCurrencyAmount(tournament.prize),
-    status: tournament.status,
-  };
+  return cloneTournament(tournament);
 };
 
 export const tournamentService = {
@@ -518,6 +534,25 @@ export const tournamentService = {
       params: status ? { status } : undefined,
     });
     return unwrapApiList<TournamentApiItem>(response);
+  },
+
+  async getGlobalTournamentCount(useMockFallback = false): Promise<number> {
+    try {
+      const response = await apiClient.get('/api/tournaments/get-global-tournament-count');
+      const data = unwrapApiData<TournamentCountResponse | number>(response);
+
+      if (typeof data === 'number') {
+        return asNumber(data);
+      }
+
+      return asNumber(data.globalTournamentCount ?? data.count ?? data.total);
+    } catch (error) {
+      if (useMockFallback) {
+        return mockTournaments.length;
+      }
+
+      throw error;
+    }
   },
 
   async getAllTournaments(useMockFallback = true): Promise<Tournament[]> {
@@ -562,22 +597,30 @@ export const tournamentService = {
     }
   },
 
-  async createTournament(data: TournamentPayloadData): Promise<Tournament> {
+  async createTournament(data: TournamentPayloadData, useMockFallback = false): Promise<Tournament> {
     try {
       const response = await apiClient.post('/api/tournaments/create-tournament', cleanTournamentPayload(data));
       const apiTournament = mapApiTournament(unwrapApiData<RawTournament>(response), 0);
       return buildTournamentFromData(data, apiTournament.tournamentId, apiTournament);
-    } catch {
+    } catch (error) {
+      if (!useMockFallback) {
+        throw error;
+      }
+
       return createMockTournament(data);
     }
   },
 
-  async updateTournament(tournamentId: number | string, data: TournamentPayloadData): Promise<Tournament> {
+  async updateTournament(tournamentId: number | string, data: TournamentPayloadData, useMockFallback = false): Promise<Tournament> {
     try {
-      const response = await apiClient.put(`/api/tournaments/update-tournament/${tournamentId}`, cleanTournamentPayload(data));
+      const response = await apiClient.put(`/api/tournaments/update-tournament/${tournamentId}`, cleanTournamentUpdatePayload(data));
       const apiTournament = mapApiTournament(unwrapApiData<RawTournament>(response), 0);
       return buildTournamentFromData(data, apiTournament.tournamentId, apiTournament);
-    } catch {
+    } catch (error) {
+      if (!useMockFallback) {
+        throw error;
+      }
+
       return updateMockTournament(tournamentId, data);
     }
   },
@@ -593,13 +636,49 @@ export const tournamentService = {
     throw new Error('Delete tournament API is not available in the backend.');
   },
 
-  async cancelTournament(tournamentId: number | string): Promise<TournamentApiItem> {
+  async cancelTournament(tournamentId: number | string, useMockFallback = false): Promise<Tournament> {
     try {
       const response = await apiClient.patch(`/api/tournaments/cancel-tournament/${tournamentId}`);
-      return unwrapApiData<TournamentApiItem>(response);
-    } catch {
+      return mapApiTournament(unwrapApiData<RawTournament>(response), 0);
+    } catch (error) {
+      if (!useMockFallback) {
+        throw error;
+      }
+
       return cancelMockTournament(tournamentId);
     }
+  },
+
+  async openRegistration(
+    tournamentId: number | string,
+    data: { registrationOpenAt?: string; registrationCloseAt: string },
+  ): Promise<Tournament> {
+    await apiClient.patch(`/api/v1/admin/tournaments/${tournamentId}/open-registration`, {
+      registrationOpenAt: data.registrationOpenAt || undefined,
+      registrationCloseAt: data.registrationCloseAt,
+    });
+    return this.getTournamentById(tournamentId);
+  },
+
+  async closeRegistration(
+    tournamentId: number | string,
+    data: { autoRejectPending?: boolean; autoCancelUnconfirmed?: boolean } = {},
+  ): Promise<Tournament> {
+    await apiClient.patch(`/api/v1/admin/tournaments/${tournamentId}/close-registration`, {
+      autoRejectPending: data.autoRejectPending ?? false,
+      autoCancelUnconfirmed: data.autoCancelUnconfirmed ?? false,
+    });
+    return this.getTournamentById(tournamentId);
+  },
+
+  async startTournament(tournamentId: number | string): Promise<Tournament> {
+    await apiClient.patch(`/api/v1/admin/tournaments/${tournamentId}/start`);
+    return this.getTournamentById(tournamentId);
+  },
+
+  async completeTournament(tournamentId: number | string): Promise<Tournament> {
+    await apiClient.patch(`/api/v1/admin/tournaments/${tournamentId}/complete`);
+    return this.getTournamentById(tournamentId);
   },
 
   async getTournamentSchedule(tournamentId: number | string): Promise<TournamentMatch[]> {
