@@ -1,0 +1,440 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>HTMS | The Pinnacle of Horse Racing Management</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700;800&amp;family=Inter:wght@400;500;600&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                    "background": "#0b1326",
+                    "on-tertiary": "#690007",
+                    "tertiary-fixed-dim": "#ffb4ac",
+                    "primary-container": "#d4af37",
+                    "on-secondary": "#003909",
+                    "error-container": "#93000a",
+                    "surface-container-high": "#222a3d",
+                    "secondary-container": "#005b14",
+                    "on-tertiary-container": "#90000e",
+                    "inverse-surface": "#dae2fd",
+                    "surface-container-highest": "#2d3449",
+                    "outline": "#99907c",
+                    "surface-variant": "#2d3449",
+                    "surface-container-low": "#131b2e",
+                    "on-primary": "#3c2f00",
+                    "on-primary-fixed-variant": "#574500",
+                    "on-primary-fixed": "#241a00",
+                    "primary-fixed-dim": "#e9c349",
+                    "inverse-primary": "#735c00",
+                    "surface-container-lowest": "#060e20",
+                    "on-background": "#dae2fd",
+                    "on-error-container": "#ffdad6",
+                    "surface": "#0b1326",
+                    "surface-container": "#171f33",
+                    "secondary": "#88d982",
+                    "outline-variant": "#4d4635",
+                    "on-surface": "#dae2fd",
+                    "on-secondary-fixed": "#002204",
+                    "surface-bright": "#31394d",
+                    "inverse-on-surface": "#283044",
+                    "primary-fixed": "#ffe088",
+                    "on-primary-container": "#554300",
+                    "on-surface-variant": "#d0c5af",
+                    "on-tertiary-fixed-variant": "#93000e",
+                    "on-secondary-container": "#81d27c",
+                    "secondary-fixed-dim": "#88d982",
+                    "on-error": "#690005",
+                    "surface-dim": "#0b1326",
+                    "tertiary-fixed": "#ffdad6",
+                    "primary": "#f2ca50",
+                    "tertiary-container": "#ff968c",
+                    "tertiary": "#ffbfb8",
+                    "surface-tint": "#e9c349",
+                    "error": "#ffb4ab",
+                    "on-tertiary-fixed": "#410003",
+                    "secondary-fixed": "#a3f69c",
+                    "on-secondary-fixed-variant": "#005312"
+            },
+            "borderRadius": {
+                    "DEFAULT": "0.25rem",
+                    "lg": "0.5rem",
+                    "xl": "0.75rem",
+                    "full": "9999px"
+            },
+            "spacing": {
+                    "gutter": "16px",
+                    "unit": "4px",
+                    "margin-desktop": "32px",
+                    "container-max": "1440px",
+                    "margin-mobile": "16px"
+            },
+            "fontFamily": {
+                    "label-md": ["Inter"],
+                    "headline-lg-mobile": ["Montserrat"],
+                    "display-lg": ["Montserrat"],
+                    "body-sm": ["Inter"],
+                    "headline-lg": ["Montserrat"],
+                    "body-md": ["Inter"],
+                    "headline-md": ["Montserrat"],
+                    "body-lg": ["Inter"],
+                    "data-mono": ["Inter"]
+            },
+            "fontSize": {
+                    "label-md": ["12px", {"lineHeight": "16px", "letterSpacing": "0.05em", "fontWeight": "600"}],
+                    "headline-lg-mobile": ["24px", {"lineHeight": "32px", "fontWeight": "700"}],
+                    "display-lg": ["48px", {"lineHeight": "56px", "letterSpacing": "-0.02em", "fontWeight": "800"}],
+                    "body-sm": ["14px", {"lineHeight": "20px", "fontWeight": "400"}],
+                    "headline-lg": ["32px", {"lineHeight": "40px", "letterSpacing": "-0.01em", "fontWeight": "700"}],
+                    "body-md": ["16px", {"lineHeight": "24px", "fontWeight": "400"}],
+                    "headline-md": ["20px", {"lineHeight": "28px", "fontWeight": "600"}],
+                    "body-lg": ["18px", {"lineHeight": "28px", "fontWeight": "400"}],
+                    "data-mono": ["14px", {"lineHeight": "20px", "fontWeight": "500"}]
+            }
+          },
+        },
+      }
+    </script>
+<style>
+        body { background-color: #0b1326; color: #dae2fd; }
+        .glass-card {
+            background: rgba(30, 41, 59, 0.7);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(51, 65, 85, 0.5);
+        }
+        .gold-gradient {
+            background: linear-gradient(135deg, #f2ca50 0%, #d4af37 100%);
+        }
+        .ticker-scroll {
+            display: flex;
+            width: fit-content;
+            animation: scroll 40s linear infinite;
+        }
+        @keyframes scroll {
+            0% { transform: translateX(0); }
+            100% { transform: translateX(-50%); }
+        }
+        .pulse-live {
+            animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+        }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: .5; }
+        }
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+    </style>
+</head>
+<body class="font-body-md text-body-md overflow-x-hidden">
+<!-- Top Navigation Bar -->
+<nav class="fixed top-0 left-0 w-full z-50 flex justify-between items-center px-8 md:px-32 h-16 bg-surface-container-low/80 backdrop-blur-md border-b border-outline-variant/30 shadow-sm">
+<div class="font-headline-md text-headline-md font-bold text-primary">HTMS</div>
+<div class="hidden md:flex items-center space-x-8">
+<a class="text-primary border-b-2 border-primary pb-1 font-label-md text-label-md" href="#">Home</a>
+<a class="text-on-surface-variant hover:text-on-surface transition-colors font-label-md text-label-md" href="#">Tournaments</a>
+<a class="text-on-surface-variant hover:text-on-surface transition-colors font-label-md text-label-md" href="#">Live Odds</a>
+<a class="text-on-surface-variant hover:text-on-surface transition-colors font-label-md text-label-md" href="#">Rankings</a>
+</div>
+<div class="flex items-center space-x-4">
+<span class="material-symbols-outlined text-on-surface-variant cursor-pointer hover:bg-surface-container-highest/50 p-2 rounded-full transition-colors">notifications</span>
+<button class="gold-gradient text-on-primary px-6 py-2 rounded-lg font-label-md text-label-md font-bold active:scale-95 transition-transform">Join the Race</button>
+</div>
+</nav>
+<!-- Hero Section -->
+<section class="relative min-h-screen flex items-center pt-16 overflow-hidden">
+<div class="absolute inset-0 z-0">
+<img class="w-full h-full object-cover opacity-40 blur-[2px]" data-alt="A cinematic, low-angle shot of powerful thoroughbred horses galloping through early morning mist on a pristine turf track. The lighting is dramatic and golden, filtering through the dust kicked up by hooves. The visual style is premium and high-contrast, utilizing deep navy shadows and brilliant ochre highlights to create a sense of high-stakes momentum and professional sportsmanship." src="https://lh3.googleusercontent.com/aida-public/AB6AXuAMECLOWNrDaYZayptmiktWx0wBNF3DYXYJFdqOmb7f0lbXELzFaizKIcqgCq655F9mfHQjMB4vV33zITEW68yWnSuVEElxHx5KKUrWfVL4ic11vvHju-2VZM7SItLPqX0z9udU8nLv8BQn-tI0WX8QXMYGBOo7h94yX5vlu8dOnTsd4GyzD93O_OBwAU1AG5ZCrCV8J9UMrVtaOB5KBBuol1OhNNGNy9VI8w9B0GDqcbDMR1kHiIAkYp73T3-E2huQ5Tsu20hvvvjc"/>
+<div class="absolute inset-0 bg-gradient-to-r from-background via-background/80 to-transparent"></div>
+</div>
+<div class="relative z-10 px-8 md:px-32 max-w-5xl">
+<span class="inline-block px-4 py-1 rounded-full border border-primary text-primary font-label-md text-label-md mb-6 uppercase tracking-widest">Global Racing Management</span>
+<h1 class="font-display-lg text-display-lg md:text-[64px] mb-6 leading-[1.1] text-on-surface">The Pinnacle of <br/><span class="text-primary">Horse Racing</span> Management</h1>
+<p class="font-body-lg text-body-lg text-on-surface-variant mb-10 max-w-2xl">
+                Experience precision data, lightning-fast tournament logistics, and the ultimate betting excitement. Whether you manage a stable or chase the thrill of the win, HTMS is your elite racing command center.
+            </p>
+<div class="flex flex-wrap gap-4">
+<button class="gold-gradient text-on-primary px-8 py-4 rounded-xl font-headline-md text-headline-md font-bold shadow-lg shadow-primary/20 active:scale-95 transition-transform">Join the Race</button>
+<button class="bg-surface-container-highest text-on-surface px-8 py-4 rounded-xl font-headline-md text-headline-md font-bold border border-outline-variant hover:bg-surface-bright transition-colors">Explore Tournaments</button>
+</div>
+</div>
+<!-- Float Decoration -->
+<div class="absolute right-0 bottom-0 p-12 hidden xl:block">
+<div class="glass-card p-6 rounded-2xl w-80 shadow-2xl border-l-4 border-primary">
+<div class="flex justify-between items-center mb-4">
+<span class="text-secondary font-label-md text-label-md flex items-center">
+<span class="material-symbols-outlined text-[14px] mr-1 pulse-live" style="font-variation-settings: 'FILL' 1;">fiber_manual_record</span>
+                        LIVE AT ASCOT
+                    </span>
+<span class="text-on-surface-variant font-data-mono text-data-mono">Race 4/8</span>
+</div>
+<div class="space-y-3">
+<div class="flex justify-between items-center">
+<div class="flex items-center gap-3">
+<div class="w-8 h-8 rounded-full bg-primary-container flex items-center justify-center text-on-primary font-bold text-xs">SK</div>
+<span class="font-bold">Sovereign King</span>
+</div>
+<span class="text-primary font-data-mono">2.40</span>
+</div>
+<div class="flex justify-between items-center">
+<div class="flex items-center gap-3">
+<div class="w-8 h-8 rounded-full bg-on-tertiary-container flex items-center justify-center text-on-tertiary font-bold text-xs">MB</div>
+<span class="font-bold">Midnight Blue</span>
+</div>
+<span class="text-primary font-data-mono">5.20</span>
+</div>
+</div>
+</div>
+</div>
+</section>
+<!-- Live Odds Ticker -->
+<div class="bg-surface-container-lowest border-y border-outline-variant/30 py-3 relative z-20">
+<div class="ticker-scroll">
+<!-- Ticker Items (repeated for loop) -->
+<div class="flex space-x-12 px-6 items-center">
+<span class="font-label-md text-label-md text-secondary uppercase tracking-widest flex items-center"><span class="material-symbols-outlined mr-1 text-sm">bolt</span> Upcoming Races:</span>
+<span class="font-data-mono text-data-mono flex items-center gap-2"><span class="text-on-surface-variant">14:00 Kentucky Derby:</span> Gold Flash <span class="text-primary font-bold">1.85</span></span>
+<span class="font-data-mono text-data-mono flex items-center gap-2"><span class="text-on-surface-variant">14:15 Melbourne Cup:</span> Thunder Hoof <span class="text-primary font-bold">3.40</span></span>
+<span class="font-data-mono text-data-mono flex items-center gap-2"><span class="text-on-surface-variant">14:30 Prix de l'Arc:</span> Velvet Storm <span class="text-primary font-bold">12.0</span></span>
+<span class="font-data-mono text-data-mono flex items-center gap-2"><span class="text-on-surface-variant">14:45 Grand National:</span> Iron Will <span class="text-primary font-bold">6.50</span></span>
+<!-- Loop back -->
+<span class="font-label-md text-label-md text-secondary uppercase tracking-widest flex items-center"><span class="material-symbols-outlined mr-1 text-sm">bolt</span> Upcoming Races:</span>
+<span class="font-data-mono text-data-mono flex items-center gap-2"><span class="text-on-surface-variant">14:00 Kentucky Derby:</span> Gold Flash <span class="text-primary font-bold">1.85</span></span>
+<span class="font-data-mono text-data-mono flex items-center gap-2"><span class="text-on-surface-variant">14:15 Melbourne Cup:</span> Thunder Hoof <span class="text-primary font-bold">3.40</span></span>
+<span class="font-data-mono text-data-mono flex items-center gap-2"><span class="text-on-surface-variant">14:30 Prix de l'Arc:</span> Velvet Storm <span class="text-primary font-bold">12.0</span></span>
+<span class="font-data-mono text-data-mono flex items-center gap-2"><span class="text-on-surface-variant">14:45 Grand National:</span> Iron Will <span class="text-primary font-bold">6.50</span></span>
+</div>
+</div>
+</div>
+<!-- Feature Highlights -->
+<section class="py-24 px-8 md:px-32 bg-background">
+<div class="text-center mb-16">
+<h2 class="font-headline-lg text-headline-lg mb-4">Precision Engineered for Every Actor</h2>
+<p class="text-on-surface-variant max-w-xl mx-auto">Our platform bridges the gap between field management and fan experience with tailored interfaces.</p>
+</div>
+<div class="grid grid-cols-1 md:grid-cols-3 gap-8">
+<!-- Owners Card -->
+<div class="glass-card p-8 rounded-2xl hover:-translate-y-2 transition-all duration-300 group">
+<div class="w-16 h-16 rounded-xl bg-primary-container/20 flex items-center justify-center text-primary mb-8 group-hover:scale-110 transition-transform">
+<span class="material-symbols-outlined text-4xl" style="font-variation-settings: 'FILL' 1;">pets</span>
+</div>
+<h3 class="font-headline-md text-headline-md mb-4 text-on-surface">Manage Your Stable</h3>
+<p class="text-on-surface-variant mb-8">Track horse health, pedigree, and tournament eligibility through a high-performance dashboard designed for owners.</p>
+<a class="text-primary font-label-md text-label-md flex items-center hover:underline" href="#">
+                    EXPLORE OWNER TOOLS <span class="material-symbols-outlined ml-2 text-sm">arrow_forward</span>
+</a>
+</div>
+<!-- Spectators Card -->
+<div class="glass-card p-8 rounded-2xl border-primary hover:-translate-y-2 transition-all duration-300 group bg-surface-container-high/50">
+<div class="w-16 h-16 rounded-xl bg-secondary-container/20 flex items-center justify-center text-secondary mb-8 group-hover:scale-110 transition-transform">
+<span class="material-symbols-outlined text-4xl" style="font-variation-settings: 'FILL' 1;">visibility</span>
+</div>
+<h3 class="font-headline-md text-headline-md mb-4 text-on-surface">Premium Betting Experience</h3>
+<p class="text-on-surface-variant mb-8">Real-time Tote boards, AI-powered odds tracking, and seamless betting integrations for the ultimate fan engagement.</p>
+<a class="text-secondary font-label-md text-label-md flex items-center hover:underline" href="#">
+                    START BETTING <span class="material-symbols-outlined ml-2 text-sm">arrow_forward</span>
+</a>
+</div>
+<!-- Referees Card -->
+<div class="glass-card p-8 rounded-2xl hover:-translate-y-2 transition-all duration-300 group">
+<div class="w-16 h-16 rounded-xl bg-error-container/20 flex items-center justify-center text-error mb-8 group-hover:scale-110 transition-transform">
+<span class="material-symbols-outlined text-4xl" style="font-variation-settings: 'FILL' 1;">rule</span>
+</div>
+<h3 class="font-headline-md text-headline-md mb-4 text-on-surface">Precision Reporting</h3>
+<p class="text-on-surface-variant mb-8">Unmatched accuracy for stewards and referees. Instantly log incidents and verify results with millisecond-precision data.</p>
+<a class="text-error font-label-md text-label-md flex items-center hover:underline" href="#">
+                    VIEW COMPLIANCE <span class="material-symbols-outlined ml-2 text-sm">arrow_forward</span>
+</a>
+</div>
+</div>
+</section>
+<!-- Stats Counter -->
+<section class="py-20 bg-surface-container-low border-y border-outline-variant/20">
+<div class="px-8 md:px-32 grid grid-cols-1 md:grid-cols-3 gap-12 text-center">
+<div>
+<div class="font-display-lg text-display-lg text-primary mb-2">500+</div>
+<div class="font-label-md text-label-md text-on-surface-variant tracking-widest uppercase">Active Horses</div>
+</div>
+<div class="border-y md:border-y-0 md:border-x border-outline-variant/30 py-12 md:py-0">
+<div class="font-display-lg text-display-lg text-primary mb-2">1.2M</div>
+<div class="font-label-md text-label-md text-on-surface-variant tracking-widest uppercase">Total Bets Placed</div>
+</div>
+<div>
+<div class="font-display-lg text-display-lg text-primary mb-2">50+</div>
+<div class="font-label-md text-label-md text-on-surface-variant tracking-widest uppercase">Global Tournaments</div>
+</div>
+</div>
+</section>
+<!-- Recent Results -->
+<section class="py-24 px-8 md:px-32 bg-background">
+<div class="flex flex-col md:flex-row justify-between items-end mb-12 gap-6">
+<div>
+<h2 class="font-headline-lg text-headline-lg mb-4">The Winner's Circle</h2>
+<p class="text-on-surface-variant">Top finishers from the Golden Gallop Grand Prix (Aug 2024)</p>
+</div>
+<button class="text-on-surface border border-outline-variant px-6 py-2 rounded-lg font-label-md text-label-md hover:bg-surface-container-highest transition-all">View All Results</button>
+</div>
+<div class="glass-card rounded-2xl overflow-hidden">
+<table class="w-full text-left">
+<thead>
+<tr class="bg-surface-container-high/50">
+<th class="px-8 py-5 font-label-md text-label-md text-on-surface-variant uppercase tracking-widest">Rank</th>
+<th class="px-8 py-5 font-label-md text-label-md text-on-surface-variant uppercase tracking-widest">Horse</th>
+<th class="px-8 py-5 font-label-md text-label-md text-on-surface-variant uppercase tracking-widest">Jockey / Silks</th>
+<th class="px-8 py-5 font-label-md text-label-md text-on-surface-variant uppercase tracking-widest">Time</th>
+<th class="px-8 py-5 font-label-md text-label-md text-on-surface-variant uppercase tracking-widest">Payout</th>
+</tr>
+</thead>
+<tbody class="divide-y divide-outline-variant/20">
+<tr class="hover:bg-surface-container-highest/20 transition-colors">
+<td class="px-8 py-6">
+<span class="w-8 h-8 rounded-full bg-primary flex items-center justify-center text-on-primary font-bold">1</span>
+</td>
+<td class="px-8 py-6">
+<div class="flex items-center gap-4">
+<img class="w-12 h-12 rounded-full object-cover border-2 border-primary" data-alt="A close-up profile portrait of a majestic brown horse with a white diamond on its forehead. The image is crisp with shallow depth of field, set against a dark, moody background with subtle warm lighting. Elegant and powerful." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBdZpD8K9lXUMOt7rzPyRRR5X6ZPzlqsngsIvNGFUqGlwlVpcq_0T35W66pROAVwq0fENeFYRtem4nYOY12qNT_QbydExUJJUKNkpDMH3lykT2Yw66w_WZRZN8zKhRSJO6OY-6YJ4vK7RXbEVTPETt-qeES_V5SIMmS8ZjP3DkiO_pEqflgDQWJu_HiMvoN8c-MXvKF16eko0x1Ot_L6JNnHG9fFgqZauczxthYb8Ax532oBO2zBAupTDXAQcnRw7qKaKwumQxsz7-v"/>
+<span class="font-headline-md text-headline-md text-on-surface">Apex Legend</span>
+</div>
+</td>
+<td class="px-8 py-6">
+<div class="flex items-center gap-3">
+<div class="w-6 h-6 rounded-full border-2 border-primary bg-[repeating-linear-gradient(45deg,#f2ca50,#f2ca50_4px,#3c2f00_4px,#3c2f00_8px)]"></div>
+<span class="font-body-md text-body-md">S. Martinez</span>
+</div>
+</td>
+<td class="px-8 py-6 font-data-mono text-data-mono text-secondary">2:14.32</td>
+<td class="px-8 py-6 font-data-mono text-data-mono text-primary">$450,000</td>
+</tr>
+<tr class="hover:bg-surface-container-highest/20 transition-colors">
+<td class="px-8 py-6">
+<span class="w-8 h-8 rounded-full bg-on-surface-variant/30 flex items-center justify-center text-on-surface font-bold">2</span>
+</td>
+<td class="px-8 py-6">
+<div class="flex items-center gap-4">
+<img class="w-12 h-12 rounded-full object-cover border-2 border-outline-variant" data-alt="A striking white horse galloping, captured in mid-stride. The photography style is high-contrast black and white with a dramatic dark background, emphasizing muscle definition and elegance. Professional and corporate aesthetic." src="https://lh3.googleusercontent.com/aida-public/AB6AXuAzyG1ccRnSF94-iAkNoHXWUYZztRFaQZPmsxrISCnTm6pdqJIP_8KjFB7AIj6iPU7EMq5gRUd1PuBk56zrXc_wAGe_ykihqpz6KqBb1Yp2zgu8Dr09n6iPsgPX1jcsctYOjWfOUo4XDPUE0Ag_KE59QgkC_B9hNaXs5CrofPtiSFR8kgrBN7ucRpThawjHEoJh8MhNaLufNAdkuAqxd-vN0ixch8wSBW5OstU-IB6w_wGTVwuAIWpB8SmcR16uVaRCGg4r6Jos77v-"/>
+<span class="font-headline-md text-headline-md text-on-surface">Ghost Runner</span>
+</div>
+</td>
+<td class="px-8 py-6">
+<div class="flex items-center gap-3">
+<div class="w-6 h-6 rounded-full border-2 border-secondary bg-secondary-container"></div>
+<span class="font-body-md text-body-md">M. Thompson</span>
+</div>
+</td>
+<td class="px-8 py-6 font-data-mono text-data-mono text-secondary">2:14.58</td>
+<td class="px-8 py-6 font-data-mono text-data-mono text-primary">$180,000</td>
+</tr>
+<tr class="hover:bg-surface-container-highest/20 transition-colors">
+<td class="px-8 py-6">
+<span class="w-8 h-8 rounded-full bg-on-surface-variant/20 flex items-center justify-center text-on-surface-variant font-bold">3</span>
+</td>
+<td class="px-8 py-6">
+<div class="flex items-center gap-4">
+<img class="w-12 h-12 rounded-full object-cover border-2 border-outline-variant/30" data-alt="Close up of a muscular dark black horse, its coat shining under dramatic studio lighting. The aesthetic is minimal, luxurious, and powerful, with deep shadows and sharp highlights. High-end sports management style." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDwtfGwXw2Q6Mp31MK2E2SDi9ridHJoyl2h-nHT7xEqb8SRS9qagx9t9Ft5fvbv6pKgxVkno2ZKI0ZXKSLq7vhMlyEd6YIRiVB1z1UUPYosIvABHrtrg6cq7fYs-ga3WHA885fgIFn9QbkaMO0s4DNS3Xmj8lMM7GBjUvJiRN56pJZukHBz0sY2SGMYR2q_R0ZWim3HqXkU99uoHpGqWLJJlHj1wAzw47YWtyTLSEBR20in2ekZmYiCRLcKH5SIb35fgG7jHACzKeEa"/>
+<span class="font-headline-md text-headline-md text-on-surface">Black Velvet</span>
+</div>
+</td>
+<td class="px-8 py-6">
+<div class="flex items-center gap-3">
+<div class="w-6 h-6 rounded-full border-2 border-error bg-tertiary-container"></div>
+<span class="font-body-md text-body-md">L. Richards</span>
+</div>
+</td>
+<td class="px-8 py-6 font-data-mono text-data-mono text-secondary">2:15.01</td>
+<td class="px-8 py-6 font-data-mono text-data-mono text-primary">$75,000</td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
+<!-- Call to Action -->
+<section class="py-24 px-8 md:px-32 bg-background relative overflow-hidden">
+<div class="glass-card rounded-[32px] p-12 md:p-24 text-center relative overflow-hidden border-primary/30">
+<div class="absolute inset-0 opacity-10">
+<div class="absolute top-0 left-0 w-full h-full" style="background-image: radial-gradient(#f2ca50 1px, transparent 1px); background-size: 40px 40px;"></div>
+</div>
+<div class="relative z-10">
+<h2 class="font-display-lg text-display-lg mb-8">Ready to Elevate Your Race?</h2>
+<p class="text-on-surface-variant text-body-lg max-w-2xl mx-auto mb-12">Join the world's most advanced horse racing ecosystem today. Whether you're managing a stable or betting on glory, HTMS gives you the winning edge.</p>
+<div class="flex flex-col md:flex-row justify-center gap-6">
+<button class="gold-gradient text-on-primary px-10 py-5 rounded-xl font-headline-md text-headline-md font-bold shadow-2xl active:scale-95 transition-transform">Create Operator Account</button>
+<button class="bg-surface-container-highest text-on-surface px-10 py-5 rounded-xl font-headline-md text-headline-md font-bold border border-outline-variant hover:bg-surface-bright transition-colors">Register as Spectator</button>
+</div>
+</div>
+</div>
+</section>
+<!-- Footer -->
+<footer class="bg-surface-container-lowest pt-20 pb-10 px-8 md:px-32 border-t border-outline-variant/30">
+<div class="grid grid-cols-1 md:grid-cols-4 gap-12 mb-16">
+<div class="col-span-1 md:col-span-1">
+<div class="font-headline-md text-headline-md font-bold text-primary mb-6">HTMS</div>
+<p class="text-on-surface-variant font-body-sm text-body-sm mb-6">Redefining the standards of high-stakes sportsmanship through precision technology and elite tournament management since 2024.</p>
+<div class="flex gap-4">
+<span class="material-symbols-outlined text-on-surface-variant hover:text-primary cursor-pointer transition-colors">public</span>
+<span class="material-symbols-outlined text-on-surface-variant hover:text-primary cursor-pointer transition-colors">forum</span>
+<span class="material-symbols-outlined text-on-surface-variant hover:text-primary cursor-pointer transition-colors">share</span>
+</div>
+</div>
+<div>
+<h4 class="font-label-md text-label-md text-on-surface uppercase tracking-widest mb-6">Platform</h4>
+<ul class="space-y-4 text-on-surface-variant font-body-sm text-body-sm">
+<li><a class="hover:text-primary transition-colors" href="#">Race Management</a></li>
+<li><a class="hover:text-primary transition-colors" href="#">Live Odds Engine</a></li>
+<li><a class="hover:text-primary transition-colors" href="#">Stable Dashboards</a></li>
+<li><a class="hover:text-primary transition-colors" href="#">Tote Systems</a></li>
+</ul>
+</div>
+<div>
+<h4 class="font-label-md text-label-md text-on-surface uppercase tracking-widest mb-6">Company</h4>
+<ul class="space-y-4 text-on-surface-variant font-body-sm text-body-sm">
+<li><a class="hover:text-primary transition-colors" href="#">About Us</a></li>
+<li><a class="hover:text-primary transition-colors" href="#">Partnerships</a></li>
+<li><a class="hover:text-primary transition-colors" href="#">Press Kit</a></li>
+<li><a class="hover:text-primary transition-colors" href="#">Careers</a></li>
+</ul>
+</div>
+<div>
+<h4 class="font-label-md text-label-md text-on-surface uppercase tracking-widest mb-6">Compliance</h4>
+<ul class="space-y-4 text-on-surface-variant font-body-sm text-body-sm">
+<li><a class="hover:text-primary transition-colors" href="#">Privacy Policy</a></li>
+<li><a class="hover:text-primary transition-colors" href="#">Terms of Service</a></li>
+<li><a class="hover:text-primary transition-colors" href="#">Anti-Money Laundering</a></li>
+<li><a class="hover:text-primary transition-colors" href="#">Global Licensing</a></li>
+</ul>
+</div>
+</div>
+<div class="border-t border-outline-variant/20 pt-10 flex flex-col md:flex-row justify-between items-center gap-6">
+<div class="flex items-center gap-4">
+<span class="text-error font-bold font-label-md text-label-md border border-error px-2 py-0.5 rounded">18+</span>
+<p class="text-on-surface-variant font-label-md text-label-md uppercase tracking-tight">Gamble Responsibly. If you or someone you know has a gambling problem, call 1-800-GAMBLER.</p>
+</div>
+<p class="text-on-surface-variant font-label-md text-label-md">© 2024 HTMS GLOBAL SYSTEMS. ALL RIGHTS RESERVED.</p>
+</div>
+</footer>
+<script>
+        // Simple scroll reveal interaction
+        const observerOptions = {
+            threshold: 0.1
+        };
+
+        const observer = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    entry.target.classList.add('opacity-100', 'translate-y-0');
+                    entry.target.classList.remove('opacity-0', 'translate-y-10');
+                }
+            });
+        }, observerOptions);
+
+        document.querySelectorAll('.glass-card').forEach(card => {
+            card.classList.add('transition-all', 'duration-700', 'opacity-0', 'translate-y-10');
+            observer.observe(card);
+        });
+    </script>
+</body></html>

@@ -1,0 +1,448 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>HTMS Spectator Dashboard</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700;800&family=Inter:wght@400;500;600;700&family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@100..900&family=Montserrat:wght@100..900&display=swap" rel="stylesheet"/>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .glass-panel {
+            background: rgba(30, 41, 59, 0.7);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(51, 65, 85, 0.5);
+        }
+        .gold-gradient-btn {
+            background: linear-gradient(135deg, #f2ca50 0%, #d4af37 100%);
+            color: #3c2f00;
+        }
+        .gold-gradient-btn:hover {
+            filter: brightness(1.1);
+        }
+        @keyframes pulse-live {
+            0% { transform: scale(1); opacity: 1; }
+            50% { transform: scale(1.2); opacity: 0.7; }
+            100% { transform: scale(1); opacity: 1; }
+        }
+        .live-pulse {
+            animation: pulse-live 2s infinite;
+        }
+        .odds-up { color: #88d982; }
+        .odds-down { color: #ffb4ac; }
+        
+        /* Custom scrollbar for data density */
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: #0b1326; }
+        ::-webkit-scrollbar-thumb { background: #2d3449; border-radius: 10px; }
+    </style>
+<script id="tailwind-config">
+        tailwind.config = {
+          darkMode: "class",
+          theme: {
+            extend: {
+              "colors": {
+                      "outline": "#99907c",
+                      "on-secondary": "#003909",
+                      "background": "#0b1326",
+                      "surface": "#0b1326",
+                      "on-tertiary-fixed-variant": "#93000e",
+                      "inverse-surface": "#dae2fd",
+                      "on-secondary-fixed": "#002204",
+                      "on-primary-fixed": "#241a00",
+                      "surface-dim": "#0b1326",
+                      "surface-container-high": "#222a3d",
+                      "on-primary-fixed-variant": "#574500",
+                      "secondary": "#88d982",
+                      "tertiary-container": "#ff968c",
+                      "surface-container-lowest": "#060e20",
+                      "tertiary-fixed-dim": "#ffb4ac",
+                      "surface-container-highest": "#2d3449",
+                      "surface-container-low": "#131b2e",
+                      "surface-tint": "#e9c349",
+                      "surface-bright": "#31394d",
+                      "error-container": "#93000a",
+                      "error": "#ffb4ab",
+                      "on-surface-variant": "#d0c5af",
+                      "on-error-container": "#ffdad6",
+                      "tertiary": "#ffbfb8",
+                      "surface-variant": "#2d3449",
+                      "inverse-primary": "#735c00",
+                      "on-tertiary": "#690007",
+                      "outline-variant": "#4d4635",
+                      "inverse-on-surface": "#283044",
+                      "primary-fixed": "#ffe088",
+                      "secondary-container": "#005b14",
+                      "on-primary": "#3c2f00",
+                      "primary-container": "#d4af37",
+                      "on-surface": "#dae2fd",
+                      "on-background": "#dae2fd",
+                      "primary-fixed-dim": "#e9c349",
+                      "primary": "#f2ca50",
+                      "on-primary-container": "#554300",
+                      "on-secondary-fixed-variant": "#005312",
+                      "on-tertiary-container": "#90000e",
+                      "tertiary-fixed": "#ffdad6",
+                      "surface-container": "#171f33",
+                      "secondary-fixed-dim": "#88d982",
+                      "on-error": "#690005",
+                      "on-tertiary-fixed": "#410003",
+                      "on-secondary-container": "#81d27c",
+                      "secondary-fixed": "#a3f69c"
+              },
+              "borderRadius": {
+                      "DEFAULT": "0.25rem",
+                      "lg": "0.5rem",
+                      "xl": "0.75rem",
+                      "full": "9999px"
+              },
+              "spacing": {
+                      "unit": "4px",
+                      "margin-mobile": "16px",
+                      "margin-desktop": "32px",
+                      "gutter": "16px",
+                      "container-max": "1440px"
+              },
+              "fontFamily": {
+                      "body-lg": ["Inter"],
+                      "display-lg": ["Montserrat"],
+                      "label-md": ["Inter"],
+                      "headline-lg-mobile": ["Montserrat"],
+                      "data-mono": ["Inter"],
+                      "headline-lg": ["Montserrat"],
+                      "headline-md": ["Montserrat"],
+                      "body-md": ["Inter"],
+                      "body-sm": ["Inter"]
+              },
+              "fontSize": {
+                      "body-lg": ["18px", {"lineHeight": "28px", "fontWeight": "400"}],
+                      "display-lg": ["48px", {"lineHeight": "56px", "letterSpacing": "-0.02em", "fontWeight": "800"}],
+                      "label-md": ["12px", {"lineHeight": "16px", "letterSpacing": "0.05em", "fontWeight": "600"}],
+                      "headline-lg-mobile": ["24px", {"lineHeight": "32px", "fontWeight": "700"}],
+                      "data-mono": ["14px", {"lineHeight": "20px", "fontWeight": "500"}],
+                      "headline-lg": ["32px", {"lineHeight": "40px", "letterSpacing": "-0.01em", "fontWeight": "700"}],
+                      "headline-md": ["20px", {"lineHeight": "28px", "fontWeight": "600"}],
+                      "body-md": ["16px", {"lineHeight": "24px", "fontWeight": "400"}],
+                      "body-sm": ["14px", {"lineHeight": "20px", "fontWeight": "400"}]
+              }
+            },
+          },
+        }
+    </script>
+</head>
+<body class="bg-background text-on-background font-body-md overflow-x-hidden">
+<!-- Top Navigation Bar (Shared Component Strategy) -->
+<header class="fixed top-0 left-0 w-full z-50 flex justify-between items-center px-margin-desktop h-16 bg-surface-container-high border-b border-outline-variant shadow-md">
+<div class="flex items-center gap-4">
+<div class="flex items-center gap-2 font-display-lg text-headline-md font-extrabold text-primary">
+<img alt="HTMS Logo" class="h-8 w-8 object-contain" src="https://lh3.googleusercontent.com/aida/AP1WRLsc3y8b8SyL_FvEx4lw6irnAQgXaQa58L8Hk8rg6f69oJSPyhAz6yuITq-IbdVE309lYWgLK2YQeUN9N0EkPWsq5pCz_bSKGR8zsfk2diylYUDiwk3iRmbs2ze0xevj0NZGdV67ran_L_yvIMoXNC3VLCMAnFTM-ODr2JohTpfv0yOPyQT-LsDIDpwnkoT483-5jaXhVW8rZbRAEM_Xa0BWm8O60DqPI-K0UOF6mB9tt4w_LU9uIcd8LSFi"/>
+<span>HTMS</span>
+</div>
+<nav class="hidden md:flex gap-8 ml-10">
+<a class="text-primary font-bold border-b-2 border-primary pb-1 font-body-md text-body-md transition-all" href="#">Live Viewer</a>
+<a class="text-on-surface-variant font-medium hover:text-on-surface transition-all font-body-md text-body-md" href="#">Betting History</a>
+<a class="text-on-surface-variant font-medium hover:text-on-surface transition-all font-body-md text-body-md" href="#">Wallet</a>
+</nav>
+</div>
+<div class="flex items-center gap-6">
+<div class="hidden lg:flex items-center gap-3 px-4 py-1.5 bg-surface-container-highest rounded-full border border-outline-variant">
+<span class="material-symbols-outlined text-secondary text-sm">account_balance_wallet</span>
+<span class="font-data-mono text-data-mono font-bold">$12,450.80</span>
+<button class="bg-primary text-on-primary text-[10px] px-2 py-0.5 rounded font-bold uppercase tracking-wider hover:bg-primary-container transition-colors">Top Up</button>
+</div>
+<div class="flex items-center gap-4">
+<span class="material-symbols-outlined text-on-surface-variant cursor-pointer hover:text-primary transition-colors">notifications</span>
+<span class="material-symbols-outlined text-on-surface-variant cursor-pointer hover:text-primary transition-colors">settings</span>
+<div class="h-8 w-8 rounded-full bg-primary-container flex items-center justify-center text-on-primary-container font-bold text-xs border border-primary overflow-hidden">
+<img class="w-full h-full object-cover" data-alt="A close-up professional profile portrait of a high-end sports bettor in a dark suit, lit by dramatic cinematic lighting with cool blue and warm gold tones. The aesthetic is clean, corporate, and prestigious, set against a blurred background of a modern digital office." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCVSufLpkJxJ6j8Ccstff6T2LTfyDeky53wokn37e2Pi7psGKv9I7o-sN5ms-oqoHL4eob4IBnp4Edgznc7tJ-6zApQ-UOYrI3_8YYmmaHr7m7efXDKzn2SdK7pLqZDTkSnwXNedWOqNqbrtcpPKHrtd6NJdMQAHTeYgirK4S8XD4N-0H195PDOCQJElERae8HBjCj-q7Ar-KB4RdMFIRKvgLnh6Vyeyxiq81rEj4merSBCt0NrTBCrazAIxt67k40BvhGxEYNZbajO"/>
+</div>
+</div>
+</div>
+</header>
+<!-- Main Content Canvas -->
+<main class="pt-20 pb-12 px-margin-mobile md:px-margin-desktop max-w-container-max mx-auto">
+<!-- Live Odds Ticker -->
+<div class="w-full mb-6 glass-panel rounded-xl overflow-hidden py-3 border-l-4 border-primary">
+<div class="flex items-center px-4 gap-4">
+<div class="flex items-center gap-2 shrink-0">
+<span class="material-symbols-outlined text-error live-pulse">dock</span>
+<span class="font-bold text-primary text-xs uppercase tracking-widest">Live Odds</span>
+</div>
+<div class="flex-1 overflow-hidden whitespace-nowrap">
+<div class="inline-flex gap-12 animate-[marquee_30s_linear_infinite]">
+<!-- Ticker Items -->
+<div class="flex items-center gap-2">
+<span class="font-bold text-on-surface">#1 Silver Streak</span>
+<span class="font-data-mono text-secondary">2.50</span>
+<span class="material-symbols-outlined text-[12px] odds-up">arrow_drop_up</span>
+</div>
+<div class="flex items-center gap-2">
+<span class="font-bold text-on-surface">#4 Midnight Dash</span>
+<span class="font-data-mono text-secondary">4.20</span>
+<span class="material-symbols-outlined text-[12px] odds-up">arrow_drop_up</span>
+</div>
+<div class="flex items-center gap-2">
+<span class="font-bold text-on-surface">#7 Golden Mane</span>
+<span class="font-data-mono text-error">1.85</span>
+<span class="material-symbols-outlined text-[12px] odds-down">arrow_drop_down</span>
+</div>
+<div class="flex items-center gap-2">
+<span class="font-bold text-on-surface">#2 Thunder Bolt</span>
+<span class="font-data-mono text-secondary">12.00</span>
+<span class="material-symbols-outlined text-[12px] odds-up">arrow_drop_up</span>
+</div>
+<div class="flex items-center gap-2">
+<span class="font-bold text-on-surface">#9 Emerald Eye</span>
+<span class="font-data-mono text-on-surface-variant">6.40</span>
+<span class="material-symbols-outlined text-[12px] text-outline">horizontal_rule</span>
+</div>
+<!-- Loop duplicates -->
+<div class="flex items-center gap-2">
+<span class="font-bold text-on-surface">#1 Silver Streak</span>
+<span class="font-data-mono text-secondary">2.50</span>
+<span class="material-symbols-outlined text-[12px] odds-up">arrow_drop_up</span>
+</div>
+<div class="flex items-center gap-2">
+<span class="font-bold text-on-surface">#4 Midnight Dash</span>
+<span class="font-data-mono text-secondary">4.20</span>
+<span class="material-symbols-outlined text-[12px] odds-up">arrow_drop_up</span>
+</div>
+</div>
+</div>
+</div>
+</div>
+<!-- Dashboard Layout Grid -->
+<div class="grid grid-cols-1 lg:grid-cols-12 gap-gutter">
+<!-- LEFT COLUMN: Live Stream & Info (8/12) -->
+<div class="lg:col-span-8 space-y-gutter">
+<!-- Live Race Stream Section -->
+<div class="relative rounded-2xl overflow-hidden shadow-2xl group border border-outline-variant aspect-video">
+<div class="absolute inset-0 z-0">
+<img class="w-full h-full object-cover" data-alt="A wide-angle cinematic shot of high-stakes thoroughbred horse racing at a premier nighttime track. The scene is bathed in professional stadium floodlights, creating high-contrast shadows and glowing highlights on the horses' muscled flanks. Vibrant green turf contrasts with deep navy skies and golden stadium glows. Professional racing broadcast quality." src="https://lh3.googleusercontent.com/aida-public/AB6AXuA-f-t7bHLTOhPXhSyPZ1oh1AwAs0jLH8jD2x3APjAALelhVXIci7AGNIVd1nrN-ws6hkUCXrBGEmRsXEw29bZaNUfn88JQ4mIE9EGS87xRlMOB0DB4ozHVMxA2rhI5IsMhekKodU4QDILMRCxQOT3e9WDQE6jZ6ekQa1KYovzMx1ToE82B0nCgv968ysHavcga3ivV1rn_-4oEu3JfqbPwQkLoXpDEDiH5b9I9qFDqQmhYJjaUUM6EXQ_60kErDaQr1ZNuc5sBujQ-"/>
+</div>
+<!-- Stream Overlay -->
+<div class="absolute inset-0 bg-gradient-to-t from-background via-transparent to-transparent opacity-60"></div>
+<div class="absolute top-4 left-4 flex items-center gap-3">
+<div class="bg-error px-3 py-1 rounded text-[10px] font-bold flex items-center gap-1.5 uppercase tracking-tighter">
+<span class="w-2 h-2 rounded-full bg-white live-pulse"></span>
+                            Live
+                        </div>
+<div class="glass-panel px-3 py-1 rounded text-[10px] font-bold text-white flex items-center gap-1.5 uppercase tracking-tighter">
+<span class="material-symbols-outlined text-[12px]">visibility</span>
+                            14.2k
+                        </div>
+</div>
+<div class="absolute bottom-6 left-6 right-6 flex justify-between items-end">
+<div>
+<h2 class="font-display-lg text-headline-lg text-white mb-1 drop-shadow-lg">Grand National Derby</h2>
+<p class="text-on-surface-variant font-medium">Race 7 of 12 • 2400m Turf • G1 Stakes</p>
+</div>
+<div class="flex gap-2">
+<button class="w-12 h-12 rounded-full glass-panel flex items-center justify-center text-white hover:bg-primary transition-all active:scale-90">
+<span class="material-symbols-outlined">fullscreen</span>
+</button>
+<button class="w-12 h-12 rounded-full glass-panel flex items-center justify-center text-white hover:bg-primary transition-all active:scale-90">
+<span class="material-symbols-outlined">volume_up</span>
+</button>
+</div>
+</div>
+</div>
+<!-- Race Participants / Quick Select Bento -->
+<div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+<div class="glass-panel p-4 rounded-xl border-l-4 border-secondary">
+<div class="flex justify-between items-start mb-4">
+<div class="flex items-center gap-3">
+<div class="w-10 h-10 rounded-full bg-surface-container-highest border border-outline-variant flex items-center justify-center">
+<span class="font-bold text-primary">#1</span>
+</div>
+<div>
+<h4 class="font-bold text-on-surface">Silver Streak</h4>
+<p class="text-[10px] text-on-surface-variant uppercase">J: Marcus Vane</p>
+</div>
+</div>
+<span class="font-data-mono text-secondary font-bold">2.50</span>
+</div>
+<button class="w-full py-2 rounded bg-surface-container-highest hover:bg-primary-container hover:text-on-primary-container transition-all text-xs font-bold uppercase tracking-widest border border-outline-variant">Quick Bet</button>
+</div>
+<div class="glass-panel p-4 rounded-xl border-l-4 border-primary">
+<div class="flex justify-between items-start mb-4">
+<div class="flex items-center gap-3">
+<div class="w-10 h-10 rounded-full bg-surface-container-highest border border-outline-variant flex items-center justify-center">
+<span class="font-bold text-primary">#4</span>
+</div>
+<div>
+<h4 class="font-bold text-on-surface">Midnight Dash</h4>
+<p class="text-[10px] text-on-surface-variant uppercase">J: Leo Thorne</p>
+</div>
+</div>
+<span class="font-data-mono text-secondary font-bold">4.20</span>
+</div>
+<button class="w-full py-2 rounded bg-surface-container-highest hover:bg-primary-container hover:text-on-primary-container transition-all text-xs font-bold uppercase tracking-widest border border-outline-variant">Quick Bet</button>
+</div>
+<div class="glass-panel p-4 rounded-xl border-l-4 border-outline">
+<div class="flex justify-between items-start mb-4">
+<div class="flex items-center gap-3">
+<div class="w-10 h-10 rounded-full bg-surface-container-highest border border-outline-variant flex items-center justify-center">
+<span class="font-bold text-primary">#7</span>
+</div>
+<div>
+<h4 class="font-bold text-on-surface">Golden Mane</h4>
+<p class="text-[10px] text-on-surface-variant uppercase">J: Sarah Kent</p>
+</div>
+</div>
+<span class="font-data-mono text-secondary font-bold">1.85</span>
+</div>
+<button class="w-full py-2 rounded bg-surface-container-highest hover:bg-primary-container hover:text-on-primary-container transition-all text-xs font-bold uppercase tracking-widest border border-outline-variant">Quick Bet</button>
+</div>
+</div>
+</div>
+<!-- RIGHT COLUMN: Betting Slip & Wallet (4/12) -->
+<div class="lg:col-span-4 space-y-gutter">
+<!-- Betting Slip Component -->
+<div class="bg-surface-container border border-outline-variant rounded-2xl flex flex-col h-full min-h-[600px] shadow-lg sticky top-20">
+<div class="p-6 border-b border-outline-variant">
+<div class="flex justify-between items-center">
+<h3 class="font-display-lg text-headline-md text-white">Betting Slip</h3>
+<div class="bg-primary-container/20 text-primary px-2 py-0.5 rounded-full text-[10px] font-bold uppercase">2 Picks</div>
+</div>
+</div>
+<div class="flex-1 p-6 space-y-4 overflow-y-auto">
+<!-- Bet Item 1 -->
+<div class="p-4 bg-surface-container-low rounded-xl border border-outline-variant relative group">
+<button class="absolute top-2 right-2 text-on-surface-variant hover:text-error transition-colors">
+<span class="material-symbols-outlined text-sm">close</span>
+</button>
+<div class="flex justify-between mb-2">
+<span class="text-xs font-bold text-primary uppercase">Win Bet</span>
+<span class="font-data-mono text-secondary">2.50</span>
+</div>
+<p class="font-bold text-on-surface">Silver Streak (#1)</p>
+<p class="text-[10px] text-on-surface-variant mb-3">Grand National Derby • Race 7</p>
+<div class="flex items-center gap-2">
+<div class="flex-1 relative">
+<span class="absolute left-3 top-1/2 -translate-y-1/2 text-xs text-on-surface-variant">$</span>
+<input class="w-full bg-background border border-outline-variant rounded p-1.5 pl-6 text-sm font-data-mono focus:ring-1 focus:ring-primary focus:border-primary outline-none" type="number" value="100"/>
+</div>
+<div class="text-right">
+<p class="text-[10px] text-on-surface-variant uppercase">Est. Return</p>
+<p class="text-sm font-bold text-secondary font-data-mono">$250.00</p>
+</div>
+</div>
+</div>
+<!-- Bet Item 2 -->
+<div class="p-4 bg-surface-container-low rounded-xl border border-outline-variant relative group">
+<button class="absolute top-2 right-2 text-on-surface-variant hover:text-error transition-colors">
+<span class="material-symbols-outlined text-sm">close</span>
+</button>
+<div class="flex justify-between mb-2">
+<span class="text-xs font-bold text-primary uppercase">Place Bet (1-3)</span>
+<span class="font-data-mono text-secondary">1.40</span>
+</div>
+<p class="font-bold text-on-surface">Midnight Dash (#4)</p>
+<p class="text-[10px] text-on-surface-variant mb-3">Grand National Derby • Race 7</p>
+<div class="flex items-center gap-2">
+<div class="flex-1 relative">
+<span class="absolute left-3 top-1/2 -translate-y-1/2 text-xs text-on-surface-variant">$</span>
+<input class="w-full bg-background border border-outline-variant rounded p-1.5 pl-6 text-sm font-data-mono focus:ring-1 focus:ring-primary focus:border-primary outline-none" type="number" value="50"/>
+</div>
+<div class="text-right">
+<p class="text-[10px] text-on-surface-variant uppercase">Est. Return</p>
+<p class="text-sm font-bold text-secondary font-data-mono">$70.00</p>
+</div>
+</div>
+</div>
+<!-- Empty state / suggestion could go here -->
+<div class="border-2 border-dashed border-outline-variant rounded-xl p-6 flex flex-col items-center justify-center text-center opacity-40">
+<span class="material-symbols-outlined text-3xl mb-2">add_circle</span>
+<p class="text-xs font-medium">Add more picks from the viewer or participant list</p>
+</div>
+</div>
+<div class="p-6 bg-surface-container-high border-t border-outline-variant space-y-4">
+<div class="flex justify-between text-on-surface-variant text-sm">
+<span>Total Stake</span>
+<span class="font-data-mono text-on-surface font-bold">$150.00</span>
+</div>
+<div class="flex justify-between text-on-surface-variant text-sm">
+<span>Potential Payout</span>
+<span class="font-data-mono text-secondary font-bold">$320.00</span>
+</div>
+<div class="flex items-center justify-between py-2 px-3 bg-background rounded-lg border border-outline-variant mb-2">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-primary text-sm">account_balance_wallet</span>
+<div class="flex flex-col">
+<span class="text-[10px] text-on-surface-variant uppercase leading-none">Wallet Balance</span>
+<span class="font-data-mono text-sm font-bold">$12,450.80</span>
+</div>
+</div>
+<button class="text-primary text-[10px] font-bold uppercase hover:underline">Top Up</button>
+</div>
+<button class="w-full gold-gradient-btn py-4 rounded-xl font-bold uppercase tracking-widest text-sm shadow-lg shadow-primary/20 flex items-center justify-center gap-2 transition-transform active:scale-95">
+<span class="material-symbols-outlined">confirmation_number</span>
+                            Place Wagers
+                        </button>
+</div>
+</div>
+</div>
+</div>
+</main>
+<!-- Mobile Navigation (Shared Component Strategy) -->
+<nav class="md:hidden fixed bottom-0 left-0 w-full bg-surface-container-high h-16 flex justify-around items-center border-t border-outline-variant z-50">
+<a class="flex flex-col items-center text-primary" href="#">
+<span class="material-symbols-outlined">note_stack</span>
+<span class="text-[10px] font-bold uppercase mt-1">Live</span>
+</a>
+<a class="flex flex-col items-center text-on-surface-variant" href="#">
+<span class="material-symbols-outlined">history</span>
+<span class="text-[10px] font-bold uppercase mt-1">History</span>
+</a>
+<a class="flex flex-col items-center text-on-surface-variant" href="#">
+<span class="material-symbols-outlined">account_balance_wallet</span>
+<span class="text-[10px] font-bold uppercase mt-1">Wallet</span>
+</a>
+<a class="flex flex-col items-center text-on-surface-variant" href="#">
+<span class="material-symbols-outlined">person</span>
+<span class="text-[10px] font-bold uppercase mt-1">Profile</span>
+</a>
+</nav>
+<!-- Micro-interaction Scripts -->
+<script>
+        // Simple marquee controller for the odds ticker
+        const ticker = document.querySelector('.animate-marquee');
+        if (ticker) {
+            ticker.addEventListener('mouseenter', () => ticker.style.animationPlayState = 'paused');
+            ticker.addEventListener('mouseleave', () => ticker.style.animationPlayState = 'running');
+        }
+
+        // Mock wallet top-up feedback
+        const topUpBtns = document.querySelectorAll('button:contains("Top Up")');
+        topUpBtns.forEach(btn => {
+            btn.addEventListener('click', () => {
+                alert('Wallet Top Up system coming soon to HTMS!');
+            });
+        });
+
+        // Search bar interaction
+        const searchInput = document.querySelector('input[type="number"]');
+        if (searchInput) {
+            searchInput.addEventListener('focus', () => {
+                searchInput.parentElement.classList.add('ring-2', 'ring-primary');
+            });
+            searchInput.addEventListener('blur', () => {
+                searchInput.parentElement.classList.remove('ring-2', 'ring-primary');
+            });
+        }
+    </script>
+<style>
+        @keyframes marquee {
+            0% { transform: translateX(0); }
+            100% { transform: translateX(-50%); }
+        }
+        .animate-marquee {
+            animation: marquee 30s linear infinite;
+        }
+    </style>
+</body></html>
