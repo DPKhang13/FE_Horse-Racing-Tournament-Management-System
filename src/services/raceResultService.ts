@@ -1,4 +1,5 @@
 import { apiClient, unwrapApiData, unwrapApiList } from './apiClient';
+import { mockRaceResults, mockRankingBoards } from '../mocks/raceResultMockData';
 import type {
   RaceResultEntry,
   RaceResultFilters,
@@ -200,10 +201,6 @@ const mapRankingEntry = (raw: RawObject, index: number, category: RankingCategor
 });
 
 export const raceResultService = {
-  async getRaceResultList(filters: RaceResultFilters = {}): Promise<RaceResultListItem[]> {
-    const response = await apiClient.get('/api/race-results/get-all');
-    const items = unwrapApiList<RawObject>(response).map(mapSummary).map(toListItem);
-    return filterResults(items, filters);
   async getRaceResultSummaries(): Promise<RaceResultSummary[]> {
     if (import.meta.env.DEV) {
       return mockRaceResults;
@@ -224,28 +221,52 @@ export const raceResultService = {
   },
 
   async getRaceResultById(id: string): Promise<RaceResultSummary> {
-    const response = await apiClient.get(`/api/race-results/get-by-id/${id}`);
-    return mapSummary(unwrapApiData<RawObject>(response));
+    const mockResult = mockRaceResults.find((result) => result.id === id);
+
+    if (import.meta.env.DEV && mockResult) {
+      return mockResult;
+    }
+
+    try {
+      const response = await apiClient.get(`/api/race-results/get-by-id/${id}`);
+      return mapSummary(unwrapApiData<RawObject>(response));
+    } catch (error) {
+      if (mockResult) {
+        return mockResult;
+      }
+
+      throw error;
+    }
   },
 
   async getRankingBoard(category: RankingCategory): Promise<RankingBoard | undefined> {
-    const endpoint = category === 'horse' ? '/api/horses/ranking' : '/api/jockeys/ranking';
-    const response = await apiClient.get(endpoint);
-    const entries = unwrapApiList<RawObject>(response).map((entry, index) =>
-      mapRankingEntry(entry, index, category),
-    );
-
-    if (entries.length === 0) {
-      return undefined;
+    if (import.meta.env.DEV) {
+      return mockRankingBoards[category];
     }
 
-    return {
-      category,
-      tournamentName: 'Overall',
-      season: String(new Date().getFullYear()),
-      lastUpdated: new Date().toISOString(),
-      entries,
-    };
+    try {
+      if (category === 'owner') {
+        return mockRankingBoards.owner;
+      }
+
+      const endpoint = category === 'horse' ? '/api/horses/ranking' : '/api/jockeys/ranking';
+      const response = await apiClient.get(endpoint);
+      const entries = unwrapApiList<RawObject>(response).map((entry, index) =>
+        mapRankingEntry(entry, index, category),
+      );
+
+      return entries.length > 0
+        ? {
+            category,
+            tournamentName: 'Overall',
+            season: String(new Date().getFullYear()),
+            lastUpdated: new Date().toISOString(),
+            entries,
+          }
+        : mockRankingBoards[category];
+    } catch {
+      return mockRankingBoards[category];
+    }
   },
 
   getTournamentFilterOptions(results: RaceResultListItem[] = []): string[] {
