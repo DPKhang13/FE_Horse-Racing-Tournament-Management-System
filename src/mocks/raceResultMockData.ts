@@ -17,7 +17,7 @@ type MockRunner = {
   disqualified?: string;
 };
 
-const prizeByPosition = ['₫320,000,000', '₫160,000,000', '₫80,000,000'];
+const prizeByPosition = ['VND 320,000,000', 'VND 160,000,000', 'VND 80,000,000'];
 
 const createEntries = (raceId: string, runners: MockRunner[]): RaceResultEntry[] =>
   runners.map((runner, index) => {
@@ -87,12 +87,12 @@ const createResult = ({
     winnerHorse: winner?.horseName ?? '-',
     winnerJockey: winner?.jockeyName ?? '-',
     winnerTime: winner?.finishTime ?? '-',
-    totalPrizePool: '₫560,000,000',
+    totalPrizePool: 'VND 560,000,000',
     entries,
     prizeDistributions: [
-      { position: 1, amount: '₫320,000,000', label: 'Champion' },
-      { position: 2, amount: '₫160,000,000', label: 'Runner-up' },
-      { position: 3, amount: '₫80,000,000', label: 'Third place' },
+      { position: 1, amount: 'VND 320,000,000', label: 'Champion' },
+      { position: 2, amount: 'VND 160,000,000', label: 'Runner-up' },
+      { position: 3, amount: 'VND 80,000,000', label: 'Third place' },
     ],
   };
 };

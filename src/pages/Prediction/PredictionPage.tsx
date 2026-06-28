@@ -1,16 +1,20 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
-import { Clock3, Ticket, TrendingUp, X } from 'lucide-react';
+import { ArrowRight, Clock3, Ticket, TrendingUp, X } from 'lucide-react';
 import { getApiErrorMessage } from '../../services/apiClient';
 import { betService, type BetItem } from '../../services/betService';
 import { predictionService } from '../../services/predictionService';
 import type { OpenRacePrediction } from '../../types/prediction';
-import { ArrowRight, Clock3, Ticket, TrendingUp } from 'lucide-react';
-import { getApiErrorMessage } from '../../services/apiClient';
-import { betService, type BetItem, type BetOptionItem } from '../../services/betService';
 
 const formatPoints = (value: number) => new Intl.NumberFormat('en-US', {
   maximumFractionDigits: 0,
 }).format(value);
+
+const formatCloseTime = (value: string) => new Intl.DateTimeFormat('en-US', {
+  month: 'short',
+  day: '2-digit',
+  hour: '2-digit',
+  minute: '2-digit',
+}).format(new Date(value));
 
 const statusClassName = (status: string) => {
   const normalizedStatus = status.toLowerCase();
@@ -29,13 +33,8 @@ const statusClassName = (status: string) => {
 const PredictionPage = () => {
   const [bets, setBets] = useState<BetItem[]>([]);
   const [openRacePredictions, setOpenRacePredictions] = useState<OpenRacePrediction[]>([]);
-  const [betOptions, setBetOptions] = useState<BetOptionItem[]>([]);
-  const [selectedOptionId, setSelectedOptionId] = useState('');
-  const [betPoints, setBetPoints] = useState(100);
-  const [betType, setBetType] = useState(true);
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [message, setMessage] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
   const [walletBalance, setWalletBalance] = useState(0);
   const [isPredictionModalOpen, setIsPredictionModalOpen] = useState(false);
@@ -43,7 +42,6 @@ const PredictionPage = () => {
   const [selectedHorseId, setSelectedHorseId] = useState(0);
   const [stake, setStake] = useState('100');
   const [formError, setFormError] = useState('');
-  const [successMessage, setSuccessMessage] = useState('');
 
   useEffect(() => {
     let isMounted = true;
@@ -53,24 +51,21 @@ const PredictionPage = () => {
       setErrorMessage('');
 
       try {
-        const [data, overview] = await Promise.all([
+        const [betsData, overview] = await Promise.all([
           betService.getBets(),
           predictionService.getPredictionOverview(),
         ]);
 
-        if (isMounted) {
-          const nextOpenRaces = overview.openRaces;
-
-          setOpenRacePredictions(nextOpenRaces);
-          setSelectedRaceId(nextOpenRaces[0]?.id ?? 0);
-          setSelectedHorseId(nextOpenRaces[0]?.options[0]?.horseId ?? 0);
-
-          if (overview.walletBalance !== undefined) {
-            setWalletBalance(overview.walletBalance);
-          }
-
-          setBets(data);
+        if (!isMounted) {
+          return;
         }
+
+        const nextOpenRaces = overview.openRaces;
+        setOpenRacePredictions(nextOpenRaces);
+        setSelectedRaceId(nextOpenRaces[0]?.id ?? 0);
+        setSelectedHorseId(nextOpenRaces[0]?.options[0]?.horseId ?? 0);
+        setWalletBalance(overview.walletBalance ?? 0);
+        setBets(betsData);
       } catch (error) {
         if (isMounted) {
           setErrorMessage(getApiErrorMessage(error, 'Unable to load predictions.'));
@@ -89,42 +84,22 @@ const PredictionPage = () => {
 
     void loadPredictionPage();
 
-  const loadPredictionData = async () => {
-    setIsLoading(true);
-    setErrorMessage('');
-
-    try {
-      const [betList, optionList] = await Promise.all([
-        betService.getBets(),
-        betService.getBetOptions(),
-      ]);
-
-      setBets(betList);
-      setBetOptions(optionList);
-      setSelectedOptionId((current) => current || (optionList[0]?.optionId ? String(optionList[0].optionId) : ''));
-    } catch (error) {
-      setErrorMessage(getApiErrorMessage(error, 'Unable to load predictions.'));
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    void loadPredictionData();
+    return () => {
+      isMounted = false;
+    };
   }, []);
 
   const stats = useMemo(() => {
     const pending = bets.filter((bet) => bet.status.toLowerCase() === 'pending').length;
     const settled = bets.length - pending;
     const openRaces = openRacePredictions.filter((race) => race.status === 'Open').length;
+    const balanceProxy = bets.reduce(
+      (total, bet) => total + (bet.status.toLowerCase() === 'won' ? bet.potentialPayout : 0),
+      0,
+    );
 
-    return { openRaces, pending, settled };
+    return { openRaces, pending, settled, balanceProxy };
   }, [bets, openRacePredictions]);
-
-  const activePredictions = useMemo(
-    () => bets.filter((bet) => bet.status.toLowerCase() === 'pending'),
-    [bets],
-  );
 
   const selectedRace = useMemo(
     () => openRacePredictions.find((race) => race.id === selectedRaceId) ?? openRacePredictions[0],
@@ -132,8 +107,8 @@ const PredictionPage = () => {
   );
 
   const selectedOption = useMemo(
-    () => betOptions.find((option) => option.optionId === Number(selectedOptionId)),
-    [betOptions, selectedOptionId],
+    () => selectedRace?.options.find((option) => option.horseId === selectedHorseId) ?? selectedRace?.options[0],
+    [selectedHorseId, selectedRace],
   );
 
   const stakeValue = Number(stake);
@@ -148,7 +123,6 @@ const PredictionPage = () => {
     setSelectedHorseId(race?.options[0]?.horseId ?? 0);
     setStake('100');
     setFormError('');
-    setSuccessMessage('');
     setIsPredictionModalOpen(true);
   };
 
@@ -161,62 +135,38 @@ const PredictionPage = () => {
   const handleCreatePrediction = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setFormError('');
-    setSuccessMessage('');
-  const handleCreateBet = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    setMessage('');
-    setErrorMessage('');
 
-    if (!selectedOption) {
-      setErrorMessage('Please choose a betting option first.');
+    if (!selectedOption?.optionId) {
+      setFormError('This prediction option is missing an API optionId.');
+      return;
+    }
+
+    if (!Number.isFinite(stakeValue) || stakeValue <= 0) {
+      setFormError('Prediction points must be greater than 0.');
       return;
     }
 
     setIsSubmitting(true);
 
     try {
-      if (selectedOption.optionId) {
-        const prediction = await betService.createBet({
-          optionId: selectedOption.optionId,
-          betType: true,
-          betPoints: stakeValue,
-          betRate: selectedOption.odds,
-          rewardPoints: potentialPayout,
-          status: 'pending',
-        });
+      const prediction = await betService.createBet({
+        optionId: selectedOption.optionId,
+        betType: true,
+        betPoints: stakeValue,
+        betRate: selectedOption.odds,
+        rewardPoints: potentialPayout,
+        status: 'pending',
+      });
 
-        setBets((current) => [prediction, ...current]);
-        setWalletBalance((current) => Math.max(0, current - prediction.amount));
-        setSuccessMessage(`Prediction placed on ${prediction.horseName} for ${formatPoints(prediction.amount)} pts.`);
-        setIsPredictionModalOpen(false);
-        return;
-      }
-
-      setFormError('This prediction option is missing an API optionId.');
+      setBets((current) => [prediction, ...current]);
+      setWalletBalance((current) => Math.max(0, current - prediction.amount));
+      setIsPredictionModalOpen(false);
     } catch (error) {
       setFormError(getApiErrorMessage(error, 'Unable to create prediction.'));
-      await betService.createBet({
-        optionId: selectedOption.optionId,
-        betType,
-        betPoints,
-        betRate: selectedOption.currentRate,
-      });
-      setMessage('Prediction placed.');
-      await loadPredictionData();
-    } catch (error) {
-      setErrorMessage(getApiErrorMessage(error, 'Could not place prediction.'));
     } finally {
       setIsSubmitting(false);
     }
   };
-
-  const stats = useMemo(() => {
-    const pending = bets.filter((bet) => bet.status.toLowerCase() === 'pending').length;
-    const settled = bets.length - pending;
-    const balanceProxy = bets.reduce((total, bet) => total + (bet.status.toLowerCase() === 'won' ? bet.potentialPayout : 0), 0);
-
-    return { pending, settled, balanceProxy };
-  }, [bets]);
 
   return (
     <div className="bg-surface min-h-screen py-12">
@@ -225,7 +175,11 @@ const PredictionPage = () => {
           <div className="space-y-3">
             <p className="text-headline-lg font-bold text-primary mb-2">Prediction Center</p>
           </div>
-          <button className="inline-flex items-center gap-2 rounded-md bg-secondary px-6 py-3 text-sm font-semibold text-white transition hover:bg-secondary-container/90">
+          <button
+            type="button"
+            onClick={() => openPredictionModal()}
+            className="inline-flex items-center gap-2 rounded-md bg-secondary px-6 py-3 text-sm font-semibold text-white transition hover:bg-secondary-container/90"
+          >
             New Prediction
             <ArrowRight className="w-4 h-4" />
           </button>
@@ -236,11 +190,6 @@ const PredictionPage = () => {
             {errorMessage}
           </div>
         )}
-        {message && (
-          <div className="mb-8 rounded-md border border-secondary/30 bg-secondary-container/30 px-4 py-3 text-body-sm font-semibold text-secondary">
-            {message}
-          </div>
-        )}
 
         <div className="grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
           <div className="space-y-6">
@@ -249,14 +198,12 @@ const PredictionPage = () => {
                 <div>
                   <p className="text-xs font-semibold uppercase tracking-[0.2em] text-secondary">Wallet</p>
                   <h2 className="mt-2 text-3xl font-bold text-primary">{formatPoints(walletBalance)} pts</h2>
-                  <h2 className="mt-2 text-3xl font-bold text-primary">{formatPoints(stats.balanceProxy)} pts</h2>
                 </div>
                 <div className="rounded-2xl bg-secondary-container px-4 py-3 text-sm font-semibold text-secondary">Won payout total</div>
               </div>
               <div className="grid gap-4 sm:grid-cols-3">
                 {[
-                  { label: 'Open prediction races', value: String(stats.pending).padStart(2, '0'), color: 'bg-surface-container-highest text-primary' },
-                  { label: 'Open predictions', value: String(stats.pending).padStart(2, '0'), color: 'bg-surface-container-highest text-primary' },
+                  { label: 'Open prediction races', value: String(stats.openRaces).padStart(2, '0'), color: 'text-primary' },
                   { label: 'Pending', value: String(stats.pending).padStart(2, '0'), color: 'text-primary' },
                   { label: 'Settled', value: String(stats.settled).padStart(2, '0'), color: 'text-secondary' },
                 ].map((item) => (
@@ -265,6 +212,10 @@ const PredictionPage = () => {
                     <p className={`mt-3 text-3xl font-bold ${item.color}`}>{item.value}</p>
                   </div>
                 ))}
+              </div>
+              <div className="mt-4 rounded-2xl border border-outline-variant bg-surface-container p-4">
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-on-surface-variant">Won payout total</p>
+                <p className="mt-3 text-3xl font-bold text-primary">{formatPoints(stats.balanceProxy)} pts</p>
               </div>
             </section>
 
@@ -286,7 +237,7 @@ const PredictionPage = () => {
                       <div>
                         <p className="text-xs font-semibold uppercase tracking-[0.18em] text-secondary">{race.grade} / {race.surface}</p>
                         <h3 className="mt-2 text-lg font-bold text-primary">{race.raceName}</h3>
-                        <p className="mt-1 text-sm text-on-surface-variant">{race.track} · {race.date}</p>
+                        <p className="mt-1 text-sm text-on-surface-variant">{race.track} - {race.date}</p>
                       </div>
                       <span className="rounded-full bg-secondary-container/50 px-3 py-1 text-xs font-bold uppercase tracking-[0.16em] text-on-secondary-container">
                         {race.status}
@@ -295,7 +246,7 @@ const PredictionPage = () => {
                     <div className="mt-5 flex items-end justify-between gap-4">
                       <div>
                         <p className="text-xs text-on-surface-variant">Favorite</p>
-                        <p className="mt-1 font-semibold text-on-surface">{race.favoriteHorse} · {race.odds} odds</p>
+                        <p className="mt-1 font-semibold text-on-surface">{race.favoriteHorse} - {race.odds} odds</p>
                       </div>
                       <p className="inline-flex items-center gap-1 text-sm font-semibold text-primary">
                         <Clock3 className="h-4 w-4" /> Closes {formatCloseTime(race.closesAt)}
@@ -317,59 +268,6 @@ const PredictionPage = () => {
                   </div>
                 )}
               </div>
-                  <Clock3 className="w-4 h-4" /> {betOptions.length} options
-                </div>
-              </div>
-
-              <form onSubmit={handleCreateBet} className="grid gap-4">
-                <label className="grid gap-2">
-                  <span className="text-xs font-semibold uppercase tracking-[0.18em] text-on-surface-variant">Bet option</span>
-                  <select
-                    value={selectedOptionId}
-                    onChange={(event) => setSelectedOptionId(event.target.value)}
-                    required
-                    className="rounded-xl border border-outline-variant bg-surface-container-low px-4 py-3 text-sm focus:border-primary focus:outline-none"
-                  >
-                    <option value="">Select option</option>
-                    {betOptions.map((option) => (
-                      <option key={option.optionId} value={option.optionId}>
-                        {option.raceName} / {option.horseName} / rate {option.currentRate}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-
-                {selectedOption && (
-                  <div className="rounded-2xl border border-outline-variant bg-surface-container-low p-4 text-sm text-on-surface-variant">
-                    <p className="font-semibold text-primary">{selectedOption.horseName}</p>
-                    <p>{selectedOption.jockeyFullName ?? 'No jockey assigned'} / {selectedOption.raceName}</p>
-                    <p className="mt-2">Current rate {selectedOption.currentRate} / {formatPoints(selectedOption.totalBetPoints)} pts / {selectedOption.totalBetCount} bets</p>
-                  </div>
-                )}
-
-                <div className="grid gap-4 sm:grid-cols-[1fr_auto]">
-                  <label className="grid gap-2">
-                    <span className="text-xs font-semibold uppercase tracking-[0.18em] text-on-surface-variant">Bet points</span>
-                    <input
-                      type="number"
-                      min={1}
-                      value={betPoints || ''}
-                      onChange={(event) => setBetPoints(Number(event.target.value))}
-                      required
-                      className="rounded-xl border border-outline-variant bg-surface-container-low px-4 py-3 text-sm focus:border-primary focus:outline-none"
-                    />
-                  </label>
-                  <label className="flex items-end gap-3 rounded-xl border border-outline-variant bg-surface-container-low px-4 py-3 text-sm font-semibold text-on-surface-variant">
-                    <input type="checkbox" checked={betType} onChange={(event) => setBetType(event.target.checked)} className="mb-1 h-4 w-4" />
-                    Win bet
-                  </label>
-                </div>
-
-                <button disabled={isSubmitting || !selectedOption} className="inline-flex items-center justify-center gap-2 rounded-md bg-secondary px-6 py-3 text-sm font-semibold text-white transition hover:bg-secondary-container/90 disabled:cursor-not-allowed disabled:opacity-60">
-                  {isSubmitting ? 'Placing...' : 'Place Prediction'}
-                  <ArrowRight className="w-4 h-4" />
-                </button>
-              </form>
             </section>
           </div>
 
@@ -476,7 +374,7 @@ const PredictionPage = () => {
                   className="w-full rounded-md border border-outline-variant bg-surface-container-low px-4 py-3 focus:border-primary focus:outline-none"
                 >
                   {openRacePredictions.map((race) => (
-                    <option key={race.id} value={race.id}>{race.raceName} — closes {formatCloseTime(race.closesAt)}</option>
+                    <option key={race.id} value={race.id}>{race.raceName} - closes {formatCloseTime(race.closesAt)}</option>
                   ))}
                 </select>
               </label>
@@ -490,7 +388,7 @@ const PredictionPage = () => {
                 >
                   {selectedRace.options.map((option) => (
                     <option key={option.horseId} value={option.horseId}>
-                      {option.horseName} / {option.jockeyName} — {option.odds} odds
+                      {option.horseName} / {option.jockeyName} - {option.odds} odds
                     </option>
                   ))}
                 </select>
@@ -548,10 +446,10 @@ const PredictionPage = () => {
                 </button>
                 <button
                   type="submit"
-                  disabled={walletBalance <= 0}
+                  disabled={walletBalance <= 0 || isSubmitting}
                   className="rounded-md bg-secondary px-5 py-3 text-sm font-bold text-on-secondary transition hover:bg-secondary-container disabled:cursor-not-allowed disabled:opacity-50"
                 >
-                  Confirm prediction
+                  {isSubmitting ? 'Submitting...' : 'Confirm prediction'}
                 </button>
               </div>
             </form>

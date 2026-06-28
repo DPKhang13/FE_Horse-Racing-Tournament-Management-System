@@ -129,8 +129,7 @@ const RankingPage = () => {
             <div className="inline-flex items-center gap-2 text-body-sm text-on-surface-variant">
               <BarChart3 className="w-4 h-4 text-secondary" />
               <span>
-                {rankingBoard.tournamentName} • Season {rankingBoard.season} • Updated{' '}
-                {formatLastUpdated(rankingBoard.lastUpdated)}
+                {rankingBoard.tournamentName} - Season {rankingBoard.season} - Updated {formatLastUpdated(rankingBoard.lastUpdated)}
               </span>
             </div>
           )}
