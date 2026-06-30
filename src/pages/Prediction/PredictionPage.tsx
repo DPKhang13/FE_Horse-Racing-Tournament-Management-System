@@ -41,7 +41,6 @@ const PredictionPage = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
   const [walletBalance, setWalletBalance] = useState(0);
-  const [activeBetCount, setActiveBetCount] = useState<number | undefined>();
   const [isPredictionModalOpen, setIsPredictionModalOpen] = useState(false);
   const [selectedRaceId, setSelectedRaceId] = useState(0);
   const [selectedHorseId, setSelectedHorseId] = useState(0);
@@ -70,7 +69,6 @@ const PredictionPage = () => {
         setSelectedRaceId(nextOpenRaces[0]?.id ?? 0);
         setSelectedHorseId(nextOpenRaces[0]?.options[0]?.horseId ?? 0);
         setWalletBalance(overview.walletBalance ?? 0);
-        setActiveBetCount(overview.activeBetCount);
         setBets(betsData);
       } catch (error) {
         if (isMounted) {
@@ -80,7 +78,6 @@ const PredictionPage = () => {
           setSelectedHorseId(0);
           setBets([]);
           setWalletBalance(0);
-          setActiveBetCount(undefined);
         }
       } finally {
         if (isMounted) {
@@ -99,14 +96,14 @@ const PredictionPage = () => {
   const stats = useMemo(() => {
     const pending = bets.filter((bet) => bet.status.toLowerCase() === 'pending').length;
     const settled = bets.length - pending;
-    const openRaces = activeBetCount ?? pending;
+    const openRaces = openRacePredictions.length;
     const balanceProxy = bets.reduce(
       (total, bet) => total + (bet.status.toLowerCase() === 'won' ? bet.potentialPayout : 0),
       0,
     );
 
     return { openRaces, pending, settled, balanceProxy };
-  }, [activeBetCount, bets]);
+  }, [bets, openRacePredictions.length]);
 
   const selectedRace = useMemo(
     () => openRacePredictions.find((race) => race.id === selectedRaceId) ?? openRacePredictions[0],
@@ -167,7 +164,6 @@ const PredictionPage = () => {
 
       setBets((current) => [prediction, ...current]);
       setWalletBalance((current) => Math.max(0, current - prediction.amount));
-      setActiveBetCount((current) => (current === undefined ? undefined : current + 1));
       setIsPredictionModalOpen(false);
     } catch (error) {
       setFormError(getApiErrorMessage(error, 'Unable to create prediction.'));
