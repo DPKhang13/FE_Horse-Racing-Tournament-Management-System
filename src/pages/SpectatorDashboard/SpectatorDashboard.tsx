@@ -6,6 +6,7 @@ import { getApiErrorMessage } from '../../services/apiClient';
 import { betService, type BetItem } from '../../services/betService';
 import { dashboardService, type DashboardSummaryCount } from '../../services/dashboardService';
 import type { NotificationItem } from '../../services/notificationService';
+import { predictionService } from '../../services/predictionService';
 import type { RaceScheduleItem } from '../../services/scheduleService';
 import type { RaceResultListItem } from '../../types/raceResult';
 import { spectatorDashboardMockData } from './mockData';
@@ -61,6 +62,7 @@ const SpectatorDashboard: React.FC = () => {
   const [latestResults, setLatestResults] = useState<RaceResultListItem[]>([]);
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const [summaryCount, setSummaryCount] = useState<DashboardSummaryCount>();
+  const [openPredictionRaceCount, setOpenPredictionRaceCount] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState('');
 
@@ -72,16 +74,18 @@ const SpectatorDashboard: React.FC = () => {
       setErrorMessage('');
 
       try {
-        const [dashboard, bets] = await Promise.all([
+        const [dashboard, bets, openPredictionRaces] = await Promise.all([
           dashboardService.getSpectatorDashboard(),
           betService.getBets(),
+          predictionService.getOpenPredictionRaces(),
         ]);
 
         if (isMounted) {
           setSummaryCount(dashboard.summaryCount);
           setUpcomingRaces(dashboard.upcomingRaces.slice(0, 6));
-          setMyPredictions(dashboard.activeBets.slice(0, 5));
+          setMyPredictions(bets.slice(0, 5));
           setPredictionBets(bets);
+          setOpenPredictionRaceCount(openPredictionRaces.length);
           setLatestResults(dashboard.latestResults.slice(0, 5));
           setNotifications(dashboard.notifications.slice(0, 5));
         }
@@ -89,6 +93,7 @@ const SpectatorDashboard: React.FC = () => {
         if (isMounted) {
           setErrorMessage(getApiErrorMessage(error, 'Unable to load spectator dashboard.'));
           setSummaryCount(undefined);
+          setOpenPredictionRaceCount(0);
           setUpcomingRaces(spectatorDashboardMockData.upcomingRaces);
           setMyPredictions(spectatorDashboardMockData.myPredictions);
           setPredictionBets(spectatorDashboardMockData.myPredictions);
@@ -118,7 +123,7 @@ const SpectatorDashboard: React.FC = () => {
     },
     {
       label: 'Open prediction races',
-      value: String(summaryCount?.activeBetCount ?? myPredictions.length).padStart(2, '0'),
+      value: String(openPredictionRaceCount).padStart(2, '0'),
       tone: 'text-primary',
       action: () => navigate('/prediction'),
     },
@@ -128,7 +133,7 @@ const SpectatorDashboard: React.FC = () => {
       tone: 'text-on-surface',
       action: () => navigate('/notifications'),
     },
-  ], [myPredictions.length, navigate, notifications.length, summaryCount, upcomingRaces.length]);
+  ], [navigate, notifications.length, openPredictionRaceCount, summaryCount, upcomingRaces.length]);
 
   const settledPayoutByRaceId = useMemo(() => {
     return predictionBets.reduce((map, bet) => {
