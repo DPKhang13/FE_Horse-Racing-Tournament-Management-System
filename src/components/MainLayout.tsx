@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Bell, LogIn, LogOut, Trophy, User } from 'lucide-react';
-import { motion } from 'motion/react';
 import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { getAccessToken } from '../services/apiClient';
 import { authService } from '../services/authService';
@@ -151,11 +150,28 @@ const MainLayout = ({ children }: { children: ReactNode }) => {
 };
 
 const landingNavItems = [
-  { label: 'Home', to: '#home' },
   { label: 'Tournaments', to: '#tournaments' },
-  { label: 'Live Odds', to: '#live-odds' },
-  { label: 'Rankings', to: '#rankings' },
+  { label: 'Jockey', to: '#jockey' },
+  { label: 'Horse', to: '#horse' },
 ];
+
+const landingSectionIds = ['#home', ...landingNavItems.map((item) => item.to)];
+const landingSectionThresholds = [0.45, 0.6, 0.75, 0.9];
+
+const scrollToLandingSection = (selector: string) => {
+  const section = document.querySelector(selector) as HTMLElement | null;
+  if (!section) {
+    return;
+  }
+
+  const headerOffset = 110;
+  const top = window.scrollY + section.getBoundingClientRect().top - headerOffset;
+  window.scrollTo({
+    top: Math.max(0, top),
+    behavior: 'smooth',
+  });
+  window.history.replaceState(null, '', selector);
+};
 
 const LandingTopBar = ({
   isAuthenticated,
@@ -164,7 +180,9 @@ const LandingTopBar = ({
   isAuthenticated: boolean;
   profile?: UserProfile;
 }) => {
+  const navigate = useNavigate();
   const [isScrolled, setIsScrolled] = useState(false);
+  const [activeSection, setActiveSection] = useState('#home');
   const dashboardRoute = profile?.roleType === 'spectator'
     ? '/spectator-dashboard'
     : getDefaultRouteForRole(profile?.roleType);
@@ -182,29 +200,106 @@ const LandingTopBar = ({
     };
   }, []);
 
+  useEffect(() => {
+    const sections = landingSectionIds
+      .map((selector) => document.querySelector(selector) as HTMLElement | null)
+      .filter((section): section is HTMLElement => Boolean(section));
+
+    if (sections.length === 0) {
+      return;
+    }
+
+    const visibleRatios = new Map<string, number>();
+    const updateActiveSection = () => {
+      const bestMatch = Array.from(visibleRatios.entries())
+        .sort((left, right) => right[1] - left[1])[0];
+
+      if (bestMatch && bestMatch[1] >= 0.45) {
+        setActiveSection(bestMatch[0]);
+        return;
+      }
+
+      if (window.scrollY < 120) {
+        setActiveSection('#home');
+      }
+    };
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          const key = `#${entry.target.id}`;
+          if (entry.isIntersecting) {
+            visibleRatios.set(key, entry.intersectionRatio);
+          } else {
+            visibleRatios.delete(key);
+          }
+        });
+
+        updateActiveSection();
+      },
+      {
+        threshold: landingSectionThresholds,
+        rootMargin: '-96px 0px -12% 0px',
+      },
+    );
+
+    sections.forEach((section) => observer.observe(section));
+    updateActiveSection();
+
+    return () => {
+      observer.disconnect();
+    };
+  }, []);
+
   return (
-    <motion.header
-      layout
-      transition={{ type: 'spring', stiffness: 260, damping: 28 }}
-      className={`fixed z-50 transition-all duration-500 ease-out ${
-        isScrolled
-          ? 'left-4 right-4 top-4 mx-auto h-14 max-w-5xl rounded-full border border-outline-variant/40 bg-surface-container-low/75 px-5 shadow-2xl shadow-black/30 backdrop-blur-2xl md:px-7'
-          : 'left-0 top-0 h-16 w-full border-b border-outline-variant/30 bg-surface-container-low/80 px-8 shadow-sm backdrop-blur-md md:px-32'
-      }`}
-    >
-      <div className="flex h-full items-center justify-between gap-4">
-        <a href="#home" className={`font-display font-bold text-primary transition-all ${isScrolled ? 'text-lg' : 'text-xl'}`}>
+    <div className="fixed left-0 top-0 z-[100] flex w-full pointer-events-none justify-center transition-all duration-400 ease-in-out">
+      <header
+        className={`
+          pointer-events-auto flex w-full items-center justify-between transition-all duration-400 ease-in-out
+          ${isScrolled
+            ? 'mt-4 h-14 max-w-[95%] rounded-full border border-outline-variant/40 bg-surface-container-low/75 px-5 shadow-2xl shadow-black/30 backdrop-blur-2xl md:px-7 lg:max-w-5xl'
+            : 'mt-0 h-16 max-w-full rounded-[0px] border-b border-outline-variant/30 bg-surface-container-low/80 px-8 shadow-sm backdrop-blur-md md:px-32'
+          }
+        `}
+      >
+        <a
+          href="#home"
+          onClick={(event) => {
+            event.preventDefault();
+            setActiveSection('#home');
+            scrollToLandingSection('#home');
+          }}
+          className={`font-display font-bold text-primary transition-all ${isScrolled ? 'text-lg' : 'text-xl'}`}
+        >
           HTMS
         </a>
 
         <nav className={`hidden items-center transition-all md:flex ${isScrolled ? 'space-x-5' : 'space-x-8'}`}>
+          <button
+            type="button"
+            onClick={() => {
+              if (isAuthenticated) {
+                navigate(dashboardRoute);
+              } else {
+                navigate('/login', { state: { mode: 'login' } });
+              }
+            }}
+            className="text-label-md font-semibold text-on-surface-variant transition-colors hover:text-on-surface"
+          >
+            Dashboard
+          </button>
           {landingNavItems.map((item) => (
             <a
               key={item.label}
               href={item.to}
+              onClick={(event) => {
+                event.preventDefault();
+                setActiveSection(item.to);
+                scrollToLandingSection(item.to);
+              }}
               className={`text-label-md font-semibold transition-colors ${
-                item.label === 'Home'
-                  ? 'border-b-2 border-primary pb-1 text-primary'
+                item.to === activeSection
+                  ? 'text-primary'
                   : 'text-on-surface-variant hover:text-on-surface'
               }`}
             >
@@ -250,8 +345,8 @@ const LandingTopBar = ({
             </>
           )}
         </div>
-      </div>
-    </motion.header>
+      </header>
+    </div>
   );
 };
 

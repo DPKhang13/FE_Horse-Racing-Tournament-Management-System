@@ -2,9 +2,6 @@ import { useEffect, useMemo, useState } from 'react';
 import { BarChart3, CheckCircle2, Clock3 } from 'lucide-react';
 import { getApiErrorMessage } from '../../services/apiClient';
 import { betService, type BetItem } from '../../services/betService';
-import { predictionMockService } from '../../services/predictionMockService';
-
-const shouldUseMockData = import.meta.env.DEV;
 
 const formatPoints = (value: number) => new Intl.NumberFormat('en-US', {
   maximumFractionDigits: 0,
@@ -40,16 +37,12 @@ const ResultTrackingPage = () => {
         const data = await betService.getBets();
 
         if (isMounted) {
-          if (shouldUseMockData || data.length === 0) {
-            setTrackedResults(predictionMockService.getBets());
-          } else {
-            setTrackedResults(data);
-          }
+          setTrackedResults(data);
         }
       } catch (error) {
         if (isMounted) {
           setErrorMessage(getApiErrorMessage(error, 'Unable to load prediction results.'));
-          setTrackedResults(predictionMockService.getBets());
+          setTrackedResults([]);
         }
       } finally {
         if (isMounted) {

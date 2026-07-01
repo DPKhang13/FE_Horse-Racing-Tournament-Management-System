@@ -66,7 +66,7 @@ export type RaceResultListItem = {
   }>;
 };
 
-export type RankingCategory = 'horse' | 'jockey' | 'owner';
+export type RankingCategory = 'horse' | 'jockey';
 
 export type RankingEntry = {
   rank: number;

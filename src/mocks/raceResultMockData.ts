@@ -17,7 +17,7 @@ type MockRunner = {
   disqualified?: string;
 };
 
-const prizeByPosition = ['₫320,000,000', '₫160,000,000', '₫80,000,000'];
+const prizeByPosition = ['VND 320,000,000', 'VND 160,000,000', 'VND 80,000,000'];
 
 const createEntries = (raceId: string, runners: MockRunner[]): RaceResultEntry[] =>
   runners.map((runner, index) => {
@@ -87,12 +87,12 @@ const createResult = ({
     winnerHorse: winner?.horseName ?? '-',
     winnerJockey: winner?.jockeyName ?? '-',
     winnerTime: winner?.finishTime ?? '-',
-    totalPrizePool: '₫560,000,000',
+    totalPrizePool: 'VND 560,000,000',
     entries,
     prizeDistributions: [
-      { position: 1, amount: '₫320,000,000', label: 'Champion' },
-      { position: 2, amount: '₫160,000,000', label: 'Runner-up' },
-      { position: 3, amount: '₫80,000,000', label: 'Third place' },
+      { position: 1, amount: 'VND 320,000,000', label: 'Champion' },
+      { position: 2, amount: 'VND 160,000,000', label: 'Runner-up' },
+      { position: 3, amount: 'VND 80,000,000', label: 'Third place' },
     ],
   };
 };
@@ -236,14 +236,6 @@ const rankingEntries: Record<RankingCategory, RankingEntry[]> = {
     rankingEntry(5, 'jockey-305', 'Ava Le', 'JCK-2026-018', 260, 2, 8, '4-1-3'),
     rankingEntry(6, 'jockey-306', 'Oliver Dang', 'JCK-2026-011', 240, 1, 8, '2-4-1'),
   ],
-  owner: [
-    rankingEntry(1, 'owner-401', 'Nguyen Minh Racing', 'Golden Hoof Racing', 580, 5, 12, '1-2-1'),
-    rankingEntry(2, 'owner-402', 'Tran Gia Stable', 'City Lights Stable', 545, 4, 11, '1-1-4'),
-    rankingEntry(3, 'owner-403', 'Le Thanh Equestrian', 'Greenfield Stable', 490, 4, 12, '4-1-2'),
-    rankingEntry(4, 'owner-404', 'Pham Quang Racing', 'North Star Racing', 455, 3, 11, '2-4-1'),
-    rankingEntry(5, 'owner-405', 'Highland Horse Club', 'Highland Equestrian', 410, 2, 10, '1-2-3'),
-    rankingEntry(6, 'owner-406', 'Vu Bao Stable', 'Storm Chasers', 365, 2, 10, '5-3-2'),
-  ],
 };
 
 export const mockRankingBoards: Record<RankingCategory, RankingBoard> = {
@@ -260,12 +252,5 @@ export const mockRankingBoards: Record<RankingCategory, RankingBoard> = {
     season: '2026',
     lastUpdated: '2026-06-19T10:30:00+07:00',
     entries: rankingEntries.jockey,
-  },
-  owner: {
-    category: 'owner',
-    tournamentName: 'HTMS Overall Championship',
-    season: '2026',
-    lastUpdated: '2026-06-19T10:30:00+07:00',
-    entries: rankingEntries.owner,
   },
 };

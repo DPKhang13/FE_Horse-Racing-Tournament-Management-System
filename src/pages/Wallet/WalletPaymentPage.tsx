@@ -1,7 +1,23 @@
 import { useState, type FormEvent } from 'react';
+import { motion } from 'motion/react';
 import { CreditCard, ExternalLink } from 'lucide-react';
 import { getApiErrorMessage } from '../../services/apiClient';
 import { paymentService, type VnpayPaymentResponse } from '../../services/paymentService';
+
+// Animation variants
+const revealContainer = {
+  hidden: {},
+  visible: {
+    transition: {
+      staggerChildren: 0.12,
+    },
+  },
+};
+
+const revealUp = {
+  hidden: { opacity: 0, y: 28 },
+  visible: { opacity: 1, y: 0 },
+};
 
 const WalletPaymentPage = () => {
   const [amount, setAmount] = useState(10000);
@@ -26,17 +42,37 @@ const WalletPaymentPage = () => {
   return (
     <div className="min-h-screen bg-surface py-12">
       <div className="mx-auto max-w-container px-4 md:px-margin-desktop">
-        <div className="mb-10">
+        <motion.div 
+          className="mb-10"
+          initial="hidden"
+          animate="visible"
+          variants={revealUp}
+        >
           <p className="text-xs font-semibold uppercase tracking-[0.2em] text-secondary">Wallet</p>
           <h1 className="mt-2 text-headline-lg font-bold text-primary">VNPay top-up</h1>
-        </div>
+        </motion.div>
 
         {errorMessage && (
-          <div className="mb-6 rounded-md border border-error/30 bg-error-container/20 px-4 py-3 text-body-sm font-semibold text-error">{errorMessage}</div>
+          <motion.div 
+            initial="hidden"
+            animate="visible"
+            variants={revealUp}
+            className="mb-6 rounded-md border border-error/30 bg-error-container/20 px-4 py-3 text-body-sm font-semibold text-error"
+          >
+            {errorMessage}
+          </motion.div>
         )}
 
-        <div className="grid gap-8 xl:grid-cols-[0.75fr_1.25fr]">
-          <section className="rounded-xl border border-outline-variant bg-white p-6 shadow-sm">
+        <motion.div 
+          className="grid gap-8 xl:grid-cols-[0.75fr_1.25fr]"
+          initial="hidden"
+          animate="visible"
+          variants={revealContainer}
+        >
+          <motion.section 
+            className="rounded-xl border border-outline-variant bg-white p-6 shadow-sm"
+            variants={revealUp}
+          >
             <div className="mb-5 flex items-center gap-3">
               <CreditCard className="h-5 w-5 text-secondary" />
               <h2 className="text-title-large font-bold text-primary">Create payment</h2>
@@ -62,11 +98,20 @@ const WalletPaymentPage = () => {
                   <option value="en">English</option>
                 </select>
               </label>
-              <button className="rounded-md bg-secondary px-5 py-3 text-body-sm font-bold text-white hover:bg-opacity-90">Create VNPay URL</button>
+              <motion.button 
+                className="rounded-md bg-secondary px-5 py-3 text-body-sm font-bold text-white hover:bg-opacity-90"
+                whileHover={{ y: -1, scale: 1.01 }}
+                whileTap={{ scale: 0.98 }}
+              >
+                Create VNPay URL
+              </motion.button>
             </form>
-          </section>
+          </motion.section>
 
-          <section className="rounded-xl border border-outline-variant bg-white p-6 shadow-sm">
+          <motion.section 
+            className="rounded-xl border border-outline-variant bg-white p-6 shadow-sm"
+            variants={revealUp}
+          >
             <h2 className="mb-5 text-title-large font-bold text-primary">Payment response</h2>
             {payment ? (
               <div className="space-y-4">
@@ -75,10 +120,15 @@ const WalletPaymentPage = () => {
                   <p className="mt-2 text-body-md font-semibold text-primary">{payment.transactionRef ?? '-'}</p>
                 </div>
                 {payment.paymentUrl && (
-                  <a href={payment.paymentUrl} className="inline-flex items-center gap-2 rounded-md bg-primary px-5 py-3 text-body-sm font-bold text-on-primary hover:bg-opacity-90">
+                  <motion.a 
+                    href={payment.paymentUrl} 
+                    className="inline-flex items-center gap-2 rounded-md bg-primary px-5 py-3 text-body-sm font-bold text-on-primary hover:bg-opacity-90"
+                    whileHover={{ y: -1, scale: 1.01 }}
+                    whileTap={{ scale: 0.98 }}
+                  >
                     Open VNPay
                     <ExternalLink className="h-4 w-4" />
-                  </a>
+                  </motion.a>
                 )}
               </div>
             ) : (
@@ -86,8 +136,8 @@ const WalletPaymentPage = () => {
                 Create a payment to receive the VNPay redirect URL and transaction reference.
               </div>
             )}
-          </section>
-        </div>
+          </motion.section>
+        </motion.div>
       </div>
     </div>
   );

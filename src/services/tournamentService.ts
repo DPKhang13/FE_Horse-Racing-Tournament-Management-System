@@ -33,6 +33,9 @@ export type RefereeAssignmentItem = {
   refereeId?: number;
   refereeRole?: string;
   refereeFullName?: string;
+  refereeUsername?: string;
+  refereeUserId?: number;
+  assignedAt?: string;
   status?: string;
 };
 
@@ -134,7 +137,15 @@ const parseCurrencyAmount = (value: unknown) => {
 };
 
 const normalizeTournamentStatus = (value: unknown): TournamentStatus => {
-  const normalizedValue = asString(value, 'Upcoming').trim().toLowerCase();
+  const normalizedValue = asString(value, 'Upcoming').trim().toLowerCase().replace(/[_-]+/g, ' ');
+
+  if (normalizedValue.includes('registration') && normalizedValue.includes('open')) {
+    return 'Registration Open';
+  }
+
+  if (normalizedValue.includes('registration') && normalizedValue.includes('closed')) {
+    return 'Registration Closed';
+  }
 
   if (normalizedValue.includes('ongoing') || normalizedValue === 'active') {
     return 'Ongoing';
@@ -176,6 +187,14 @@ const cleanTournamentPayload = (data: TournamentPayloadData) => ({
   endDate: data.endDate,
   prizePool: isManagementTournamentData(data) ? parseCurrencyAmount(data.prize) : Number(data.prizePool),
   status: data.status.trim(),
+});
+
+const cleanTournamentUpdatePayload = (data: TournamentPayloadData) => ({
+  name: (isManagementTournamentData(data) ? data.tournamentName : data.name).trim(),
+  location: data.location.trim(),
+  startDate: data.startDate,
+  endDate: data.endDate,
+  prizePool: isManagementTournamentData(data) ? parseCurrencyAmount(data.prize) : Number(data.prizePool),
 });
 
 const mapParticipants = (value: unknown): TournamentParticipant[] => {
@@ -250,6 +269,8 @@ const mapApiTournament = (raw: RawTournament, index: number): Tournament => {
     entryFee: asNumber(raw.entryFee),
     prize: asString(raw.prize ?? raw.prizeName, formatCurrency(prizePool)),
     status: normalizeTournamentStatus(raw.status),
+    registrationOpenAt: raw.registrationOpenAt ? asString(raw.registrationOpenAt) : undefined,
+    registrationCloseAt: raw.registrationCloseAt ? asString(raw.registrationCloseAt) : undefined,
     rulesNotes: asString(raw.rulesNotes ?? raw.note, '-'),
     participants,
     schedule: mapApiMatches(raw.schedule ?? raw.schedules ?? raw.matches, startDate),
@@ -462,6 +483,8 @@ const buildTournamentFromData = (
     entryFee: isManagementTournamentData(data) ? Number(data.entryFee) : existingTournament?.entryFee ?? 0,
     prize: isManagementTournamentData(data) ? data.prize.trim() : formatCurrency(prizePool),
     status: normalizeTournamentStatus(data.status),
+    registrationOpenAt: isManagementTournamentData(data) ? data.registrationOpenAt : existingTournament?.registrationOpenAt,
+    registrationCloseAt: isManagementTournamentData(data) ? data.registrationCloseAt : existingTournament?.registrationCloseAt,
     rulesNotes: isManagementTournamentData(data) ? data.rulesNotes.trim() : existingTournament?.rulesNotes ?? '',
     participants: existingTournament?.participants.map((participant) => ({ ...participant })) ?? [],
     schedule: existingTournament?.schedule.map((match) => ({ ...match })) ?? [],
@@ -593,7 +616,7 @@ export const tournamentService = {
 
   async updateTournament(tournamentId: number | string, data: TournamentPayloadData, useMockFallback = false): Promise<Tournament> {
     try {
-      const response = await apiClient.put(`/api/tournaments/update-tournament/${tournamentId}`, cleanTournamentPayload(data));
+      const response = await apiClient.put(`/api/tournaments/update-tournament/${tournamentId}`, cleanTournamentUpdatePayload(data));
       const apiTournament = mapApiTournament(unwrapApiData<RawTournament>(response), 0);
       return buildTournamentFromData(data, apiTournament.tournamentId, apiTournament);
     } catch (error) {
@@ -629,6 +652,38 @@ export const tournamentService = {
     }
   },
 
+  async openRegistration(
+    tournamentId: number | string,
+    data: { registrationOpenAt?: string; registrationCloseAt: string },
+  ): Promise<Tournament> {
+    await apiClient.patch(`/api/v1/admin/tournaments/${tournamentId}/open-registration`, {
+      registrationOpenAt: data.registrationOpenAt || undefined,
+      registrationCloseAt: data.registrationCloseAt,
+    });
+    return this.getTournamentById(tournamentId);
+  },
+
+  async closeRegistration(
+    tournamentId: number | string,
+    data: { autoRejectPending?: boolean; autoCancelUnconfirmed?: boolean } = {},
+  ): Promise<Tournament> {
+    await apiClient.patch(`/api/v1/admin/tournaments/${tournamentId}/close-registration`, {
+      autoRejectPending: data.autoRejectPending ?? false,
+      autoCancelUnconfirmed: data.autoCancelUnconfirmed ?? false,
+    });
+    return this.getTournamentById(tournamentId);
+  },
+
+  async startTournament(tournamentId: number | string): Promise<Tournament> {
+    await apiClient.patch(`/api/v1/admin/tournaments/${tournamentId}/start`);
+    return this.getTournamentById(tournamentId);
+  },
+
+  async completeTournament(tournamentId: number | string): Promise<Tournament> {
+    await apiClient.patch(`/api/v1/admin/tournaments/${tournamentId}/complete`);
+    return this.getTournamentById(tournamentId);
+  },
+
   async getTournamentSchedule(tournamentId: number | string): Promise<TournamentMatch[]> {
     try {
       const response = await apiClient.get(`/api/v1/admin/tournaments/${tournamentId}/get-schedule-list`);
@@ -639,12 +694,12 @@ export const tournamentService = {
   },
 
   async getPrizes(tournamentId: number | string): Promise<PrizeItem[]> {
-    const response = await apiClient.get(`/api/v1/admin/tournaments/getId/${tournamentId}`);
+    const response = await apiClient.get(`/api/v1/admin/tournaments/${tournamentId}/get-prizes`);
     return unwrapApiList<PrizeItem>(response);
   },
 
   async createPrizes(tournamentId: number | string, prizes: PrizeItem[]): Promise<PrizeItem[]> {
-    const response = await apiClient.post(`/api/v1/admin/tournaments/create/${tournamentId}`, {
+    const response = await apiClient.post(`/api/v1/admin/tournaments/${tournamentId}/create-prizes`, {
       prizes: prizes.map((prize) => ({
         finishPosition: Number(prize.finishPosition),
         prizeName: prize.prizeName.trim(),
@@ -656,12 +711,12 @@ export const tournamentService = {
   },
 
   async getRaceReferees(raceId: number | string): Promise<RefereeAssignmentItem[]> {
-    const response = await apiClient.get(`/api/v1/admin/races/${raceId}/referees`);
+    const response = await apiClient.get(`/api/v1/admin/races/${raceId}/get-referee-assignment-list`);
     return unwrapApiList<RefereeAssignmentItem>(response);
   },
 
   async assignReferee(raceId: number | string, refereeId: number, refereeRole: string): Promise<RefereeAssignmentItem> {
-    const response = await apiClient.post(`/api/v1/admin/races/${raceId}/referees`, {
+    const response = await apiClient.post(`/api/v1/admin/races/${raceId}/create-referee-assignment`, {
       refereeId: Number(refereeId),
       refereeRole: refereeRole.trim(),
     });
