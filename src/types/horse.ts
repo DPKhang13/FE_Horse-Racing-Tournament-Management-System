@@ -1,7 +1,7 @@
 export type HorseStatus = 'active' | 'inactive' | 'deleted' | string;
 
 export type Horse = {
-  id: number;
+  id: string;
   horseId: number;
   ownerId?: number;
   name: string;
@@ -21,23 +21,14 @@ export type Horse = {
   ownerLicenseNumber?: string;
 };
 
-export type RankedHorse = Horse & {
-  rank: number;
-};
-
 export type HorseFormData = {
-  ownerId: number | '';
   name: string;
   breed: string;
   age: number;
   weightKg: number;
   rankGroup: string;
+  rankingPoints: number;
   avatarUrl: string;
-  rankingPoints?: number;
-  totalWins?: number;
-  status?: HorseStatus;
-};
-
-export type HorseCountResponse = {
-  horseCount: number;
+  totalWins: number;
+  status: HorseStatus;
 };
