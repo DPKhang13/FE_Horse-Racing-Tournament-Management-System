@@ -92,7 +92,7 @@ export const navigationItems: NavigationItem[] = [
   { label: 'Prediction', to: '/prediction', allowedRoles: ['spectator'], requiresAuth: true },
   { label: 'Wallet', to: '/wallet', allowedRoles: ['spectator'], requiresAuth: true },
   { label: 'Results', to: '/results', allowedRoles: AUTHENTICATED_ROLES, requiresAuth: true },
-  { label: 'Horses', to: '/horses', allowedRoles: ['admin', 'horse_owner'], requiresAuth: true },
+  { label: 'Horses', to: '/horses', allowedRoles: ['horse_owner'], requiresAuth: true },
   { label: 'Tracking', to: '/tracking', allowedRoles: ['spectator'], requiresAuth: true },
   { label: 'Notifications', to: '/notifications', allowedRoles: AUTHENTICATED_ROLES, requiresAuth: true },
 ];
