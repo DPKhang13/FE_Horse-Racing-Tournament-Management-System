@@ -83,6 +83,7 @@ export const navigationItems: NavigationItem[] = [
   { label: 'Home', to: '/' },
   { label: 'Dashboard', to: '/spectator-dashboard', allowedRoles: ['spectator'], requiresAuth: true },
   { label: 'Dashboard', to: '/admin-ops', allowedRoles: ['admin'], requiresAuth: true },
+  { label: 'Users', to: '/admin/users', allowedRoles: ['admin'], requiresAuth: true },
   { label: 'Dashboard', to: '/owner-dashboard', allowedRoles: ['horse_owner'], requiresAuth: true },
   { label: 'Tournaments', to: '/tournaments', allowedRoles: ['admin'], requiresAuth: true },
   { label: 'Horses', to: '/admin/horses', allowedRoles: ['admin'], requiresAuth: true },

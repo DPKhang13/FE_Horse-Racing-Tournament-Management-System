@@ -24,6 +24,7 @@ import NotificationsPage from '../pages/Notifications/NotificationsPage';
 import WalletPaymentPage from '../pages/Wallet/WalletPaymentPage';
 import TournamentManagementPage from '../pages/Tournament/TournamentManagementPage';
 import TournamentSchedulePage from '../pages/Tournament/TournamentSchedulePage';
+import UserManagementPage from '../pages/Admin/UserManagementPage';
 import OwnerDashboardPage from '../pages/Owner/OwnerDashboardPage';
 
 const withLayout = (page: ReactNode) => <MainLayout>{page}</MainLayout>;
@@ -57,6 +58,7 @@ const AppRoutes = () => {
       <Route path="/profile" element={protectedPage(<UserProfilePage />)} />
       <Route path="/admin-ops" element={protectedPage(<AdminOperationsPage />, ['admin'])} />
       <Route path="/admin/horses" element={protectedPage(<AdminHorseManagementPage />, ['admin'])} />
+      <Route path="/admin/users" element={protectedPage(<UserManagementPage />, ['admin'])} />
       <Route path="/tournaments" element={protectedPage(<TournamentManagementPage />, ['admin'])} />
       <Route path="/tournaments/:tournamentId/schedule" element={protectedPage(<TournamentSchedulePage />, ['admin'])} />
       <Route path="/registrations" element={protectedPage(<RaceRegistrationPage />, ['horse_owner', 'admin', 'race_referee'])} />
