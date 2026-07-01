@@ -154,7 +154,11 @@ const RankingPage = () => {
                 {categoryOptions.find((option) => option.value === category)?.label} Rankings
               </h2>
             </div>
-            <RankingTable entries={rankingBoard.entries} showSubtitle={category !== 'jockey'} />
+            <RankingTable
+              entries={rankingBoard.entries}
+              formLabel={category === 'jockey' ? 'Kinh nghiệm' : 'Form'}
+              showSubtitle={category !== 'jockey'}
+            />
           </section>
         ) : (
           <div className="rounded-lg border border-outline-variant bg-white p-12 text-center">

@@ -16,6 +16,7 @@ type RawObject = Record<string, unknown>;
 const betOptionsByRaceId = new Map<string, Promise<RawObject[]>>();
 const prizesByTournamentId = new Map<string, Promise<RawObject[]>>();
 const raceDetailsByRaceId = new Map<string, Promise<RawObject | undefined>>();
+const publicResultsByRaceId = new Map<string, Promise<RawObject[]>>();
 
 const asString = (value: unknown, fallback = '') => {
   if (value === null || value === undefined) {
@@ -89,6 +90,21 @@ const formatPrizeAmount = (value: unknown) => {
   return Number.isFinite(amount) && amount > 0 ? formatCurrency(amount) : undefined;
 };
 
+const normalizeWinRate = (value: unknown, totalWins: number, totalRaces: number) => {
+  const apiRate = Number(value);
+
+  if (Number.isFinite(apiRate) && apiRate > 0) {
+    const percentage = apiRate <= 1 ? apiRate * 100 : apiRate;
+    return Math.round(percentage * 10) / 10;
+  }
+
+  if (totalRaces <= 0) {
+    return 0;
+  }
+
+  return Math.round((totalWins / totalRaces) * 1000) / 10;
+};
+
 const mapEntry = (raw: RawObject): RaceResultEntry => ({
   id: asString(raw.resultId ?? raw.id),
   assignmentId: asString(raw.assignmentId),
@@ -147,6 +163,58 @@ const mapSummary = (raw: RawObject): RaceResultSummary => {
   };
 };
 
+const getResultSortId = (raw: RawObject) => asNumber(raw.resultId ?? raw.id, Number.MAX_SAFE_INTEGER);
+
+const groupResultsByRace = (results: RawObject[]) => {
+  const groupedResults = new Map<string, RawObject>();
+
+  results.forEach((result) => {
+    const raceKey = asString(result.raceId || result.resultId || result.id);
+    const currentGroup = groupedResults.get(raceKey);
+
+    if (!currentGroup) {
+      groupedResults.set(raceKey, {
+        ...result,
+        entries: [result],
+      });
+      return;
+    }
+
+    const currentEntries = Array.isArray(currentGroup.entries)
+      ? currentGroup.entries.filter((entry): entry is RawObject => Boolean(entry) && typeof entry === 'object')
+      : [];
+    const nextEntries = [...currentEntries, result].sort((a, b) => {
+      const positionDiff = asNumber(a.finishPosition, 999) - asNumber(b.finishPosition, 999);
+      return positionDiff || getResultSortId(a) - getResultSortId(b);
+    });
+    const representativeResult = nextEntries.reduce((best, entry) =>
+      getResultSortId(entry) < getResultSortId(best) ? entry : best,
+    nextEntries[0]);
+
+    groupedResults.set(raceKey, {
+      ...currentGroup,
+      ...representativeResult,
+      raceId: currentGroup.raceId ?? representativeResult.raceId,
+      raceName: currentGroup.raceName ?? representativeResult.raceName,
+      raceNumber: currentGroup.raceNumber ?? representativeResult.raceNumber,
+      tournamentName: currentGroup.tournamentName ?? representativeResult.tournamentName,
+      location: currentGroup.location ?? representativeResult.location,
+      scheduledAt: currentGroup.scheduledAt ?? representativeResult.scheduledAt,
+      publishedAt: currentGroup.publishedAt ?? representativeResult.publishedAt,
+      prizeDistributions: currentGroup.prizeDistributions ?? representativeResult.prizeDistributions,
+      prizePool: currentGroup.prizePool ?? representativeResult.prizePool,
+      entries: nextEntries,
+    });
+  });
+
+  return Array.from(groupedResults.values()).sort((a, b) => {
+    const dateDiff = new Date(asString(b.scheduledAt ?? b.recordedAt ?? b.publishedAt)).getTime()
+      - new Date(asString(a.scheduledAt ?? a.recordedAt ?? a.publishedAt)).getTime();
+
+    return dateDiff || asNumber(b.raceNumber) - asNumber(a.raceNumber);
+  });
+};
+
 const toListItem = (summary: RaceResultSummary): RaceResultListItem => ({
   id: summary.id,
   raceId: summary.raceId,
@@ -159,7 +227,7 @@ const toListItem = (summary: RaceResultSummary): RaceResultListItem => ({
   publishedAt: summary.publishedAt,
   totalPrizePool: summary.totalPrizePool,
   topFinishers: summary.entries
-    .filter((entry) => entry.finishPosition !== null && entry.finishPosition <= 3)
+    .filter((entry) => entry.finishPosition !== null)
     .map((entry) => ({
       rank: entry.finishPosition as number,
       horseName: entry.horseName,
@@ -191,22 +259,33 @@ const filterResults = (items: RaceResultListItem[], filters: RaceResultFilters =
   });
 };
 
-const mapRankingEntry = (raw: RawObject, index: number, category: RankingCategory): RankingEntry => ({
-  rank: asNumber(raw.rank, index + 1),
-  entityId: asString(raw.horseId ?? raw.jockeyId ?? raw.ownerId ?? raw.id),
-  name: asString(raw.horseName ?? raw.jockeyFullName ?? raw.ownerFullName ?? raw.name ?? raw.fullName, '-'),
-  subtitle:
-    category === 'horse'
-      ? asString(raw.ownerStableName ?? raw.ownerFullName)
-      : raw.licenseNumber
-        ? asString(raw.licenseNumber)
+const mapRankingEntry = (raw: RawObject, index: number, category: RankingCategory): RankingEntry => {
+  const totalWins = asNumber(raw.totalWins);
+  const totalRaces = asNumber(raw.totalRaces);
+
+  return {
+    rank: asNumber(raw.rank, index + 1),
+    entityId: asString(raw.horseId ?? raw.jockeyId ?? raw.ownerId ?? raw.id),
+    name: asString(raw.horseName ?? raw.jockeyFullName ?? raw.ownerFullName ?? raw.name ?? raw.fullName, '-'),
+    subtitle:
+      category === 'horse'
+        ? asString(raw.ownerStableName ?? raw.ownerFullName)
+        : raw.licenseNumber
+          ? asString(raw.licenseNumber)
+          : undefined,
+    totalPoints: asNumber(raw.rankingPoints ?? raw.totalPoints),
+    totalWins,
+    totalRaces,
+    winRate: normalizeWinRate(raw.winRate, totalWins, totalRaces),
+    recentForm: category === 'jockey'
+      ? raw.experienceYears === undefined
+        ? undefined
+        : `${asNumber(raw.experienceYears)} năm`
+      : raw.rankGroup
+        ? asString(raw.rankGroup)
         : undefined,
-  totalPoints: asNumber(raw.rankingPoints ?? raw.totalPoints),
-  totalWins: asNumber(raw.totalWins),
-  totalRaces: asNumber(raw.totalRaces),
-  winRate: asNumber(raw.winRate),
-  recentForm: raw.rankGroup ? asString(raw.rankGroup) : undefined,
-});
+  };
+};
 
 const getBetOptionsByRaceId = (raceId: string) => {
   const cachedOptions = betOptionsByRaceId.get(raceId);
@@ -221,6 +300,22 @@ const getBetOptionsByRaceId = (raceId: string) => {
     .catch(() => []);
 
   betOptionsByRaceId.set(raceId, request);
+  return request;
+};
+
+const getPublicResultsByRaceId = (raceId: string) => {
+  const cachedResults = publicResultsByRaceId.get(raceId);
+
+  if (cachedResults) {
+    return cachedResults;
+  }
+
+  const request = apiClient
+    .get(`/api/v1/races/${raceId}/results/public/get`)
+    .then((response) => unwrapApiList<RawObject>(response))
+    .catch(() => []);
+
+  publicResultsByRaceId.set(raceId, request);
   return request;
 };
 
@@ -321,6 +416,24 @@ const findMatchingBetOption = (result: RawObject, options: RawObject[]) => {
   });
 };
 
+const findMatchingRaceResult = (result: RawObject, results: RawObject[]) => {
+  const resultId = asString(result.resultId ?? result.id);
+  const assignmentId = asString(result.assignmentId);
+  const horseId = asString(result.horseId);
+
+  return results.find((item) => {
+    const itemResultId = asString(item.resultId ?? item.id);
+    const itemAssignmentId = asString(item.assignmentId);
+    const itemHorseId = asString(item.horseId);
+
+    return (
+      (resultId && itemResultId === resultId) ||
+      (assignmentId && itemAssignmentId === assignmentId) ||
+      (horseId && itemHorseId === horseId)
+    );
+  });
+};
+
 const enrichResultWithDetail = async (raw: RawObject): Promise<RawObject> => {
   const resultId = asString(raw.resultId ?? raw.id);
 
@@ -329,8 +442,12 @@ const enrichResultWithDetail = async (raw: RawObject): Promise<RawObject> => {
   }
 
   try {
-    const response = await apiClient.get(`/api/race-results/get-by-id/${resultId}`);
-    const detail = unwrapApiData<RawObject>(response);
+    const raceIdFromList = asString(raw.raceId);
+    const publicResults = raceIdFromList ? await getPublicResultsByRaceId(raceIdFromList) : [];
+    const publicDetail = findMatchingRaceResult(raw, publicResults);
+    const detail: RawObject = publicDetail ?? await apiClient
+      .get(`/api/race-results/get-by-id/${resultId}`)
+      .then((response) => unwrapApiData<RawObject>(response));
     const mergedResult: RawObject = {
       ...raw,
       ...detail,
@@ -361,7 +478,7 @@ export const raceResultService = {
     const response = await apiClient.get('/api/race-results/get-all');
     const results = unwrapApiList<RawObject>(response);
     const enrichedResults = await Promise.all(results.map(enrichResultWithDetail));
-    return enrichedResults.map(mapSummary);
+    return groupResultsByRace(enrichedResults).map(mapSummary);
   },
 
   async getRaceResultList(filters: RaceResultFilters = {}): Promise<RaceResultListItem[]> {
@@ -372,20 +489,32 @@ export const raceResultService = {
   async getRaceResultById(id: string): Promise<RaceResultSummary> {
     const response = await apiClient.get(`/api/race-results/get-by-id/${id}`);
     const result = unwrapApiData<RawObject>(response);
+    const detailRaceId = asString(result.raceId);
+    const publicResults = detailRaceId ? await getPublicResultsByRaceId(detailRaceId) : [];
+    const allResultsResponse = publicResults.length > 0
+      ? undefined
+      : await apiClient.get('/api/race-results/get-all');
+    const allResults = allResultsResponse ? unwrapApiList<RawObject>(allResultsResponse) : [];
+    const sameRaceResults = publicResults.length > 0
+      ? publicResults
+      : allResults.filter((item) => asString(item.raceId) === detailRaceId);
+    const detailEntries = sameRaceResults.length > 0 ? sameRaceResults : [result];
+    const enrichedEntries = await Promise.all(detailEntries.map(enrichResultWithDetail));
+    const groupedResult = groupResultsByRace(enrichedEntries)[0] ?? result;
     const raceId = asString(result.raceId);
     const options = raceId ? await getBetOptionsByRaceId(raceId) : [];
     const matchingOption = findMatchingBetOption(result, options);
-    const tournamentId = await resolveTournamentId(result);
+    const tournamentId = await resolveTournamentId(groupedResult);
     const prizes = tournamentId ? await getPrizesByTournamentId(tournamentId) : [];
     const matchingPrize = findMatchingPrize(result, prizes);
 
     return mapSummary({
-      ...result,
-      tournamentId: result.tournamentId ?? tournamentId,
-      odds: result.odds ?? matchingOption?.currentRate ?? matchingOption?.betRate,
-      prizeAmount: result.prizeAmount ?? matchingPrize?.amount,
+      ...groupedResult,
+      tournamentId: groupedResult.tournamentId ?? tournamentId,
+      odds: groupedResult.odds ?? matchingOption?.currentRate ?? matchingOption?.betRate,
+      prizeAmount: groupedResult.prizeAmount ?? matchingPrize?.amount,
       prizeDistributions: mapPrizeDistributions(prizes),
-      prizePool: result.prizePool ?? getPrizePool(prizes),
+      prizePool: groupedResult.prizePool ?? getPrizePool(prizes),
     });
   },
 
