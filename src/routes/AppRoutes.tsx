@@ -48,6 +48,7 @@ const AppRoutes = () => {
       <Route path="/results" element={protectedPage(<RaceResultList />)} />
       <Route path="/results/rankings" element={protectedPage(<RankingPage />)} />
       <Route path="/results/:resultId" element={protectedPage(<RaceResultDetail />)} />
+      <Route path="/horses" element={protectedPage(<HorseManagementPage />, ['admin', 'horse_owner'])} />
       <Route path="/horses" element={protectedPage(<HorseManagementPage />, ['horse_owner'])} />
       <Route path="/owner-dashboard" element={protectedPage(<OwnerDashboardPage />, ['horse_owner'])} />
       <Route path="/spectator-dashboard" element={protectedPage(<SpectatorDashboard />, ['spectator'])} />
