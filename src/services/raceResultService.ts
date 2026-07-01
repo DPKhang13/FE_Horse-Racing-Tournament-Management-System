@@ -321,47 +321,67 @@ const findMatchingBetOption = (result: RawObject, options: RawObject[]) => {
   });
 };
 
-const enrichResultWithDetail = async (raw: RawObject): Promise<RawObject> => {
-  const resultId = asString(raw.resultId ?? raw.id);
+const getPublicResultsByRaceId = async (raceId: string): Promise<RawObject[]> => {
+  const response = await apiClient.get(`/api/v1/races/${raceId}/results/public/get`);
+  return unwrapApiList<RawObject>(response);
+};
 
-  if (!resultId) {
-    return raw;
+const buildPublishedSummary = async (raceId: string, results: RawObject[]): Promise<RaceResultSummary | null> => {
+  if (results.length === 0) {
+    return null;
   }
 
-  try {
-    const response = await apiClient.get(`/api/race-results/get-by-id/${resultId}`);
-    const detail = unwrapApiData<RawObject>(response);
-    const mergedResult: RawObject = {
-      ...raw,
-      ...detail,
-      resultId: raw.resultId ?? detail.resultId,
-    };
-    const raceId = asString(mergedResult.raceId);
-    const options = raceId ? await getBetOptionsByRaceId(raceId) : [];
-    const matchingOption = findMatchingBetOption(mergedResult, options);
-    const tournamentId = await resolveTournamentId(mergedResult);
-    const prizes = tournamentId ? await getPrizesByTournamentId(tournamentId) : [];
-    const matchingPrize = findMatchingPrize(mergedResult, prizes);
+  const [options, tournamentId] = await Promise.all([
+    getBetOptionsByRaceId(raceId),
+    resolveTournamentId(results[0]),
+  ]);
+  const prizes = tournamentId ? await getPrizesByTournamentId(tournamentId) : [];
+  const enrichedEntries = results.map((result) => {
+    const matchingOption = findMatchingBetOption(result, options);
+    const matchingPrize = findMatchingPrize(result, prizes);
 
     return {
-      ...mergedResult,
-      tournamentId: mergedResult.tournamentId ?? tournamentId,
-      odds: mergedResult.odds ?? matchingOption?.currentRate ?? matchingOption?.betRate,
-      prizeAmount: mergedResult.prizeAmount ?? matchingPrize?.amount,
-      prizeDistributions: mapPrizeDistributions(prizes),
-      prizePool: mergedResult.prizePool ?? getPrizePool(prizes),
+      ...result,
+      odds: result.odds ?? matchingOption?.currentRate ?? matchingOption?.betRate,
+      prizeAmount: result.prizeAmount ?? matchingPrize?.amount,
     };
-  } catch {
-    return raw;
-  }
+  });
+
+  return mapSummary({
+    ...results[0],
+    id: raceId,
+    raceId,
+    tournamentId: results[0].tournamentId ?? tournamentId,
+    entries: enrichedEntries,
+    prizeDistributions: mapPrizeDistributions(prizes),
+    prizePool: results[0].prizePool ?? getPrizePool(prizes),
+  });
 };
 
 export const raceResultService = {
   async getRaceResultSummaries(): Promise<RaceResultSummary[]> {
     const response = await apiClient.get('/api/race-results/get-all');
-    const results = unwrapApiList<RawObject>(response);
-    const enrichedResults = await Promise.all(results.map(enrichResultWithDetail));
-    return enrichedResults.map(mapSummary);
+    const raceIds = Array.from(
+      new Set(
+        unwrapApiList<RawObject>(response)
+          .filter((result) => normalizeStatus(result.status) === 'published')
+          .map((result) => asString(result.raceId))
+          .filter(Boolean),
+      ),
+    );
+
+    const summaries = await Promise.all(
+      raceIds.map(async (raceId) => {
+        try {
+          const results = await getPublicResultsByRaceId(raceId);
+          return await buildPublishedSummary(raceId, results);
+        } catch {
+          return null;
+        }
+      }),
+    );
+
+    return summaries.filter((summary): summary is RaceResultSummary => Boolean(summary));
   },
 
   async getRaceResultList(filters: RaceResultFilters = {}): Promise<RaceResultListItem[]> {
@@ -370,23 +390,14 @@ export const raceResultService = {
   },
 
   async getRaceResultById(id: string): Promise<RaceResultSummary> {
-    const response = await apiClient.get(`/api/race-results/get-by-id/${id}`);
-    const result = unwrapApiData<RawObject>(response);
-    const raceId = asString(result.raceId);
-    const options = raceId ? await getBetOptionsByRaceId(raceId) : [];
-    const matchingOption = findMatchingBetOption(result, options);
-    const tournamentId = await resolveTournamentId(result);
-    const prizes = tournamentId ? await getPrizesByTournamentId(tournamentId) : [];
-    const matchingPrize = findMatchingPrize(result, prizes);
+    const results = await getPublicResultsByRaceId(id);
+    const summary = await buildPublishedSummary(id, results);
 
-    return mapSummary({
-      ...result,
-      tournamentId: result.tournamentId ?? tournamentId,
-      odds: result.odds ?? matchingOption?.currentRate ?? matchingOption?.betRate,
-      prizeAmount: result.prizeAmount ?? matchingPrize?.amount,
-      prizeDistributions: mapPrizeDistributions(prizes),
-      prizePool: result.prizePool ?? getPrizePool(prizes),
-    });
+    if (!summary) {
+      throw new Error('Published results are not available for this race');
+    }
+
+    return summary;
   },
 
   async getRankingBoard(category: RankingCategory): Promise<RankingBoard | undefined> {
