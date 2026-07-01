@@ -1,4 +1,5 @@
 import { Activity, CalendarDays, Gauge, MapPin, Shield, Trophy, Users } from 'lucide-react';
+import heroImage from '../assets/hero.png';
 
 const highlights = [
   {
@@ -31,7 +32,7 @@ const Hero = () => {
         className="absolute inset-0 bg-cover bg-center opacity-45"
         style={{
           backgroundImage:
-            'linear-gradient(90deg, rgba(6,14,32,0.98) 0%, rgba(11,19,38,0.84) 45%, rgba(11,19,38,0.42) 100%), url("https://images.unsplash.com/photo-1599408162165-8b753ca992aa?auto=format&fit=crop&q=80&w=2200")',
+            `linear-gradient(90deg, rgba(6,14,32,0.98) 0%, rgba(11,19,38,0.84) 45%, rgba(11,19,38,0.42) 100%), url(${heroImage})`,
         }}
       />
       <div className="absolute inset-0 racing-grid opacity-70" />

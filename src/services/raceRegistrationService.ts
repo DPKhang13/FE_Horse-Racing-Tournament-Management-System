@@ -15,6 +15,7 @@ export type RaceRegistrationItem = {
   tournamentName?: string;
   raceName?: string;
   raceNumber?: number;
+  scheduledAt?: string;
   horseName?: string;
   ownerFullName?: string;
   ownerStableName?: string;
@@ -26,16 +27,22 @@ export type RaceRegistrationFormData = {
   tournamentId: number;
   raceId: number;
   horseId: number;
-  jockeyId?: number;
   status?: string;
   ownerConfirmationStatus?: string;
+};
+
+export type AdminRaceRegistrationApprovePayload = {
+  note?: string;
+};
+
+export type AdminRaceRegistrationRejectPayload = {
+  reason?: string;
 };
 
 const toPayload = (data: RaceRegistrationFormData) => ({
   tournamentId: Number(data.tournamentId),
   raceId: Number(data.raceId),
   horseId: Number(data.horseId),
-  jockeyId: data.jockeyId ? Number(data.jockeyId) : undefined,
 });
 
 const toUpdatePayload = (data: RaceRegistrationFormData) => ({
@@ -65,11 +72,13 @@ export const raceRegistrationService = {
     return unwrapApiData<RaceRegistrationItem>(response);
   },
 
-  async approve(id: number | string, status: string): Promise<RaceRegistrationItem> {
-    const response = await apiClient.put(`/api/race-registrations/approve/${id}`, {
-      status,
-      approvedAt: new Date().toISOString(),
-    });
+  async approve(id: number | string, payload: AdminRaceRegistrationApprovePayload = {}): Promise<RaceRegistrationItem> {
+    const response = await apiClient.patch(`/api/v1/admin/race-registrations/${id}/approve`, payload);
+    return unwrapApiData<RaceRegistrationItem>(response);
+  },
+
+  async reject(id: number | string, payload: AdminRaceRegistrationRejectPayload = {}): Promise<RaceRegistrationItem> {
+    const response = await apiClient.patch(`/api/v1/admin/race-registrations/${id}/reject`, payload);
     return unwrapApiData<RaceRegistrationItem>(response);
   },
 
