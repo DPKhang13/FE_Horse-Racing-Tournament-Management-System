@@ -17,6 +17,7 @@ import UserProfilePage from '../pages/Profile/UserProfilePage';
 import { AUTHENTICATED_ROLES } from '../utils/permissions';
 import AdminHorseManagementPage from '../pages/Admin/AdminHorseManagementPage';
 import AdminOperationsPage from '../pages/Admin/AdminOperationsPage';
+import RegistrationManagementPage from '../pages/Admin/RegistrationManagementPage';
 import RaceRegistrationPage from '../pages/Race/RaceRegistrationPage';
 import JockeyAssignmentsPage from '../pages/Race/JockeyAssignmentsPage';
 import RaceControlPage from '../pages/Race/RaceControlPage';
@@ -59,6 +60,8 @@ const AppRoutes = () => {
       <Route path="/admin-ops" element={protectedPage(<AdminOperationsPage />, ['admin'])} />
       <Route path="/admin/horses" element={protectedPage(<AdminHorseManagementPage />, ['admin'])} />
       <Route path="/admin/users" element={protectedPage(<UserManagementPage />, ['admin'])} />
+      <Route path="/admin/registrations" element={protectedPage(<RegistrationManagementPage />, ['admin'])} />
+      <Route path="/admin/race-registrations" element={protectedPage(<RegistrationManagementPage />, ['admin'])} />
       <Route path="/tournaments" element={protectedPage(<TournamentManagementPage />, ['admin'])} />
       <Route path="/tournaments/:tournamentId/schedule" element={protectedPage(<TournamentSchedulePage />, ['admin'])} />
       <Route path="/registrations" element={protectedPage(<RaceRegistrationPage />, ['horse_owner', 'admin', 'race_referee'])} />
