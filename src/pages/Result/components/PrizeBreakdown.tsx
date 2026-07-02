@@ -6,6 +6,10 @@ type PrizeBreakdownProps = {
 };
 
 const PrizeBreakdown = ({ distributions, totalPrizePool }: PrizeBreakdownProps) => {
+  const podiumPrizes = distributions
+    .filter((item) => item.position >= 1 && item.position <= 3)
+    .sort((a, b) => a.position - b.position);
+
   return (
     <section className="bg-white border border-outline-variant rounded-lg p-6">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
@@ -20,7 +24,7 @@ const PrizeBreakdown = ({ distributions, totalPrizePool }: PrizeBreakdownProps) 
       </div>
 
       <div className="space-y-3">
-        {distributions.map((item) => (
+        {podiumPrizes.map((item) => (
           <div
             key={item.position}
             className="flex items-center justify-between gap-4 rounded-lg border border-outline-variant bg-surface-container-lowest px-4 py-3 hover:border-secondary transition-colors"

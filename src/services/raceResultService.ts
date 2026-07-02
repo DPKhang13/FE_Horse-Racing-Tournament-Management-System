@@ -13,9 +13,9 @@ import type {
 
 type RawObject = Record<string, unknown>;
 
-const betOptionsByRaceId = new Map<string, Promise<RawObject[]>>();
 const prizesByTournamentId = new Map<string, Promise<RawObject[]>>();
 const raceDetailsByRaceId = new Map<string, Promise<RawObject | undefined>>();
+const publicResultsByRaceId = new Map<string, Promise<RawObject[]>>();
 
 const asString = (value: unknown, fallback = '') => {
   if (value === null || value === undefined) {
@@ -42,6 +42,16 @@ const formatCurrency = (value: unknown) => {
     currency: 'VND',
     maximumFractionDigits: 0,
   }).format(amount);
+};
+
+const formatPrizeDisplay = (value: unknown) => {
+  const amount = Number(value);
+
+  if (Number.isFinite(amount)) {
+    return formatCurrency(amount);
+  }
+
+  return value ? asString(value) : '-';
 };
 
 const formatFinishTime = (value: unknown) => {
@@ -89,6 +99,21 @@ const formatPrizeAmount = (value: unknown) => {
   return Number.isFinite(amount) && amount > 0 ? formatCurrency(amount) : undefined;
 };
 
+const normalizeWinRate = (value: unknown, totalWins: number, totalRaces: number) => {
+  const apiRate = Number(value);
+
+  if (Number.isFinite(apiRate) && apiRate > 0) {
+    const percentage = apiRate <= 1 ? apiRate * 100 : apiRate;
+    return Math.round(percentage * 10) / 10;
+  }
+
+  if (totalRaces <= 0) {
+    return 0;
+  }
+
+  return Math.round((totalWins / totalRaces) * 1000) / 10;
+};
+
 const mapEntry = (raw: RawObject): RaceResultEntry => ({
   id: asString(raw.resultId ?? raw.id),
   assignmentId: asString(raw.assignmentId),
@@ -105,7 +130,6 @@ const mapEntry = (raw: RawObject): RaceResultEntry => ({
   isDisqualified: Boolean(raw.isDisqualified),
   disqualificationReason: raw.disqualifyReason ? asString(raw.disqualifyReason) : undefined,
   prizeAmount: formatPrizeAmount(raw.prizeAmount),
-  odds: raw.odds ? asString(raw.odds) : undefined,
 });
 
 const mapSummary = (raw: RawObject): RaceResultSummary => {
@@ -114,6 +138,21 @@ const mapSummary = (raw: RawObject): RaceResultSummary => {
     .map((entry) => mapEntry(entry as RawObject))
     .sort((a, b) => (a.finishPosition ?? 999) - (b.finishPosition ?? 999));
   const winner = entries.find((entry) => entry.finishPosition === 1) ?? entries[0];
+  const prizePool = raw.totalPrizePool ?? raw.prizePool;
+  const prizeDistributions = Array.isArray(raw.prizeDistributions)
+    ? raw.prizeDistributions.map((prize) => {
+        const item = prize as RawObject;
+        const position = asNumber(item.finishPosition ?? item.position);
+
+        return {
+          position,
+          amount: formatPrizeDisplay(item.amount),
+          label: asString(item.prizeName ?? item.label, `Rank ${position}`),
+        };
+      })
+      .filter((prize) => prize.position > 0)
+      .sort((a, b) => a.position - b.position)
+    : [];
 
   return {
     id: asString(raw.resultId ?? raw.id ?? raw.raceId),
@@ -132,18 +171,9 @@ const mapSummary = (raw: RawObject): RaceResultSummary => {
     winnerHorse: winner?.horseName ?? '-',
     winnerJockey: winner?.jockeyName ?? '-',
     winnerTime: winner?.finishTime ?? '-',
-    totalPrizePool: formatCurrency(raw.totalPrizePool ?? raw.prizePool),
+    totalPrizePool: formatCurrency(prizePool),
     entries,
-    prizeDistributions: Array.isArray(raw.prizeDistributions)
-      ? raw.prizeDistributions.map((prize) => {
-          const item = prize as RawObject;
-          return {
-            position: asNumber(item.finishPosition),
-            amount: formatCurrency(item.amount),
-            label: asString(item.prizeName, `${item.finishPosition}`),
-          };
-        })
-      : [],
+    prizeDistributions,
   };
 };
 
@@ -159,13 +189,12 @@ const toListItem = (summary: RaceResultSummary): RaceResultListItem => ({
   publishedAt: summary.publishedAt,
   totalPrizePool: summary.totalPrizePool,
   topFinishers: summary.entries
-    .filter((entry) => entry.finishPosition !== null && entry.finishPosition <= 3)
+    .filter((entry) => entry.finishPosition !== null)
     .map((entry) => ({
       rank: entry.finishPosition as number,
       horseName: entry.horseName,
       jockeyName: entry.jockeyName,
       finishTime: entry.finishTime ?? '-',
-      odds: entry.odds,
     })),
 });
 
@@ -191,36 +220,47 @@ const filterResults = (items: RaceResultListItem[], filters: RaceResultFilters =
   });
 };
 
-const mapRankingEntry = (raw: RawObject, index: number, category: RankingCategory): RankingEntry => ({
-  rank: asNumber(raw.rank, index + 1),
-  entityId: asString(raw.horseId ?? raw.jockeyId ?? raw.ownerId ?? raw.id),
-  name: asString(raw.horseName ?? raw.jockeyFullName ?? raw.ownerFullName ?? raw.name ?? raw.fullName, '-'),
-  subtitle:
-    category === 'horse'
-      ? asString(raw.ownerStableName ?? raw.ownerFullName)
-      : raw.licenseNumber
-        ? asString(raw.licenseNumber)
+const mapRankingEntry = (raw: RawObject, index: number, category: RankingCategory): RankingEntry => {
+  const totalWins = asNumber(raw.totalWins);
+  const totalRaces = asNumber(raw.totalRaces);
+
+  return {
+    rank: asNumber(raw.rank, index + 1),
+    entityId: asString(raw.horseId ?? raw.jockeyId ?? raw.ownerId ?? raw.id),
+    name: asString(raw.horseName ?? raw.jockeyFullName ?? raw.ownerFullName ?? raw.name ?? raw.fullName, '-'),
+    subtitle:
+      category === 'horse'
+        ? asString(raw.ownerStableName ?? raw.ownerFullName)
+        : raw.licenseNumber
+          ? asString(raw.licenseNumber)
+          : undefined,
+    totalPoints: asNumber(raw.rankingPoints ?? raw.totalPoints),
+    totalWins,
+    totalRaces,
+    winRate: normalizeWinRate(raw.winRate, totalWins, totalRaces),
+    recentForm: category === 'jockey'
+      ? raw.experienceYears === undefined
+        ? undefined
+        : `${asNumber(raw.experienceYears)} năm`
+      : raw.rankGroup
+        ? asString(raw.rankGroup)
         : undefined,
-  totalPoints: asNumber(raw.rankingPoints ?? raw.totalPoints),
-  totalWins: asNumber(raw.totalWins),
-  totalRaces: asNumber(raw.totalRaces),
-  winRate: asNumber(raw.winRate),
-  recentForm: raw.rankGroup ? asString(raw.rankGroup) : undefined,
-});
+  };
+};
 
-const getBetOptionsByRaceId = (raceId: string) => {
-  const cachedOptions = betOptionsByRaceId.get(raceId);
+const getPublicResultsByRaceId = (raceId: string) => {
+  const cachedResults = publicResultsByRaceId.get(raceId);
 
-  if (cachedOptions) {
-    return cachedOptions;
+  if (cachedResults) {
+    return cachedResults;
   }
 
   const request = apiClient
-    .get(`/api/bet-options/get-by-race/${raceId}`)
+    .get(`/api/v1/races/${raceId}/results/public/get`)
     .then((response) => unwrapApiList<RawObject>(response))
     .catch(() => []);
 
-  betOptionsByRaceId.set(raceId, request);
+  publicResultsByRaceId.set(raceId, request);
   return request;
 };
 
@@ -306,43 +346,18 @@ const findMatchingPrize = (result: RawObject, prizes: RawObject[]) => {
   return prizes.find((prize) => asNumber(prize.finishPosition) === finishPosition);
 };
 
-const findMatchingBetOption = (result: RawObject, options: RawObject[]) => {
-  const horseId = asString(result.horseId);
-  const assignmentId = asString(result.assignmentId);
-
-  return options.find((option) => {
-    const optionHorseId = asString(option.horseId);
-    const optionAssignmentId = asString(option.assignmentId);
-
-    return (
-      (horseId && optionHorseId === horseId) ||
-      (assignmentId && optionAssignmentId === assignmentId)
-    );
-  });
-};
-
-const getPublicResultsByRaceId = async (raceId: string): Promise<RawObject[]> => {
-  const response = await apiClient.get(`/api/v1/races/${raceId}/results/public/get`);
-  return unwrapApiList<RawObject>(response);
-};
-
 const buildPublishedSummary = async (raceId: string, results: RawObject[]): Promise<RaceResultSummary | null> => {
   if (results.length === 0) {
     return null;
   }
 
-  const [options, tournamentId] = await Promise.all([
-    getBetOptionsByRaceId(raceId),
-    resolveTournamentId(results[0]),
-  ]);
+  const tournamentId = await resolveTournamentId(results[0]);
   const prizes = tournamentId ? await getPrizesByTournamentId(tournamentId) : [];
   const enrichedEntries = results.map((result) => {
-    const matchingOption = findMatchingBetOption(result, options);
     const matchingPrize = findMatchingPrize(result, prizes);
 
     return {
       ...result,
-      odds: result.odds ?? matchingOption?.currentRate ?? matchingOption?.betRate,
       prizeAmount: result.prizeAmount ?? matchingPrize?.amount,
     };
   });

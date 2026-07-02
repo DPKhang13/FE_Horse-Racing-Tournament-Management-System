@@ -1,4 +1,4 @@
-import { Routes, Route } from 'react-router-dom';
+import { Navigate, Routes, Route } from 'react-router-dom';
 import type { ReactNode } from 'react';
 import LandingPage from '../pages/Home/LandingPage';
 import SchedulePage from '../pages/Race/SchedulePage';
@@ -17,6 +17,8 @@ import UserProfilePage from '../pages/Profile/UserProfilePage';
 import { AUTHENTICATED_ROLES } from '../utils/permissions';
 import AdminHorseManagementPage from '../pages/Admin/AdminHorseManagementPage';
 import AdminOperationsPage from '../pages/Admin/AdminOperationsPage';
+import AdminRacesPage from '../pages/Admin/AdminRacesPage';
+import AdminSchedulePage from '../pages/Admin/AdminSchedulePage';
 import RaceRegistrationPage from '../pages/Race/RaceRegistrationPage';
 import JockeyAssignmentsPage from '../pages/Race/JockeyAssignmentsPage';
 import RaceControlPage from '../pages/Race/RaceControlPage';
@@ -59,6 +61,9 @@ const AppRoutes = () => {
       <Route path="/admin-ops" element={protectedPage(<AdminOperationsPage />, ['admin'])} />
       <Route path="/admin/horses" element={protectedPage(<AdminHorseManagementPage />, ['admin'])} />
       <Route path="/admin/users" element={protectedPage(<UserManagementPage />, ['admin'])} />
+      <Route path="/admin/schedule" element={protectedPage(<AdminSchedulePage />, ['admin'])} />
+      <Route path="/admin/races" element={protectedPage(<AdminRacesPage />, ['admin'])} />
+      <Route path="/admin/race-schedule" element={<Navigate to="/admin/schedule" replace />} />
       <Route path="/tournaments" element={protectedPage(<TournamentManagementPage />, ['admin'])} />
       <Route path="/tournaments/:tournamentId/schedule" element={protectedPage(<TournamentSchedulePage />, ['admin'])} />
       <Route path="/registrations" element={protectedPage(<RaceRegistrationPage />, ['horse_owner', 'admin', 'race_referee'])} />

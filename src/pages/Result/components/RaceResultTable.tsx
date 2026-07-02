@@ -38,16 +38,15 @@ const RaceResultTable = ({
           <tr>
             <th className="w-[9%] px-3 py-4 text-label-sm text-outline uppercase tracking-wider">Rank</th>
             <th className="w-[8%] px-3 py-4 text-label-sm text-outline uppercase tracking-wider">Gate</th>
-            <th className="w-[22%] px-3 py-4 text-label-sm text-outline uppercase tracking-wider">Horse</th>
-            <th className="w-[20%] px-3 py-4 text-label-sm text-outline uppercase tracking-wider">Jockey</th>
-            <th className="w-[13%] px-3 py-4 text-label-sm text-outline uppercase tracking-wider text-right">Time</th>
+            <th className="w-[24%] px-3 py-4 text-label-sm text-outline uppercase tracking-wider">Horse</th>
+            <th className="w-[22%] px-3 py-4 text-label-sm text-outline uppercase tracking-wider">Jockey</th>
+            <th className="w-[15%] px-3 py-4 text-label-sm text-outline uppercase tracking-wider text-right">Time</th>
             {showPoints && (
-              <th className="w-[9%] px-3 py-4 text-label-sm text-outline uppercase tracking-wider text-right">Points</th>
+              <th className="w-[10%] px-3 py-4 text-label-sm text-outline uppercase tracking-wider text-right">Points</th>
             )}
             {showPrize && (
-              <th className="w-[11%] px-3 py-4 text-label-sm text-outline uppercase tracking-wider text-right">Prize</th>
+              <th className="w-[12%] px-3 py-4 text-label-sm text-outline uppercase tracking-wider text-right">Prize</th>
             )}
-            <th className="w-[8%] px-3 py-4 text-label-sm text-outline uppercase tracking-wider text-right">Odds</th>
           </tr>
         </thead>
         <tbody className="divide-y divide-outline-variant">
@@ -106,11 +105,6 @@ const RaceResultTable = ({
                   </span>
                 </td>
               )}
-              <td className="px-3 py-4 text-right">
-                <span className="text-body-sm font-bold text-secondary tabular-nums">
-                  {entry.odds ?? '-'}
-                </span>
-              </td>
             </tr>
           ))}
         </tbody>
