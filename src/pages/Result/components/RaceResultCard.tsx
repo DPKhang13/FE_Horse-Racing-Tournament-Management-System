@@ -40,7 +40,7 @@ const RaceResultCard = ({ result }: RaceResultCardProps) => {
           <p className="text-label-sm text-on-primary-container uppercase tracking-wider">Prize Pool</p>
           <p className="text-body-lg font-bold text-secondary-container">{result.totalPrizePool}</p>
           <Link
-            to={`/results/${result.id}`}
+            to={`/results/${result.raceId}`}
             className="flex items-center gap-2 text-label-md font-bold text-secondary-container hover:text-white transition-colors mt-1"
           >
             FULL REPORT <ChevronRight className="w-4 h-4" />
@@ -56,7 +56,6 @@ const RaceResultCard = ({ result }: RaceResultCardProps) => {
               <th className="px-6 py-4 text-label-sm text-outline uppercase tracking-wider">Horse</th>
               <th className="px-6 py-4 text-label-sm text-outline uppercase tracking-wider">Jockey</th>
               <th className="px-6 py-4 text-label-sm text-outline uppercase tracking-wider text-right">Time</th>
-              <th className="px-6 py-4 text-label-sm text-outline uppercase tracking-wider text-right">Odds</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-outline-variant">
@@ -74,11 +73,6 @@ const RaceResultCard = ({ result }: RaceResultCardProps) => {
                 <td className="px-6 py-4 text-right">
                   <span className="text-body-sm font-medium text-on-surface-variant tabular-nums">
                     {finisher.finishTime}
-                  </span>
-                </td>
-                <td className="px-6 py-4 text-right">
-                  <span className="text-body-sm font-bold text-secondary tabular-nums">
-                    {finisher.odds ?? '-'}
                   </span>
                 </td>
               </tr>
