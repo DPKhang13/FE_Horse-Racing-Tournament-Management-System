@@ -17,6 +17,7 @@ const betOptionsByRaceId = new Map<string, Promise<RawObject[]>>();
 const prizesByTournamentId = new Map<string, Promise<RawObject[]>>();
 const raceDetailsByRaceId = new Map<string, Promise<RawObject | undefined>>();
 const publicResultsByRaceId = new Map<string, Promise<RawObject[]>>();
+let allBetOptionsRequest: Promise<RawObject[]> | undefined;
 
 const asString = (value: unknown, fallback = '') => {
   if (value === null || value === undefined) {
@@ -303,6 +304,19 @@ const mapRankingEntry = (raw: RawObject, index: number, category: RankingCategor
   };
 };
 
+const getAllBetOptions = () => {
+  if (allBetOptionsRequest) {
+    return allBetOptionsRequest;
+  }
+
+  allBetOptionsRequest = apiClient
+    .get('/api/bet-options/get-all')
+    .then((response) => unwrapApiList<RawObject>(response))
+    .catch(() => []);
+
+  return allBetOptionsRequest;
+};
+
 const getBetOptionsByRaceId = (raceId: string) => {
   const cachedOptions = betOptionsByRaceId.get(raceId);
 
@@ -310,10 +324,9 @@ const getBetOptionsByRaceId = (raceId: string) => {
     return cachedOptions;
   }
 
-  const request = apiClient
-    .get('/api/bet-options/get-all', { params: { raceId } })
-    .then((response) => unwrapApiList<RawObject>(response))
-    .catch(() => []);
+  const request = getAllBetOptions().then((options) =>
+    options.filter((option) => asString(option.raceId) === raceId),
+  );
 
   betOptionsByRaceId.set(raceId, request);
   return request;
