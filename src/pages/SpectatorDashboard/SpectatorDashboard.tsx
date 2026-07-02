@@ -54,11 +54,20 @@ const formatDateTime = (value?: string) => {
   }).format(new Date(value));
 };
 
+const formatRaceStatus = (status: string) => {
+  const value = status.toLowerCase();
+
+  if (value === 'registration_open') {
+    return 'Registering';
+  }
+
+  return status.replace(/_/g, ' ');
+};
+
 const SpectatorDashboard: React.FC = () => {
   const navigate = useNavigate();
   const [upcomingRaces, setUpcomingRaces] = useState<RaceScheduleItem[]>([]);
   const [myPredictions, setMyPredictions] = useState<BetItem[]>([]);
-  const [predictionBets, setPredictionBets] = useState<BetItem[]>([]);
   const [latestResults, setLatestResults] = useState<RaceResultListItem[]>([]);
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const [summaryCount, setSummaryCount] = useState<DashboardSummaryCount>();
@@ -84,7 +93,6 @@ const SpectatorDashboard: React.FC = () => {
           setSummaryCount(dashboard.summaryCount);
           setUpcomingRaces(dashboard.upcomingRaces.slice(0, 6));
           setMyPredictions(bets.slice(0, 5));
-          setPredictionBets(bets);
           setOpenPredictionRaceCount(openPredictionRaces.length);
           setLatestResults(dashboard.latestResults.slice(0, 5));
           setNotifications(dashboard.notifications.slice(0, 5));
@@ -96,7 +104,6 @@ const SpectatorDashboard: React.FC = () => {
           setOpenPredictionRaceCount(0);
           setUpcomingRaces(spectatorDashboardMockData.upcomingRaces);
           setMyPredictions(spectatorDashboardMockData.myPredictions);
-          setPredictionBets(spectatorDashboardMockData.myPredictions);
           setLatestResults(spectatorDashboardMockData.latestResults);
           setNotifications(spectatorDashboardMockData.notifications);
         }
@@ -134,23 +141,6 @@ const SpectatorDashboard: React.FC = () => {
       action: () => navigate('/notifications'),
     },
   ], [navigate, notifications.length, openPredictionRaceCount, summaryCount, upcomingRaces.length]);
-
-  const settledPayoutByRaceId = useMemo(() => {
-    return predictionBets.reduce((map, bet) => {
-      if (bet.raceId === undefined || bet.status.toLowerCase() === 'pending') {
-        return map;
-      }
-
-      const raceId = String(bet.raceId);
-      map.set(raceId, (map.get(raceId) ?? 0) + bet.potentialPayout);
-      return map;
-    }, new Map<string, number>());
-  }, [predictionBets]);
-
-  const getResultPayoutLabel = (raceId: string) => {
-    const payout = settledPayoutByRaceId.get(String(raceId));
-    return payout === undefined ? '-' : `${formatPoints(payout)} pts`;
-  };
 
   return (
     <main className="min-h-screen bg-surface text-on-surface">
@@ -235,9 +225,11 @@ const SpectatorDashboard: React.FC = () => {
                     whileHover={{ y: -4, scale: 1.02 }}
                     transition={{ delay: index * 0.08 }}
                   >
-                    <div className="flex items-center justify-between gap-3 text-xs text-on-surface-variant">
-                      <span>{race.tournamentName}</span>
-                      <span className="rounded-full bg-secondary-container/45 px-2 py-1 font-bold uppercase tracking-[0.12em] text-on-secondary-container">{race.status}</span>
+                    <div className="flex flex-wrap items-start justify-between gap-2 text-xs text-on-surface-variant">
+                      <span className="max-w-full break-words leading-5">{race.tournamentName}</span>
+                      <span className="shrink-0 rounded-full bg-secondary-container/45 px-2 py-1 font-bold uppercase tracking-[0.12em] text-on-secondary-container">
+                        {formatRaceStatus(race.status)}
+                      </span>
                     </div>
                     <h3 className="font-display mt-3 text-xl font-bold text-on-surface">{race.raceName}</h3>
                     <p className="mt-2 text-sm text-on-surface-variant">{race.rankGroup} / {race.trackType}</p>
@@ -310,9 +302,8 @@ const SpectatorDashboard: React.FC = () => {
                       </div>
                       <span className="rounded-full bg-secondary-container/45 px-2 py-1 text-xs font-bold uppercase tracking-[0.16em] text-on-secondary-container">{item.status}</span>
                     </div>
-                    <div className="mt-3 flex items-center justify-between text-sm text-on-surface-variant">
+                    <div className="mt-3 text-sm text-on-surface-variant">
                       <span>Finish time: {item.topFinishers[0]?.finishTime ?? '-'}</span>
-                      <strong className="text-primary">{getResultPayoutLabel(item.raceId)}</strong>
                     </div>
                     <p className="mt-2 text-xs uppercase tracking-[0.16em] text-outline">{formatDateTime(item.publishedAt ?? item.date)}</p>
                   </motion.article>
