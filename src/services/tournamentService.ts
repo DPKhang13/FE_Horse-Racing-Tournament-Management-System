@@ -33,6 +33,9 @@ export type RefereeAssignmentItem = {
   refereeId?: number;
   refereeRole?: string;
   refereeFullName?: string;
+  refereeUsername?: string;
+  refereeUserId?: number;
+  assignedAt?: string;
   status?: string;
 };
 
@@ -691,12 +694,12 @@ export const tournamentService = {
   },
 
   async getPrizes(tournamentId: number | string): Promise<PrizeItem[]> {
-    const response = await apiClient.get(`/api/v1/admin/tournaments/getId/${tournamentId}`);
+    const response = await apiClient.get(`/api/v1/admin/tournaments/${tournamentId}/get-prizes`);
     return unwrapApiList<PrizeItem>(response);
   },
 
   async createPrizes(tournamentId: number | string, prizes: PrizeItem[]): Promise<PrizeItem[]> {
-    const response = await apiClient.post(`/api/v1/admin/tournaments/create/${tournamentId}`, {
+    const response = await apiClient.post(`/api/v1/admin/tournaments/${tournamentId}/create-prizes`, {
       prizes: prizes.map((prize) => ({
         finishPosition: Number(prize.finishPosition),
         prizeName: prize.prizeName.trim(),
@@ -708,12 +711,12 @@ export const tournamentService = {
   },
 
   async getRaceReferees(raceId: number | string): Promise<RefereeAssignmentItem[]> {
-    const response = await apiClient.get(`/api/v1/admin/races/${raceId}/referees`);
+    const response = await apiClient.get(`/api/v1/admin/races/${raceId}/get-referee-assignment-list`);
     return unwrapApiList<RefereeAssignmentItem>(response);
   },
 
   async assignReferee(raceId: number | string, refereeId: number, refereeRole: string): Promise<RefereeAssignmentItem> {
-    const response = await apiClient.post(`/api/v1/admin/races/${raceId}/referees`, {
+    const response = await apiClient.post(`/api/v1/admin/races/${raceId}/create-referee-assignment`, {
       refereeId: Number(refereeId),
       refereeRole: refereeRole.trim(),
     });
