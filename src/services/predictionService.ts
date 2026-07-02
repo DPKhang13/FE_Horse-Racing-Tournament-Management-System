@@ -5,6 +5,7 @@ type RawObject = Record<string, unknown>;
 
 export type PredictionOverview = {
   openRaces: OpenRacePrediction[];
+  activeBetCount?: number;
   walletBalance?: number;
 };
 
@@ -104,6 +105,21 @@ const readWalletBalance = (raw: unknown) => {
   return asNumber((wallet as RawObject).pointBalance);
 };
 
+const readActiveBetCount = (raw: unknown) => {
+  if (!raw || typeof raw !== 'object') {
+    return undefined;
+  }
+
+  const data = raw as RawObject;
+  const summaryCount = data.summaryCount;
+
+  if (!summaryCount || typeof summaryCount !== 'object') {
+    return undefined;
+  }
+
+  return asNumber((summaryCount as RawObject).activeBetCount);
+};
+
 export const predictionService = {
   async getOpenPredictionRaces(): Promise<OpenRacePrediction[]> {
     const response = await apiClient.get('/api/bets/open-predictions');
@@ -117,13 +133,14 @@ export const predictionService = {
     ]);
 
     const openRaces = openRacesResult.status === 'fulfilled' ? openRacesResult.value : [];
-    const walletBalance = dashboardResult.status === 'fulfilled'
-      ? readWalletBalance(unwrapApiData<RawObject>(dashboardResult.value))
+    const dashboardData = dashboardResult.status === 'fulfilled'
+      ? unwrapApiData<RawObject>(dashboardResult.value)
       : undefined;
 
     return {
       openRaces,
-      walletBalance,
+      activeBetCount: readActiveBetCount(dashboardData),
+      walletBalance: readWalletBalance(dashboardData),
     };
   },
 };

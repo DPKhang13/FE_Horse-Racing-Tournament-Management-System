@@ -8,7 +8,6 @@ import ResultNav from './components/ResultNav';
 const categoryOptions: { value: RankingCategory; label: string }[] = [
   { value: 'horse', label: 'Horses' },
   { value: 'jockey', label: 'Jockeys' },
-  { value: 'owner', label: 'Owners' },
 ];
 
 const formatLastUpdated = (dateString: string) => {
