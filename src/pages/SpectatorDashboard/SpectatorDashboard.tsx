@@ -3,7 +3,7 @@ import { Bell, CalendarDays, Clock3, Trophy } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import { getApiErrorMessage } from '../../services/apiClient';
-import type { BetItem } from '../../services/betService';
+import { betService, type BetItem } from '../../services/betService';
 import { dashboardService, type DashboardSummaryCount } from '../../services/dashboardService';
 import type { NotificationItem } from '../../services/notificationService';
 import type { RaceScheduleItem } from '../../services/scheduleService';
@@ -30,6 +30,12 @@ const formatTime = (value: string) => new Intl.DateTimeFormat('en-US', {
   minute: '2-digit',
 }).format(new Date(value));
 
+const formatScheduleDate = (value: string) => new Intl.DateTimeFormat('en-US', {
+  month: 'short',
+  day: '2-digit',
+  year: 'numeric',
+}).format(new Date(value));
+
 const formatPoints = (value: number) => new Intl.NumberFormat('en-US', {
   maximumFractionDigits: 0,
 }).format(value);
@@ -51,6 +57,7 @@ const SpectatorDashboard: React.FC = () => {
   const navigate = useNavigate();
   const [upcomingRaces, setUpcomingRaces] = useState<RaceScheduleItem[]>([]);
   const [myPredictions, setMyPredictions] = useState<BetItem[]>([]);
+  const [predictionBets, setPredictionBets] = useState<BetItem[]>([]);
   const [latestResults, setLatestResults] = useState<RaceResultListItem[]>([]);
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const [summaryCount, setSummaryCount] = useState<DashboardSummaryCount>();
@@ -65,12 +72,16 @@ const SpectatorDashboard: React.FC = () => {
       setErrorMessage('');
 
       try {
-        const dashboard = await dashboardService.getSpectatorDashboard();
+        const [dashboard, bets] = await Promise.all([
+          dashboardService.getSpectatorDashboard(),
+          betService.getBets(),
+        ]);
 
         if (isMounted) {
           setSummaryCount(dashboard.summaryCount);
           setUpcomingRaces(dashboard.upcomingRaces.slice(0, 6));
           setMyPredictions(dashboard.activeBets.slice(0, 5));
+          setPredictionBets(bets);
           setLatestResults(dashboard.latestResults.slice(0, 5));
           setNotifications(dashboard.notifications.slice(0, 5));
         }
@@ -80,6 +91,7 @@ const SpectatorDashboard: React.FC = () => {
           setSummaryCount(undefined);
           setUpcomingRaces(spectatorDashboardMockData.upcomingRaces);
           setMyPredictions(spectatorDashboardMockData.myPredictions);
+          setPredictionBets(spectatorDashboardMockData.myPredictions);
           setLatestResults(spectatorDashboardMockData.latestResults);
           setNotifications(spectatorDashboardMockData.notifications);
         }
@@ -105,7 +117,7 @@ const SpectatorDashboard: React.FC = () => {
       action: () => document.getElementById('race-schedule')?.scrollIntoView({ behavior: 'smooth', block: 'start' }),
     },
     {
-      label: 'Active Bets',
+      label: 'Open prediction races',
       value: String(summaryCount?.activeBetCount ?? myPredictions.length).padStart(2, '0'),
       tone: 'text-primary',
       action: () => navigate('/prediction'),
@@ -117,6 +129,23 @@ const SpectatorDashboard: React.FC = () => {
       action: () => navigate('/notifications'),
     },
   ], [myPredictions.length, navigate, notifications.length, summaryCount, upcomingRaces.length]);
+
+  const settledPayoutByRaceId = useMemo(() => {
+    return predictionBets.reduce((map, bet) => {
+      if (bet.raceId === undefined || bet.status.toLowerCase() === 'pending') {
+        return map;
+      }
+
+      const raceId = String(bet.raceId);
+      map.set(raceId, (map.get(raceId) ?? 0) + bet.potentialPayout);
+      return map;
+    }, new Map<string, number>());
+  }, [predictionBets]);
+
+  const getResultPayoutLabel = (raceId: string) => {
+    const payout = settledPayoutByRaceId.get(String(raceId));
+    return payout === undefined ? '-' : `${formatPoints(payout)} pts`;
+  };
 
   return (
     <main className="min-h-screen bg-surface text-on-surface">
@@ -208,7 +237,7 @@ const SpectatorDashboard: React.FC = () => {
                     <h3 className="font-display mt-3 text-xl font-bold text-on-surface">{race.raceName}</h3>
                     <p className="mt-2 text-sm text-on-surface-variant">{race.rankGroup} / {race.trackType}</p>
                     <div className="mt-4 flex items-center justify-between text-sm">
-                      <span className="inline-flex items-center gap-1 text-secondary"><Clock3 className="h-4 w-4" /> {formatTime(race.scheduledAt)}</span>
+                      <span className="inline-flex items-center gap-1 text-secondary"><Clock3 className="h-4 w-4" /> {formatScheduleDate(race.scheduledAt)} / {formatTime(race.scheduledAt)}</span>
                       <strong className="text-primary">{race.distanceM}m</strong>
                     </div>
                   </motion.article>
@@ -278,7 +307,7 @@ const SpectatorDashboard: React.FC = () => {
                     </div>
                     <div className="mt-3 flex items-center justify-between text-sm text-on-surface-variant">
                       <span>Finish time: {item.topFinishers[0]?.finishTime ?? '-'}</span>
-                      <strong className="text-primary">{item.totalPrizePool}</strong>
+                      <strong className="text-primary">{getResultPayoutLabel(item.raceId)}</strong>
                     </div>
                     <p className="mt-2 text-xs uppercase tracking-[0.16em] text-outline">{formatDateTime(item.publishedAt ?? item.date)}</p>
                   </motion.article>
