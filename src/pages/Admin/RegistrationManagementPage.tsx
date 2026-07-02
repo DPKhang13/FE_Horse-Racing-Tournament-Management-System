@@ -667,13 +667,6 @@ const RegistrationDetailModal = ({
           </div>
         </div>
 
-        <div className="grid gap-4 rounded-lg border border-outline-variant bg-surface-container-low p-4 sm:grid-cols-4">
-          <InfoPill label="Registration ID" value={String(getRegistrationKey(registration) || '-')} />
-          <InfoPill label="Tournament ID" value={String(registration.tournamentId || '-')} />
-          <InfoPill label="Race ID" value={String(registration.raceId || '-')} />
-          <InfoPill label="Horse ID" value={String(registration.horseId || '-')} />
-        </div>
-
         <div className="flex flex-col-reverse gap-3 border-t border-outline-variant pt-5 sm:flex-row sm:justify-end">
           <button
             type="button"
@@ -906,13 +899,6 @@ const DetailItem = ({ icon, label, value }: { icon: ReactNode; label: string; va
       <p className="text-label-sm font-bold uppercase tracking-wider">{label}</p>
     </div>
     <p className="break-words text-body-sm font-semibold text-on-surface">{value}</p>
-  </div>
-);
-
-const InfoPill = ({ label, value }: { label: string; value: string }) => (
-  <div>
-    <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-outline">{label}</p>
-    <p className="mt-1 text-body-sm font-semibold text-on-surface">{value}</p>
   </div>
 );
 
