@@ -17,6 +17,7 @@ import UserProfilePage from '../pages/Profile/UserProfilePage';
 import { AUTHENTICATED_ROLES } from '../utils/permissions';
 import AdminHorseManagementPage from '../pages/Admin/AdminHorseManagementPage';
 import AdminOperationsPage from '../pages/Admin/AdminOperationsPage';
+import RegistrationManagementPage from '../pages/Admin/RegistrationManagementPage';
 import AdminRacesPage from '../pages/Admin/AdminRacesPage';
 import AdminSchedulePage from '../pages/Admin/AdminSchedulePage';
 import RaceRegistrationPage from '../pages/Race/RaceRegistrationPage';
@@ -61,6 +62,8 @@ const AppRoutes = () => {
       <Route path="/admin-ops" element={protectedPage(<AdminOperationsPage />, ['admin'])} />
       <Route path="/admin/horses" element={protectedPage(<AdminHorseManagementPage />, ['admin'])} />
       <Route path="/admin/users" element={protectedPage(<UserManagementPage />, ['admin'])} />
+      <Route path="/admin/registrations" element={protectedPage(<RegistrationManagementPage />, ['admin'])} />
+      <Route path="/admin/race-registrations" element={protectedPage(<RegistrationManagementPage />, ['admin'])} />
       <Route path="/admin/schedule" element={protectedPage(<AdminSchedulePage />, ['admin'])} />
       <Route path="/admin/races" element={protectedPage(<AdminRacesPage />, ['admin'])} />
       <Route path="/admin/race-schedule" element={<Navigate to="/admin/schedule" replace />} />
