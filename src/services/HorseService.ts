@@ -1,5 +1,6 @@
 import { apiClient, unwrapApiData, unwrapApiList } from './apiClient';
 import type { Horse, HorseFormData } from '../types/horse';
+import type { UserProfile } from '../types/user';
 
 type RawHorse = Partial<Horse> & {
   id?: number;
@@ -67,10 +68,29 @@ const toUpdatePayload = (horse: HorseFormData) => ({
   status: horse.status,
 });
 
+const getOwnerScopedHorses = (horseList: Horse[], currentProfile: UserProfile): Horse[] => {
+  const ownerIds = new Set(
+    [currentProfile.ownerProfile?.ownerId, currentProfile.userId]
+      .map((value) => Number(value))
+      .filter((value) => Number.isFinite(value) && value > 0),
+  );
+
+  if (ownerIds.size === 0) {
+    return horseList;
+  }
+
+  return horseList.filter((horse) => horse.ownerId !== undefined && ownerIds.has(Number(horse.ownerId)));
+};
+
 export const HorseService = {
   async getHorses(): Promise<Horse[]> {
     const response = await apiClient.get('/api/horses/get-all');
     return unwrapApiList<RawHorse>(response).map(mapHorse);
+  },
+
+  async getOwnerHorses(currentProfile: UserProfile): Promise<Horse[]> {
+    const horses = await this.getHorses();
+    return getOwnerScopedHorses(horses, currentProfile);
   },
 
   async getHorseById(id: number): Promise<Horse> {

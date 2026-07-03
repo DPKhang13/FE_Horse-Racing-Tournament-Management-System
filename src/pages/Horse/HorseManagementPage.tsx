@@ -2,8 +2,10 @@ import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
 import { motion } from 'motion/react';
 import { Activity, Eye, Filter, Gauge, Pencil, Plus, Search, Trash2, Trophy, X } from 'lucide-react';
 import { getApiErrorMessage } from '../../services/apiClient';
+import { authService } from '../../services/authService';
 import { HorseService } from '../../services/HorseService';
 import type { Horse, HorseFormData } from '../../types/horse';
+import type { UserProfile } from '../../types/user';
 
 // Animation variants
 const revealContainer = {
@@ -97,6 +99,7 @@ const toFormData = (horse: Horse): HorseFormData => ({
 });
 
 const HorseManagementPage = () => {
+  const [profile, setProfile] = useState<UserProfile | undefined>(() => authService.getStoredUserProfile());
   const [horses, setHorses] = useState<Horse[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('All');
@@ -114,7 +117,9 @@ const HorseManagementPage = () => {
     setErrorMessage('');
 
     try {
-      setHorses(await HorseService.getHorses());
+      const currentProfile = profile ?? await authService.getCurrentUser();
+      setProfile(currentProfile);
+      setHorses(await HorseService.getOwnerHorses(currentProfile));
     } catch (error) {
       setErrorMessage(getApiErrorMessage(error, 'Unable to load horses.'));
     } finally {

@@ -312,13 +312,6 @@ const LandingTopBar = ({
           {isAuthenticated ? (
             <>
               <Bell className="h-5 w-5 text-on-surface-variant" />
-              <Link
-                to={dashboardRoute}
-                className="gold-gradient rounded-lg px-6 py-2 text-label-md font-bold text-on-primary transition-transform active:scale-95"
-                aria-label="Open dashboard"
-              >
-                Join the Race
-              </Link>
             </>
           ) : (
             <>

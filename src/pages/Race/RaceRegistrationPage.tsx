@@ -85,7 +85,7 @@ const RaceRegistrationPage = () => {
       if (currentProfile.roleType === 'horse_owner') {
         const [registrations, horseList, raceList, tournamentList] = await Promise.all([
           raceRegistrationService.getMine(),
-          HorseService.getHorses(),
+          HorseService.getOwnerHorses(currentProfile),
           scheduleService.getRaceSchedule(),
           scheduleService.getTournaments(),
         ]);

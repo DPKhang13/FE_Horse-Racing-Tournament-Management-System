@@ -80,7 +80,7 @@ const RaceResultList = () => {
 
         if (currentProfile.roleType === 'horse_owner') {
           const [horses, summaries] = await Promise.all([
-            HorseService.getHorses(),
+            HorseService.getOwnerHorses(currentProfile),
             raceResultService.getRaceResultSummaries(),
           ]);
 

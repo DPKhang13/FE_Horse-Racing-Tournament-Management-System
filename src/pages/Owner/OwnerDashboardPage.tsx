@@ -56,7 +56,7 @@ const OwnerDashboardPage = () => {
         setProfile(currentProfile);
 
         const [horseList, registrationList, assignmentList] = await Promise.all([
-          HorseService.getHorses(),
+          HorseService.getOwnerHorses(currentProfile),
           raceRegistrationService.getMine(),
           jockeyAssignmentService.getSent(),
         ]);
