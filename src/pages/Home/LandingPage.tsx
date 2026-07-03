@@ -161,7 +161,7 @@ const LandingPage = () => {
   const [tournaments, setTournaments] = useState<Tournament[]>([]);
   const [isLoadingTournaments, setIsLoadingTournaments] = useState(true);
   const [tournamentError, setTournamentError] = useState('');
-  const isAuthenticated = Boolean(profile);
+  const isAuthenticated = Boolean(getAccessToken());
 
   useEffect(() => {
     const syncAuthState = () => {

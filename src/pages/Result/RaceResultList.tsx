@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { ChevronRight, Filter, Search, Trophy } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { authService } from '../../services/authService';
+import { useToastNotifications } from '../../hooks/useToastNotifications';
 import { HorseService } from '../../services/HorseService';
 import { raceResultService } from '../../services/raceResultService';
 import type { Horse } from '../../types/horse';
@@ -59,6 +60,10 @@ const RaceResultList = () => {
   const [showHistory, setShowHistory] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState('');
+
+  useToastNotifications([
+    errorMessage ? { tone: 'error', text: errorMessage } : null,
+  ]);
 
   const isOwner = profile?.roleType === 'horse_owner';
 
@@ -179,12 +184,6 @@ const RaceResultList = () => {
               <ResultNav />
             </div>
           </div>
-
-          {errorMessage && (
-            <div className="mb-6 rounded-md border border-error/30 bg-error-container/20 px-4 py-3 text-body-sm font-semibold text-error">
-              {errorMessage}
-            </div>
-          )}
 
           <div className="grid gap-6 xl:grid-cols-[320px_minmax(0,1fr)]">
             <section className="rounded-lg border border-outline-variant bg-white p-5">
@@ -344,12 +343,6 @@ const RaceResultList = () => {
             ))}
           </div>
         </div>
-
-        {errorMessage && (
-          <div className="mb-6 rounded-md border border-error/30 bg-error-container/20 px-4 py-3 text-body-sm font-semibold text-error">
-            {errorMessage}
-          </div>
-        )}
 
         <div className="flex flex-col lg:flex-row lg:items-center gap-4 mb-8">
           <div className="relative flex-1 max-w-md">

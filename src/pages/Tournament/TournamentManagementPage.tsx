@@ -3,6 +3,7 @@ import { Ban, CalendarDays, ClipboardList, Eye, Filter, Flag, Layers, ListChecks
 import { motion } from 'motion/react';
 import { Link } from 'react-router-dom';
 import { getApiErrorMessage } from '../../services/apiClient';
+import { useToastNotifications } from '../../hooks/useToastNotifications';
 import { raceCrudService, type RaceCrudItem, type RaceFormData, type RaceRoundFormData, type RaceRoundItem } from '../../services/raceCrudService';
 import { tournamentService } from '../../services/tournamentService';
 import type {
@@ -392,6 +393,11 @@ const TournamentManagementPage = () => {
   const [raceModalTournament, setRaceModalTournament] = useState<Tournament | null>(null);
   const [isRaceModalOpen, setIsRaceModalOpen] = useState(false);
 
+  useToastNotifications([
+    message ? { tone: 'success', text: message } : null,
+    errorMessage ? { tone: 'error', text: errorMessage } : null,
+  ]);
+
   useEffect(() => {
     let isMounted = true;
 
@@ -728,9 +734,6 @@ const TournamentManagementPage = () => {
             Create Tournament
           </motion.button>
         </motion.div>
-
-        {message && <StatusBanner tone="success" text={message} />}
-        {errorMessage && <StatusBanner tone="error" text={errorMessage} />}
 
         <motion.div 
           className="glass-panel overflow-hidden rounded-xl"
@@ -1174,6 +1177,10 @@ const TournamentPrizeForm = ({
   const [isSavingPrizes, setIsSavingPrizes] = useState(false);
   const [notice, setNotice] = useState<{ tone: 'success' | 'error'; text: string } | null>(null);
 
+  useToastNotifications([
+    notice ? { tone: notice.tone, text: notice.text } : null,
+  ]);
+
   const loadPrizes = useCallback(async () => {
     setIsLoadingPrizes(true);
     setNotice(null);
@@ -1320,12 +1327,6 @@ const TournamentPrizeForm = ({
         </div>
       )}
 
-      {notice && (
-        <div className={`rounded-md border px-4 py-3 text-body-sm font-semibold ${notice.tone === 'success' ? 'border-secondary/30 bg-secondary-container/30 text-secondary' : 'border-error/30 bg-error-container/20 text-error'}`}>
-          {notice.text}
-        </div>
-      )}
-
       {isLoadingPrizes ? (
         <InlineEmptyState text="Loading prizes..." />
       ) : (
@@ -1360,6 +1361,11 @@ const RaceCrudPanel = ({ tournament }: { tournament: Tournament }) => {
   const [errorMessage, setErrorMessage] = useState('');
   const [showRaceSuccess, setShowRaceSuccess] = useState(false);
   const [lastCreatedRace, setLastCreatedRace] = useState<RaceCrudItem | null>(null);
+
+  useToastNotifications([
+    message ? { tone: 'success', text: message } : null,
+    errorMessage ? { tone: 'error', text: errorMessage } : null,
+  ]);
 
   const loadRaces = useCallback(async () => {
     setIsLoadingRaces(true);
@@ -1580,30 +1586,6 @@ const RaceCrudPanel = ({ tournament }: { tournament: Tournament }) => {
           Create New Race
         </motion.button>
       </motion.div>
-
-      {/* Status Messages */}
-      {message && (
-        <motion.div 
-          className="glass-panel rounded-2xl border border-secondary/30 bg-secondary/10 px-6 py-4 flex items-center gap-3"
-          variants={revealUp}
-        >
-          <div className="h-10 w-10 rounded-full bg-secondary/20 flex items-center justify-center">
-            <div className="h-5 w-5 text-secondary">✓</div>
-          </div>
-          <p className="text-body-md font-semibold text-secondary">{message}</p>
-        </motion.div>
-      )}
-      {errorMessage && (
-        <motion.div 
-          className="glass-panel rounded-2xl border border-error/30 bg-error/10 px-6 py-4 flex items-center gap-3"
-          variants={revealUp}
-        >
-          <div className="h-10 w-10 rounded-full bg-error/20 flex items-center justify-center">
-            <div className="h-5 w-5 text-error">✕</div>
-          </div>
-          <p className="text-body-md font-semibold text-error">{errorMessage}</p>
-        </motion.div>
-      )}
 
       {/* Race Management Section */}
       <motion.div 
@@ -2241,12 +2223,6 @@ const MetricCard = ({ icon, label, value }: { icon: ReactNode; label: string; va
   </div>
 );
 
-const StatusBanner = ({ tone, text }: { tone: 'success' | 'error'; text: string }) => (
-  <div className={`mb-6 rounded-md border px-4 py-3 text-body-sm font-semibold ${tone === 'success' ? 'border-secondary/30 bg-secondary-container/30 text-secondary' : 'border-error/30 bg-error-container/20 text-error'}`}>
-    {text}
-  </div>
-);
-
 const IconButton = ({
   label,
   onClick,
@@ -2384,5 +2360,4 @@ const InlineEmptyState = ({ text }: { text: string }) => (
 );
 
 export default TournamentManagementPage;
-
 

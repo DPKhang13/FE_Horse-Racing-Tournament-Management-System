@@ -12,6 +12,7 @@ import {
   type RefereeReportFormData,
   type RefereeReportItem,
 } from '../../services/raceOperationsService';
+import { useToastNotifications } from '../../hooks/useToastNotifications';
 
 const createEmptyDraftItem = (): RaceDraftResultItemInput => ({
   assignmentId: 0,
@@ -57,6 +58,11 @@ const RaceControlPage = () => {
   const [isLoadingRaceData, setIsLoadingRaceData] = useState(false);
   const [message, setMessage] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
+
+  useToastNotifications([
+    message ? { tone: 'success', text: message } : null,
+    errorMessage ? { tone: 'error', text: errorMessage } : null,
+  ]);
 
   const normalizedRaceId = selectedRaceId.trim();
 
@@ -308,9 +314,6 @@ const RaceControlPage = () => {
             </div>
           </div>
         </div>
-
-        {message && <StatusBanner tone="success" text={message} />}
-        {errorMessage && <StatusBanner tone="error" text={errorMessage} />}
 
         <section className="mb-6 grid gap-6 xl:grid-cols-[340px_minmax(0,1fr)]">
           <article className="glass-panel rounded-xl p-6">
@@ -637,12 +640,6 @@ const InfoTile = ({ label, value }: { label: string; value: string }) => (
   <div className="rounded-xl border border-outline-variant/30 bg-surface-container-low px-4 py-3">
     <p className="text-label-sm font-bold uppercase tracking-[0.12em] text-outline">{label}</p>
     <p className="mt-2 font-semibold text-on-surface">{value}</p>
-  </div>
-);
-
-const StatusBanner = ({ tone, text }: { tone: 'success' | 'error'; text: string }) => (
-  <div className={`mb-6 rounded-md border px-4 py-3 text-body-sm font-semibold ${tone === 'success' ? 'border-secondary/30 bg-secondary-container/30 text-secondary' : 'border-error/30 bg-error-container/20 text-error'}`}>
-    {text}
   </div>
 );
 

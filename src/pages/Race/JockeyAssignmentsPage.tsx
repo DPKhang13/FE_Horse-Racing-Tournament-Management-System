@@ -5,6 +5,7 @@ import { authService } from '../../services/authService';
 import { jockeyAssignmentService, type JockeyAssignmentItem } from '../../services/jockeyAssignmentService';
 import { jockeyService, type JockeyItem } from '../../services/jockeyService';
 import { raceRegistrationService, type RaceRegistrationItem } from '../../services/raceRegistrationService';
+import { useToastNotifications } from '../../hooks/useToastNotifications';
 import type { UserProfile } from '../../types/user';
 
 const normalizeStatus = (value?: string) => value?.trim().toLowerCase() ?? '';
@@ -39,6 +40,11 @@ const JockeyAssignmentsPage = () => {
 
   const isOwner = profile?.roleType === 'horse_owner';
   const isJockey = profile?.roleType === 'jockey';
+
+  useToastNotifications([
+    message ? { tone: 'success', text: message } : null,
+    errorMessage ? { tone: 'error', text: errorMessage } : null,
+  ]);
 
   const loadAssignments = async () => {
     setIsLoading(true);
@@ -219,9 +225,6 @@ const JockeyAssignmentsPage = () => {
           </div>
         </div>
 
-        {message && <StatusBanner tone="success" text={message} />}
-        {errorMessage && <StatusBanner tone="error" text={errorMessage} />}
-
         <div className="mb-6 flex justify-end">
           <button
             type="button"
@@ -401,8 +404,12 @@ const JockeyAssignmentsPage = () => {
                           <div className="flex justify-end gap-2">
                             {isJockey && (
                               <>
-                                <button type="button" onClick={() => void handleRespond(id, 'accepted')} className="rounded-md bg-secondary px-3 py-2 text-label-sm font-bold text-on-secondary">Accept</button>
-                                <button type="button" onClick={() => void handleRespond(id, 'rejected')} className="rounded-md border border-error/40 px-3 py-2 text-label-sm font-bold text-error">Reject</button>
+                                {status === 'pending' && (
+                                  <>
+                                    <button type="button" onClick={() => void handleRespond(id, 'accepted')} className="rounded-md bg-secondary px-3 py-2 text-label-sm font-bold text-on-secondary">Accept</button>
+                                    <button type="button" onClick={() => void handleRespond(id, 'rejected')} className="rounded-md border border-error/40 px-3 py-2 text-label-sm font-bold text-error">Reject</button>
+                                  </>
+                                )}
                               </>
                             )}
                             {isOwner && (
@@ -440,12 +447,6 @@ const MetricCard = ({ icon, label, value }: { icon: ReactNode; label: string; va
       <span className="text-primary">{icon}</span>
     </div>
     <p className="font-display truncate text-2xl font-extrabold text-on-surface">{value}</p>
-  </div>
-);
-
-const StatusBanner = ({ tone, text }: { tone: 'success' | 'error'; text: string }) => (
-  <div className={`mb-6 rounded-md border px-4 py-3 text-body-sm font-semibold ${tone === 'success' ? 'border-secondary/30 bg-secondary-container/30 text-secondary' : 'border-error/30 bg-error-container/20 text-error'}`}>
-    {text}
   </div>
 );
 
