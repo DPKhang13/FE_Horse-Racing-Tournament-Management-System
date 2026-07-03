@@ -3,6 +3,7 @@ import { CheckCircle2, Clock3, Send, ShieldCheck, Trophy, Users } from 'lucide-r
 import { getApiErrorMessage } from '../../services/apiClient';
 import { authService } from '../../services/authService';
 import { HorseService } from '../../services/HorseService';
+import { useToastNotifications } from '../../hooks/useToastNotifications';
 import { jockeyAssignmentService, type JockeyAssignmentItem } from '../../services/jockeyAssignmentService';
 import { raceRegistrationService, type RaceRegistrationItem } from '../../services/raceRegistrationService';
 import type { Horse } from '../../types/horse';
@@ -46,6 +47,10 @@ const OwnerDashboardPage = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState('');
 
+  useToastNotifications([
+    errorMessage ? { tone: 'error', text: errorMessage } : null,
+  ]);
+
   useEffect(() => {
     const loadDashboard = async () => {
       setIsLoading(true);
@@ -56,7 +61,7 @@ const OwnerDashboardPage = () => {
         setProfile(currentProfile);
 
         const [horseList, registrationList, assignmentList] = await Promise.all([
-          HorseService.getHorses(),
+          HorseService.getOwnerHorses(currentProfile),
           raceRegistrationService.getMine(),
           jockeyAssignmentService.getSent(),
         ]);
@@ -109,12 +114,6 @@ const OwnerDashboardPage = () => {
             </div>
           </div>
         </section>
-
-        {errorMessage && (
-          <div className="mb-6 rounded-md border border-error/30 bg-error-container/20 px-4 py-3 text-body-sm font-semibold text-error">
-            {errorMessage}
-          </div>
-        )}
 
         <div className="mb-6 grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
           <section className="glass-panel rounded-xl p-6">

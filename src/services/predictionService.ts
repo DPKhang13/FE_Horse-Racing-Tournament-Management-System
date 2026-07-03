@@ -5,6 +5,7 @@ type RawObject = Record<string, unknown>;
 
 export type PredictionOverview = {
   openRaces: OpenRacePrediction[];
+  activeBetCount?: number;
   walletBalance?: number;
 };
 
@@ -47,6 +48,16 @@ const normalizeRaceStatus = (status: unknown): OpenRacePrediction['status'] => {
   }
 
   return 'Open';
+};
+
+const isFutureDate = (value: string) => {
+  const time = new Date(value).getTime();
+
+  return Number.isFinite(time) && time > Date.now();
+};
+
+const isOpenRacePrediction = (race: OpenRacePrediction) => {
+  return race.status === 'Open' && isFutureDate(race.closesAt);
 };
 
 const getOptions = (raw: RawObject): PredictionOption[] => {
@@ -104,10 +115,44 @@ const readWalletBalance = (raw: unknown) => {
   return asNumber((wallet as RawObject).pointBalance);
 };
 
+const readActiveBetCount = (raw: unknown) => {
+  if (!raw || typeof raw !== 'object') {
+    return undefined;
+  }
+
+  const data = raw as RawObject;
+  const summaryCount = data.summaryCount;
+
+  if (!summaryCount || typeof summaryCount !== 'object') {
+    return undefined;
+  }
+
+  return asNumber((summaryCount as RawObject).activeBetCount);
+};
+
+const readOpenPredictionRaces = (raw: unknown) => {
+  if (!raw || typeof raw !== 'object') {
+    return [];
+  }
+
+  const data = raw as RawObject;
+  const openPredictionRaces = data.openPredictionRaces;
+
+  if (!Array.isArray(openPredictionRaces)) {
+    return [];
+  }
+
+  return openPredictionRaces
+    .map((item) => mapOpenRace(item as RawObject))
+    .filter(isOpenRacePrediction);
+};
+
 export const predictionService = {
   async getOpenPredictionRaces(): Promise<OpenRacePrediction[]> {
     const response = await apiClient.get('/api/bets/open-predictions');
-    return unwrapApiList<RawObject>(response).map(mapOpenRace);
+    return unwrapApiList<RawObject>(response)
+      .map(mapOpenRace)
+      .filter(isOpenRacePrediction);
   },
 
   async getPredictionOverview(): Promise<PredictionOverview> {
@@ -116,14 +161,23 @@ export const predictionService = {
       apiClient.get('/api/bets/dashboard'),
     ]);
 
-    const openRaces = openRacesResult.status === 'fulfilled' ? openRacesResult.value : [];
-    const walletBalance = dashboardResult.status === 'fulfilled'
-      ? readWalletBalance(unwrapApiData<RawObject>(dashboardResult.value))
+    const dashboardData = dashboardResult.status === 'fulfilled'
+      ? unwrapApiData<RawObject>(dashboardResult.value)
       : undefined;
+    const directOpenRaces = openRacesResult.status === 'fulfilled' ? openRacesResult.value : [];
+    const dashboardOpenRaces = readOpenPredictionRaces(dashboardData);
+
+    if (
+      openRacesResult.status === 'rejected' &&
+      dashboardResult.status === 'rejected'
+    ) {
+      throw openRacesResult.reason;
+    }
 
     return {
-      openRaces,
-      walletBalance,
+      openRaces: directOpenRaces.length > 0 ? directOpenRaces : dashboardOpenRaces,
+      activeBetCount: readActiveBetCount(dashboardData),
+      walletBalance: readWalletBalance(dashboardData),
     };
   },
 };

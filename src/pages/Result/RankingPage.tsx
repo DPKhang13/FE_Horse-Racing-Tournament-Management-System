@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { BarChart3, Trophy } from 'lucide-react';
+import { useToastNotifications } from '../../hooks/useToastNotifications';
 import { raceResultService } from '../../services/raceResultService';
 import type { RankingBoard, RankingCategory } from '../../types/raceResult';
 import RankingTable from './components/RankingTable';
@@ -25,6 +26,10 @@ const RankingPage = () => {
   const [rankingBoard, setRankingBoard] = useState<RankingBoard | undefined>();
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState('');
+
+  useToastNotifications([
+    errorMessage ? { tone: 'error', text: errorMessage } : null,
+  ]);
 
   useEffect(() => {
     let isMounted = true;
@@ -133,12 +138,6 @@ const RankingPage = () => {
             </div>
           )}
         </div>
-
-        {errorMessage && (
-          <div className="mb-6 rounded-md border border-error/30 bg-error-container/20 px-4 py-3 text-body-sm font-semibold text-error">
-            {errorMessage}
-          </div>
-        )}
 
         {isLoading ? (
           <div className="rounded-lg border border-outline-variant bg-white p-12 text-center">

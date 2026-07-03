@@ -1,7 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Calendar, Filter, MapPin } from 'lucide-react';
 import { getApiErrorMessage } from '../../services/apiClient';
+import { authService } from '../../services/authService';
+import { useToastNotifications } from '../../hooks/useToastNotifications';
 import { scheduleService, type RaceScheduleItem } from '../../services/scheduleService';
+import type { UserProfile } from '../../types/user';
 
 const formatDate = (value: string) => new Intl.DateTimeFormat('en-US', {
   month: 'short',
@@ -15,10 +18,30 @@ const formatTime = (value: string) => new Intl.DateTimeFormat('en-US', {
 }).format(new Date(value));
 
 const SchedulePage = () => {
+  const [profile, setProfile] = useState<UserProfile | undefined>(() => authService.getStoredUserProfile());
   const [schedules, setSchedules] = useState<RaceScheduleItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState('');
   const [onlyToday, setOnlyToday] = useState(false);
+  const isOwner = profile?.roleType === 'horse_owner';
+
+  useToastNotifications([
+    errorMessage ? { tone: 'error', text: errorMessage } : null,
+  ]);
+
+  useEffect(() => {
+    const syncAuthState = () => {
+      setProfile(authService.getStoredUserProfile());
+    };
+
+    window.addEventListener('auth-changed', syncAuthState);
+    window.addEventListener('storage', syncAuthState);
+
+    return () => {
+      window.removeEventListener('auth-changed', syncAuthState);
+      window.removeEventListener('storage', syncAuthState);
+    };
+  }, []);
 
   useEffect(() => {
     let isMounted = true;
@@ -83,12 +106,6 @@ const SchedulePage = () => {
           </div>
         </div>
 
-        {errorMessage && (
-          <div className="mb-8 rounded-md border border-error/30 bg-error-container/20 px-4 py-3 text-body-sm font-semibold text-error">
-            {errorMessage}
-          </div>
-        )}
-
         {isLoading ? (
           <div className="rounded-lg border border-outline-variant bg-white p-6 text-body-sm font-semibold text-on-surface-variant">
             Loading race schedule...
@@ -143,9 +160,11 @@ const SchedulePage = () => {
                     <button className="flex-1 lg:flex-none bg-white border border-primary text-primary px-6 py-2.5 rounded-md text-body-sm font-bold hover:bg-surface-container transition-all">
                       Race Details
                     </button>
-                    <button className="flex-1 lg:flex-none bg-secondary text-white px-6 py-2.5 rounded-md text-body-sm font-bold hover:bg-opacity-90 transition-all">
-                      Place Bet
-                    </button>
+                    {!isOwner && (
+                      <button className="flex-1 lg:flex-none bg-secondary text-white px-6 py-2.5 rounded-md text-body-sm font-bold hover:bg-opacity-90 transition-all">
+                        Place Bet
+                      </button>
+                    )}
                   </div>
                 </div>
               </div>

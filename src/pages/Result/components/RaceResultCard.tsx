@@ -56,7 +56,6 @@ const RaceResultCard = ({ result }: RaceResultCardProps) => {
               <th className="px-6 py-4 text-label-sm text-outline uppercase tracking-wider">Horse</th>
               <th className="px-6 py-4 text-label-sm text-outline uppercase tracking-wider">Jockey</th>
               <th className="px-6 py-4 text-label-sm text-outline uppercase tracking-wider text-right">Time</th>
-              <th className="px-6 py-4 text-label-sm text-outline uppercase tracking-wider text-right">Odds</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-outline-variant">
@@ -74,11 +73,6 @@ const RaceResultCard = ({ result }: RaceResultCardProps) => {
                 <td className="px-6 py-4 text-right">
                   <span className="text-body-sm font-medium text-on-surface-variant tabular-nums">
                     {finisher.finishTime}
-                  </span>
-                </td>
-                <td className="px-6 py-4 text-right">
-                  <span className="text-body-sm font-bold text-secondary tabular-nums">
-                    {finisher.odds ?? '-'}
                   </span>
                 </td>
               </tr>

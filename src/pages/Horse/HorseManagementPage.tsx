@@ -2,8 +2,11 @@ import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
 import { motion } from 'motion/react';
 import { Activity, Eye, Filter, Gauge, Pencil, Plus, Search, Trash2, Trophy, X } from 'lucide-react';
 import { getApiErrorMessage } from '../../services/apiClient';
+import { authService } from '../../services/authService';
+import { useToastNotifications } from '../../hooks/useToastNotifications';
 import { HorseService } from '../../services/HorseService';
 import type { Horse, HorseFormData } from '../../types/horse';
+import type { UserProfile } from '../../types/user';
 
 // Animation variants
 const revealContainer = {
@@ -97,6 +100,7 @@ const toFormData = (horse: Horse): HorseFormData => ({
 });
 
 const HorseManagementPage = () => {
+  const [profile, setProfile] = useState<UserProfile | undefined>(() => authService.getStoredUserProfile());
   const [horses, setHorses] = useState<Horse[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('All');
@@ -109,12 +113,18 @@ const HorseManagementPage = () => {
   const [isSaving, setIsSaving] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
 
+  useToastNotifications([
+    errorMessage ? { tone: 'error', text: errorMessage } : null,
+  ]);
+
   const loadHorses = async () => {
     setIsLoading(true);
     setErrorMessage('');
 
     try {
-      setHorses(await HorseService.getHorses());
+      const currentProfile = profile ?? await authService.getCurrentUser();
+      setProfile(currentProfile);
+      setHorses(await HorseService.getOwnerHorses(currentProfile));
     } catch (error) {
       setErrorMessage(getApiErrorMessage(error, 'Unable to load horses.'));
     } finally {
@@ -327,17 +337,6 @@ const HorseManagementPage = () => {
             Register Horse
           </motion.button>
         </motion.div>
-
-        {errorMessage && (
-          <motion.div 
-            className="mb-6 rounded-md border border-error/30 bg-error-container/20 px-4 py-3 text-body-sm font-semibold text-error"
-            initial="hidden"
-            animate="visible"
-            variants={revealUp}
-          >
-            {errorMessage}
-          </motion.div>
-        )}
 
         <motion.div 
           className="glass-panel overflow-hidden rounded-xl"

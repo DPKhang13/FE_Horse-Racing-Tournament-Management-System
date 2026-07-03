@@ -2,9 +2,11 @@ import { useEffect, useMemo, useState } from 'react';
 import { Globe2, MessageCircle, Share2 } from 'lucide-react';
 import { motion } from 'motion/react';
 import { Link } from 'react-router-dom';
-import { getApiErrorMessage } from '../../services/apiClient';
+import { getAccessToken, getApiErrorMessage } from '../../services/apiClient';
+import { authService } from '../../services/authService';
 import { tournamentService } from '../../services/tournamentService';
 import type { Tournament, TournamentParticipant } from '../../types/tournament';
+import type { UserProfile } from '../../types/user';
 
 const heroImage =
   'https://lh3.googleusercontent.com/aida-public/AB6AXuAMECLOWNrDaYZayptmiktWx0wBNF3DYXYJFdqOmb7f0lbXELzFaizKIcqgCq655F9mfHQjMB4vV33zITEW68yWnSuVEElxHx5KKUrWfVL4ic11vvHju-2VZM7SItLPqX0z9udU8nLv8BQn-tI0WX8QXMYGBOo7h94yX5vlu8dOnTsd4GyzD93O_OBwAU1AG5ZCrCV8J9UMrVtaOB5KBBuol1OhNNGNy9VI8w9B0GDqcbDMR1kHiIAkYp73T3-E2huQ5Tsu20hvvvjc';
@@ -155,9 +157,29 @@ const getTournamentStatusClassName = (status: string | undefined) => {
 };
 
 const LandingPage = () => {
+  const [profile, setProfile] = useState<UserProfile | undefined>(() => authService.getStoredUserProfile());
   const [tournaments, setTournaments] = useState<Tournament[]>([]);
   const [isLoadingTournaments, setIsLoadingTournaments] = useState(true);
   const [tournamentError, setTournamentError] = useState('');
+  const isAuthenticated = Boolean(getAccessToken());
+
+  useEffect(() => {
+    const syncAuthState = () => {
+      setProfile(authService.getStoredUserProfile());
+    };
+
+    window.addEventListener('auth-changed', syncAuthState);
+    window.addEventListener('storage', syncAuthState);
+
+    if (getAccessToken() && !profile) {
+      void authService.getCurrentUser().then(setProfile).catch(() => setProfile(undefined));
+    }
+
+    return () => {
+      window.removeEventListener('auth-changed', syncAuthState);
+      window.removeEventListener('storage', syncAuthState);
+    };
+  }, [profile]);
 
   useEffect(() => {
     let isMounted = true;
@@ -285,14 +307,16 @@ const LandingPage = () => {
           >
             Experience precision data, lightning-fast tournament logistics, and the ultimate betting excitement. Whether you manage a stable or chase the thrill of the win, HTMS is your elite racing command center.
           </motion.p>
-          <motion.div className="flex flex-wrap gap-4" variants={revealUp} transition={{ duration: 0.65 }}>
-            <Link to="/login" state={{ mode: 'signup' }} className="gold-gradient rounded-xl px-8 py-4 font-display text-xl font-bold text-on-primary shadow-lg shadow-primary/20 transition-transform active:scale-95">
-              Join the Race
-            </Link>
-            <Link to="/tournaments" className="rounded-xl border border-outline-variant bg-surface-container-highest px-8 py-4 font-display text-xl font-bold text-on-surface transition-colors hover:bg-surface-bright">
-              Explore Tournaments
-            </Link>
-          </motion.div>
+          {!isAuthenticated && (
+            <motion.div className="flex flex-wrap gap-4" variants={revealUp} transition={{ duration: 0.65 }}>
+              <Link to="/login" state={{ mode: 'signup' }} className="gold-gradient rounded-xl px-8 py-4 font-display text-xl font-bold text-on-primary shadow-lg shadow-primary/20 transition-transform active:scale-95">
+                Join the Race
+              </Link>
+              <Link to="/tournaments" className="rounded-xl border border-outline-variant bg-surface-container-highest px-8 py-4 font-display text-xl font-bold text-on-surface transition-colors hover:bg-surface-bright">
+                Explore Tournaments
+              </Link>
+            </motion.div>
+          )}
         </motion.div>
 
         <div className="absolute bottom-0 right-0 hidden p-12 xl:block">
