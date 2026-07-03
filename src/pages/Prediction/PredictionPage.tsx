@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { Clock3, Ticket, TrendingUp, X } from 'lucide-react';
 import { getApiErrorMessage } from '../../services/apiClient';
 import { betService, type BetItem } from '../../services/betService';
+import { dashboardService } from '../../services/dashboardService';
 import { predictionService } from '../../services/predictionService';
 import type { OpenRacePrediction } from '../../types/prediction';
 
@@ -55,8 +56,8 @@ const PredictionPage = () => {
       setErrorMessage('');
 
       try {
-        const [betsData, overview] = await Promise.all([
-          betService.getBets(),
+        const [dashboard, overview] = await Promise.all([
+          dashboardService.getSpectatorDashboard(),
           predictionService.getPredictionOverview(),
         ]);
 
@@ -68,8 +69,8 @@ const PredictionPage = () => {
         setOpenRacePredictions(nextOpenRaces);
         setSelectedRaceId(nextOpenRaces[0]?.id ?? 0);
         setSelectedHorseId(nextOpenRaces[0]?.options[0]?.horseId ?? 0);
-        setWalletBalance(overview.walletBalance ?? 0);
-        setBets(betsData);
+        setWalletBalance(dashboard.wallet?.pointBalance ?? overview.walletBalance ?? 0);
+        setBets(dashboard.activeBets);
       } catch (error) {
         if (isMounted) {
           setErrorMessage(getApiErrorMessage(error, 'Unable to load predictions.'));
