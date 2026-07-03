@@ -34,7 +34,7 @@ const ResultTrackingPage = () => {
       setErrorMessage('');
 
       try {
-        const data = await betService.getBets();
+        const data = await betService.getCurrentUserBets();
 
         if (isMounted) {
           setTrackedResults(data);

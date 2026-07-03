@@ -1,4 +1,5 @@
 import { apiClient, unwrapApiData, unwrapApiList } from './apiClient';
+import { authService } from './authService';
 
 export type BetStatus = 'pending' | 'won' | 'lost' | 'cancelled' | string;
 
@@ -108,6 +109,20 @@ export const betService = {
   async getBets(): Promise<BetItem[]> {
     const response = await apiClient.get('/api/bets/get-all');
     return unwrapApiList<RawBet>(response).map(mapBet);
+  },
+
+  async getCurrentUserBets(): Promise<BetItem[]> {
+    const [bets, currentUser] = await Promise.all([
+      this.getBets(),
+      authService.getCurrentUser().catch(() => authService.getStoredUserProfile()),
+    ]);
+    const currentUserId = Number(currentUser?.userId ?? currentUser?.id);
+
+    if (!Number.isFinite(currentUserId)) {
+      return [];
+    }
+
+    return bets.filter((bet) => bet.userId === currentUserId);
   },
 
   async getBetById(id: number | string): Promise<BetItem> {
