@@ -329,15 +329,8 @@ export const adminScheduleRaceApi = {
   },
 
   async getRacesByTournament(tournamentId: number | string): Promise<AdminRaceItem[]> {
-    let rawItems: RawRecord[];
-
-    try {
-      const response = await apiClient.get(`/api/tournaments/${tournamentId}/get-race-list`);
-      rawItems = unwrapListFromResponse<RawRecord>(response);
-    } catch {
-      const response = await apiClient.get(`/api/races/get-by-tournament/${tournamentId}`);
-      rawItems = unwrapListFromResponse<RawRecord>(response);
-    }
+    const response = await apiClient.get(`/api/tournaments/${tournamentId}/get-race-list`);
+    const rawItems = unwrapListFromResponse<RawRecord>(response);
 
     return rawItems
       .map(mapRace)
@@ -387,3 +380,4 @@ export const adminScheduleRaceApi = {
     await apiClient.post(`/api/v1/admin/races/cancel-race/${raceId}`);
   },
 };
+

@@ -199,7 +199,7 @@ const ensureMockRaces = async (tournamentId: number | string) => {
 export const raceCrudService = {
   async getRacesByTournament(tournamentId: number | string): Promise<RaceCrudItem[]> {
     try {
-      const response = await apiClient.get(`/api/races/get-by-tournament/${tournamentId}`);
+      const response = await apiClient.get(`/api/tournaments/${tournamentId}/get-race-list`);
       return unwrapApiList<RawRecord>(response).map(mapRace);
     } catch {
       return ensureMockRaces(tournamentId);
@@ -293,3 +293,4 @@ export const raceCrudService = {
     }
   },
 };
+
