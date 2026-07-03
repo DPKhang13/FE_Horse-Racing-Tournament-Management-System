@@ -109,20 +109,28 @@ export const toDateTimeInputValue = (value: unknown, fallback = '') => {
     return fallback;
   }
 
-  if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(text)) {
+  if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(text) && !/(Z|[+-]\d{2}:?\d{2})$/i.test(text)) {
     return text.slice(0, 16);
   }
 
   const date = new Date(text);
-  return Number.isNaN(date.getTime()) ? fallback : date.toISOString().slice(0, 16);
+  if (Number.isNaN(date.getTime())) {
+    return fallback;
+  }
+
+  const offsetMs = date.getTimezoneOffset() * 60 * 1000;
+  return new Date(date.getTime() - offsetMs).toISOString().slice(0, 16);
 };
 
-const toApiDateTime = (value: string) => {
-  if (!value) {
+const toApiInstant = (value: string) => {
+  const text = value.trim();
+
+  if (!text) {
     return undefined;
   }
 
-  return value.length === 16 ? `${value}:00` : value;
+  const date = new Date(text);
+  return Number.isNaN(date.getTime()) ? undefined : date.toISOString();
 };
 
 const extractList = <T,>(value: unknown): T[] => {
@@ -244,8 +252,8 @@ const toRacePayload = (data: AdminRaceFormData) => ({
   raceNumber: Number(data.raceNumber),
   rankGroup: normalizeRankGroup(data.rankGroup),
   lapCount: Number(data.lapCount),
-  scheduledAt: toApiDateTime(data.scheduledAt),
-  predictionClosesAt: data.predictionClosesAt ? toApiDateTime(data.predictionClosesAt) : undefined,
+  scheduledAt: toApiInstant(data.scheduledAt),
+  predictionClosesAt: data.predictionClosesAt ? toApiInstant(data.predictionClosesAt) : undefined,
   distanceM: Number(data.distanceM),
   trackType: data.trackType.trim() || undefined,
   maxHorses: Number(data.maxHorses),

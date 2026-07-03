@@ -86,6 +86,17 @@ const toDateTimeLocal = (date: string, time: string) => {
   return `${date}T${time || '09:00'}`;
 };
 
+const toApiInstant = (value?: string) => {
+  const text = value?.trim();
+
+  if (!text) {
+    return undefined;
+  }
+
+  const date = new Date(text);
+  return Number.isNaN(date.getTime()) ? undefined : date.toISOString();
+};
+
 const normalizeRaceStatus = (value: unknown): MatchStatus => {
   const text = asString(value, 'Scheduled').toLowerCase();
 
@@ -147,8 +158,8 @@ const toRacePayload = (tournamentId: number | string, data: RaceFormData) => ({
   raceNumber: Number(data.raceNumber),
   rankGroup: data.rankGroup.trim(),
   lapCount: Number(data.lapCount),
-  scheduledAt: data.scheduledAt,
-  predictionClosesAt: data.predictionClosesAt || undefined,
+  scheduledAt: toApiInstant(data.scheduledAt),
+  predictionClosesAt: toApiInstant(data.predictionClosesAt),
   distanceM: Number(data.distanceM),
   trackType: data.trackType.trim(),
   maxHorses: Number(data.maxHorses),
