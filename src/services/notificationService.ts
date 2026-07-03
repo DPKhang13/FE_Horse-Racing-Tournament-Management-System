@@ -70,7 +70,7 @@ const mapNotification = (raw: RawNotification): NotificationItem => ({
 
 export const notificationService = {
   async getNotifications(): Promise<NotificationItem[]> {
-    const response = await apiClient.get('/api/notifications/get-all');
+    const response = await apiClient.get('/api/notifications/my-notifications');
     return unwrapApiList<RawNotification>(response).map(mapNotification);
   },
 

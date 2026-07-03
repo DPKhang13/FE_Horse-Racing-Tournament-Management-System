@@ -15,9 +15,10 @@ import {
   UserCheck,
   X,
 } from 'lucide-react';
-import { mockNotifications } from '../../mocks/notificationMockData';
+import { authService } from '../../services/authService';
 import { getApiErrorMessage } from '../../services/apiClient';
 import { notificationService, type NotificationFormData, type NotificationItem } from '../../services/notificationService';
+import type { UserProfile } from '../../types/user';
 
 type ReadFilter = 'all' | 'unread' | 'read';
 type NotificationTone = 'success' | 'warning' | 'info' | 'premium';
@@ -113,6 +114,7 @@ const formatDateTime = (value?: string) => {
 
 const NotificationsPage = () => {
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
+  const [profile, setProfile] = useState<UserProfile | undefined>(() => authService.getStoredUserProfile());
   const [form, setForm] = useState<NotificationFormData>(initialForm);
   const [editingId, setEditingId] = useState<number | undefined>();
   const [isLoading, setIsLoading] = useState(true);
@@ -121,6 +123,7 @@ const NotificationsPage = () => {
   const [readFilter, setReadFilter] = useState<ReadFilter>('all');
   const [typeFilter, setTypeFilter] = useState('all');
   const [searchTerm, setSearchTerm] = useState('');
+  const canManageNotifications = profile?.roleType ? profile.roleType !== 'spectator' : false;
 
   const loadNotifications = async () => {
     setIsLoading(true);
@@ -128,10 +131,10 @@ const NotificationsPage = () => {
 
     try {
       const notificationList = await notificationService.getNotifications();
-      setNotifications(notificationList.length > 0 ? notificationList : mockNotifications);
+      setNotifications(notificationList);
     } catch (error) {
-      setErrorMessage(getApiErrorMessage(error, 'Unable to load notifications. Showing sample notification data.'));
-      setNotifications(mockNotifications);
+      setErrorMessage(getApiErrorMessage(error, 'Unable to load notifications.'));
+      setNotifications([]);
     } finally {
       setIsLoading(false);
     }
@@ -140,6 +143,27 @@ const NotificationsPage = () => {
   useEffect(() => {
     void loadNotifications();
   }, []);
+
+  useEffect(() => {
+    const syncProfile = () => setProfile(authService.getStoredUserProfile());
+
+    window.addEventListener('auth-changed', syncProfile);
+
+    if (!authService.getStoredUserProfile()) {
+      void authService.getCurrentUser().then(setProfile).catch(() => setProfile(undefined));
+    }
+
+    return () => {
+      window.removeEventListener('auth-changed', syncProfile);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!canManageNotifications && editingId) {
+      setEditingId(undefined);
+      setForm(initialForm);
+    }
+  }, [canManageNotifications, editingId]);
 
   const filteredNotifications = useMemo(() => {
     const normalizedSearch = searchTerm.trim().toLowerCase();
@@ -179,6 +203,11 @@ const NotificationsPage = () => {
     setMessage('');
     setErrorMessage('');
 
+    if (!canManageNotifications) {
+      setErrorMessage('Your role can only view notifications.');
+      return;
+    }
+
     try {
       if (editingId) {
         await notificationService.updateNotification(editingId, form);
@@ -196,6 +225,10 @@ const NotificationsPage = () => {
   };
 
   const handleEdit = (item: NotificationItem) => {
+    if (!canManageNotifications) {
+      return;
+    }
+
     setEditingId(item.notificationId);
     setForm({
       title: item.title,
@@ -231,8 +264,8 @@ const NotificationsPage = () => {
 
     try {
       await notificationService.deleteNotification(id);
+      setNotifications((current) => current.filter((item) => item.notificationId !== id));
       setMessage('Notification deleted.');
-      await loadNotifications();
     } catch (error) {
       setErrorMessage(getApiErrorMessage(error, 'Could not delete notification.'));
     }
@@ -262,58 +295,64 @@ const NotificationsPage = () => {
         </div>
       </section>
 
-      <section className="mx-auto grid max-w-[1440px] gap-6 px-4 py-8 md:px-8 xl:grid-cols-[minmax(300px,420px)_minmax(0,1fr)]">
-        <aside className="space-y-6">
+      {(message || errorMessage) && (
+        <section className="mx-auto grid max-w-[1440px] gap-3 px-4 pt-8 md:px-8">
           {message && <StatusBanner tone="success" text={message} />}
           {errorMessage && <StatusBanner tone="error" text={errorMessage} />}
+        </section>
+      )}
 
-          <section className="glass-panel rounded-xl p-5">
-            <div className="mb-5 flex items-center justify-between gap-3">
-              <div>
-                <p className="text-xs font-bold uppercase tracking-[0.18em] text-secondary">Composer</p>
-                <h2 className="font-display mt-1 text-2xl font-bold text-on-surface">
-                  {editingId ? 'Edit alert' : 'Create alert'}
-                </h2>
+      <section className={`mx-auto grid max-w-[1440px] gap-6 px-4 ${message || errorMessage ? 'py-6' : 'py-8'} md:px-8 ${canManageNotifications ? 'xl:grid-cols-[minmax(300px,420px)_minmax(0,1fr)]' : 'xl:grid-cols-1'}`}>
+        {canManageNotifications && (
+          <aside className="space-y-6">
+            <section className="glass-panel rounded-xl p-5">
+              <div className="mb-5 flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-xs font-bold uppercase tracking-[0.18em] text-secondary">Composer</p>
+                  <h2 className="font-display mt-1 text-2xl font-bold text-on-surface">
+                    {editingId ? 'Edit alert' : 'Create alert'}
+                  </h2>
+                </div>
+                {editingId ? (
+                  <button
+                    type="button"
+                    onClick={handleCancelEdit}
+                    className="rounded-lg border border-outline-variant/60 p-2 text-on-surface-variant transition hover:border-primary hover:text-primary"
+                    aria-label="Cancel edit"
+                    title="Cancel edit"
+                  >
+                    <X className="h-5 w-5" />
+                  </button>
+                ) : (
+                  <Send className="h-5 w-5 text-secondary" />
+                )}
               </div>
-              {editingId ? (
-                <button
-                  type="button"
-                  onClick={handleCancelEdit}
-                  className="rounded-lg border border-outline-variant/60 p-2 text-on-surface-variant transition hover:border-primary hover:text-primary"
-                  aria-label="Cancel edit"
-                  title="Cancel edit"
-                >
-                  <X className="h-5 w-5" />
+
+              <form onSubmit={handleSubmit} className="grid gap-4">
+                <TextInput label="Title" value={form.title} onChange={(value) => setForm((current) => ({ ...current, title: value }))} required />
+                <TextArea label="Message" value={form.message} onChange={(value) => setForm((current) => ({ ...current, message: value }))} required />
+                <SelectInput label="Notification type" value={form.type} onChange={(value) => setForm((current) => ({ ...current, type: value }))} />
+                <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-1 2xl:grid-cols-2">
+                  <TextInput label="Reference ID" type="number" value={form.refId ? String(form.refId) : ''} onChange={(value) => setForm((current) => ({ ...current, refId: value ? Number(value) : undefined }))} />
+                  <TextInput label="Reference type" value={form.refType ?? ''} onChange={(value) => setForm((current) => ({ ...current, refType: value }))} />
+                </div>
+                <label className="flex items-center gap-3 rounded-lg border border-outline-variant/50 bg-surface-container-lowest/50 px-4 py-3 text-sm font-semibold text-on-surface">
+                  <input
+                    type="checkbox"
+                    checked={form.isRead}
+                    onChange={(event) => setForm((current) => ({ ...current, isRead: event.target.checked }))}
+                    className="h-4 w-4 accent-secondary"
+                  />
+                  Mark as read after sending
+                </label>
+                <button className="gold-gradient inline-flex items-center justify-center gap-2 rounded-lg px-5 py-3 text-sm font-extrabold text-on-primary transition active:scale-[0.99]">
+                  {editingId ? <Check className="h-4 w-4" /> : <Send className="h-4 w-4" />}
+                  {editingId ? 'Update alert' : 'Create alert'}
                 </button>
-              ) : (
-                <Send className="h-5 w-5 text-secondary" />
-              )}
-            </div>
-
-            <form onSubmit={handleSubmit} className="grid gap-4">
-              <TextInput label="Title" value={form.title} onChange={(value) => setForm((current) => ({ ...current, title: value }))} required />
-              <TextArea label="Message" value={form.message} onChange={(value) => setForm((current) => ({ ...current, message: value }))} required />
-              <SelectInput label="Notification type" value={form.type} onChange={(value) => setForm((current) => ({ ...current, type: value }))} />
-              <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-1 2xl:grid-cols-2">
-                <TextInput label="Reference ID" type="number" value={form.refId ? String(form.refId) : ''} onChange={(value) => setForm((current) => ({ ...current, refId: value ? Number(value) : undefined }))} />
-                <TextInput label="Reference type" value={form.refType ?? ''} onChange={(value) => setForm((current) => ({ ...current, refType: value }))} />
-              </div>
-              <label className="flex items-center gap-3 rounded-lg border border-outline-variant/50 bg-surface-container-lowest/50 px-4 py-3 text-sm font-semibold text-on-surface">
-                <input
-                  type="checkbox"
-                  checked={form.isRead}
-                  onChange={(event) => setForm((current) => ({ ...current, isRead: event.target.checked }))}
-                  className="h-4 w-4 accent-secondary"
-                />
-                Mark as read after sending
-              </label>
-              <button className="gold-gradient inline-flex items-center justify-center gap-2 rounded-lg px-5 py-3 text-sm font-extrabold text-on-primary transition active:scale-[0.99]">
-                {editingId ? <Check className="h-4 w-4" /> : <Send className="h-4 w-4" />}
-                {editingId ? 'Update alert' : 'Create alert'}
-              </button>
-            </form>
-          </section>
-        </aside>
+              </form>
+            </section>
+          </aside>
+        )}
 
         <section className="glass-panel min-w-0 rounded-xl p-5 md:p-6">
           <div className="flex flex-col gap-5 border-b border-outline-variant/40 pb-5 lg:flex-row lg:items-center lg:justify-between">
@@ -364,6 +403,7 @@ const NotificationsPage = () => {
               <NotificationCard
                 key={item.notificationId}
                 item={item}
+                canEdit={canManageNotifications}
                 onEdit={handleEdit}
                 onMarkRead={handleMarkRead}
                 onDelete={handleDelete}
@@ -386,11 +426,13 @@ const NotificationsPage = () => {
 
 const NotificationCard = ({
   item,
+  canEdit,
   onEdit,
   onMarkRead,
   onDelete,
 }: {
   item: NotificationItem;
+  canEdit: boolean;
   onEdit: (item: NotificationItem) => void;
   onMarkRead: (id: number) => void;
   onDelete: (id: number) => void;
@@ -431,9 +473,11 @@ const NotificationCard = ({
         </div>
 
         <div className="flex shrink-0 gap-2 lg:opacity-80 lg:transition lg:group-hover:opacity-100">
-          <IconButton label="Edit notification" onClick={() => onEdit(item)}>
-            <Edit3 className="h-4 w-4" />
-          </IconButton>
+          {canEdit && (
+            <IconButton label="Edit notification" onClick={() => onEdit(item)}>
+              <Edit3 className="h-4 w-4" />
+            </IconButton>
+          )}
           <IconButton label="Mark as read" onClick={() => onMarkRead(item.notificationId)} disabled={isRead}>
             <Check className="h-4 w-4" />
           </IconButton>
