@@ -1,9 +1,6 @@
-import { useEffect, useMemo, useState } from 'react';
-import { Link, useLocation, useSearchParams } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { motion } from 'motion/react';
 import { CheckCircle2, CircleX, Wallet } from 'lucide-react';
-import { getApiErrorMessage } from '../../services/apiClient';
-import { paymentService, type VnpayReturnResponse } from '../../services/paymentService';
 
 const revealUp = {
   hidden: { opacity: 0, y: 24 },
@@ -11,58 +8,16 @@ const revealUp = {
 };
 
 const PaymentResultPage = () => {
-  const location = useLocation();
   const [searchParams] = useSearchParams();
-  const [returnResult, setReturnResult] = useState<VnpayReturnResponse>();
-  const [isSyncing, setIsSyncing] = useState(false);
-  const [syncError, setSyncError] = useState('');
-  const responseCode = returnResult?.responseCode ?? searchParams.get('vnp_ResponseCode');
-  const transactionStatus = returnResult?.transactionStatus ?? searchParams.get('vnp_TransactionStatus');
-  const txnRef = returnResult?.txnRef ?? returnResult?.transactionRef ?? searchParams.get('vnp_TxnRef') ?? searchParams.get('txnRef');
-  const amountValue = Number(searchParams.get('vnp_Amount'));
-  const amount = Number.isFinite(amountValue) && amountValue > 0 ? amountValue / 100 : undefined;
-  const isSuccess = useMemo(() => {
-    if (returnResult?.success !== undefined) {
-      return returnResult.success;
-    }
-
-    return responseCode === '00' && (!transactionStatus || transactionStatus === '00');
-  }, [responseCode, returnResult?.success, transactionStatus]);
-
-  useEffect(() => {
-    if (!location.search) {
-      return;
-    }
-
-    let isMounted = true;
-
-    const syncPaymentReturn = async () => {
-      setIsSyncing(true);
-      setSyncError('');
-
-      try {
-        const result = await paymentService.handleVnpayReturn(location.search);
-
-        if (isMounted) {
-          setReturnResult(result);
-        }
-      } catch (error) {
-        if (isMounted) {
-          setSyncError(getApiErrorMessage(error, 'Could not confirm payment with the server.'));
-        }
-      } finally {
-        if (isMounted) {
-          setIsSyncing(false);
-        }
-      }
-    };
-
-    void syncPaymentReturn();
-
-    return () => {
-      isMounted = false;
-    };
-  }, [location.search]);
+  const isSuccess = searchParams.get('success') === 'true';
+  const txnRef = searchParams.get('txnRef');
+  const pointsAddedValue = Number(searchParams.get('pointsAdded'));
+  const pointsAdded = Number.isFinite(pointsAddedValue)
+    ? new Intl.NumberFormat('vi-VN', { maximumFractionDigits: 0 }).format(pointsAddedValue)
+    : undefined;
+  const transactionStatus = searchParams.get('transactionStatus');
+  const transactionStatusLabel = transactionStatus?.toUpperCase();
+  const message = searchParams.get('message');
 
   return (
     <main className="min-h-screen bg-surface text-on-surface">
@@ -94,23 +49,17 @@ const PaymentResultPage = () => {
               <p className="mt-2 break-words text-base font-bold text-on-surface">{txnRef ?? '-'}</p>
             </div>
             <div className="rounded-lg border border-outline-variant/50 bg-surface-container-lowest p-4">
-              <p className="text-xs font-bold uppercase tracking-[0.14em] text-outline">Response code</p>
-              <p className="mt-2 text-base font-bold text-on-surface">{responseCode ?? '-'}</p>
+              <p className="text-xs font-bold uppercase tracking-[0.14em] text-outline">Points added</p>
+              <p className="mt-2 text-base font-bold text-primary">{pointsAdded ?? '-'}</p>
             </div>
             <div className="rounded-lg border border-outline-variant/50 bg-surface-container-lowest p-4">
-              <p className="text-xs font-bold uppercase tracking-[0.14em] text-outline">Amount</p>
-              <p className="mt-2 text-base font-bold text-primary">
-                {amount === undefined
-                  ? '-'
-                  : new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND', maximumFractionDigits: 0 }).format(amount)}
-              </p>
+              <p className="text-xs font-bold uppercase tracking-[0.14em] text-outline">Transaction status</p>
+              <p className="mt-2 text-base font-bold text-on-surface">{transactionStatusLabel ?? '-'}</p>
             </div>
           </div>
 
           <div className="mt-5 rounded-lg border border-outline-variant/50 bg-surface-container-lowest px-4 py-3 text-sm font-semibold text-on-surface-variant">
-            {isSyncing
-              ? 'Confirming payment with server...'
-              : syncError || returnResult?.message || 'Payment return confirmed.'}
+            {message || 'Payment return received.'}
           </div>
 
           <div className="mt-8 flex flex-col gap-3 sm:flex-row">
