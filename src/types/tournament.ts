@@ -70,3 +70,30 @@ export type TournamentMutationData = {
   registrationCloseAt?: string;
   rulesNotes: string;
 };
+
+export type PrizeResponse = {
+  id: number;
+  prizeId: number;
+  tournamentId: number;
+  tournamentName: string;
+  tournamentStatus: string;
+  prizePool: number;
+  finishPosition: number;
+  prizeName: string;
+  amount: number;
+  note: string;
+};
+
+export type CreatePrizeRequest = {
+  finishPosition: number;
+  prizeName: string;
+  amount: number;
+  note: string;
+};
+
+export type UpdatePrizeRequest = {
+  finishPosition: number;
+  prizeName: string;
+  amount: number;
+  note: string;
+};

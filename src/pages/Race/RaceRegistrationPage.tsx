@@ -5,6 +5,7 @@ import { authService } from '../../services/authService';
 import { HorseService } from '../../services/HorseService';
 import { raceRegistrationService, type RaceRegistrationItem } from '../../services/raceRegistrationService';
 import { scheduleService, type RaceScheduleItem, type TournamentApiItem } from '../../services/scheduleService';
+import { useToastNotifications } from '../../hooks/useToastNotifications';
 import type { Horse } from '../../types/horse';
 import type { UserProfile } from '../../types/user';
 
@@ -74,6 +75,11 @@ const RaceRegistrationPage = () => {
   const isOwner = profile?.roleType === 'horse_owner';
   const canApprove = profile?.roleType === 'admin';
 
+  useToastNotifications([
+    message ? { tone: 'success', text: message } : null,
+    errorMessage ? { tone: 'error', text: errorMessage } : null,
+  ]);
+
   const loadRegistrations = async () => {
     setIsLoading(true);
     setErrorMessage('');
@@ -85,7 +91,7 @@ const RaceRegistrationPage = () => {
       if (currentProfile.roleType === 'horse_owner') {
         const [registrations, horseList, raceList, tournamentList] = await Promise.all([
           raceRegistrationService.getMine(),
-          HorseService.getHorses(),
+          HorseService.getOwnerHorses(currentProfile),
           scheduleService.getRaceSchedule(),
           scheduleService.getTournaments(),
         ]);
@@ -262,9 +268,6 @@ const RaceRegistrationPage = () => {
             </span>
           </button>
         </div>
-
-        {message && <StatusBanner tone="success" text={message} />}
-        {errorMessage && <StatusBanner tone="error" text={errorMessage} />}
 
         {isOwner ? (
           <section className="rounded-xl border border-outline-variant bg-white p-6 shadow-sm">
@@ -548,12 +551,6 @@ const RaceRegistrationPage = () => {
     </div>
   );
 };
-
-const StatusBanner = ({ tone, text }: { tone: 'success' | 'error'; text: string }) => (
-  <div className={`mb-6 rounded-md border px-4 py-3 text-body-sm font-semibold ${tone === 'success' ? 'border-secondary/30 bg-secondary-container/30 text-secondary' : 'border-error/30 bg-error-container/20 text-error'}`}>
-    {text}
-  </div>
-);
 
 const InfoPill = ({ label, value }: { label: string; value: string }) => (
   <div className="rounded-md border border-outline-variant bg-white px-3 py-3">

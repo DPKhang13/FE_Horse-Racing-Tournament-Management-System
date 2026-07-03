@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
-import { ArrowRight, Clock3, Ticket, TrendingUp, X } from 'lucide-react';
+import { Clock3, Ticket, TrendingUp, X } from 'lucide-react';
 import { getApiErrorMessage } from '../../services/apiClient';
 import { betService, type BetItem } from '../../services/betService';
 import { predictionService } from '../../services/predictionService';
@@ -28,6 +28,10 @@ const statusClassName = (status: string) => {
   }
 
   return 'bg-primary/15 text-primary';
+};
+
+const payoutLabel = (status: string) => {
+  return status.toLowerCase() === 'pending' ? 'potential payout' : 'payout';
 };
 
 const PredictionPage = () => {
@@ -92,14 +96,14 @@ const PredictionPage = () => {
   const stats = useMemo(() => {
     const pending = bets.filter((bet) => bet.status.toLowerCase() === 'pending').length;
     const settled = bets.length - pending;
-    const openRaces = openRacePredictions.filter((race) => race.status === 'Open').length;
+    const openRaces = openRacePredictions.length;
     const balanceProxy = bets.reduce(
       (total, bet) => total + (bet.status.toLowerCase() === 'won' ? bet.potentialPayout : 0),
       0,
     );
 
     return { openRaces, pending, settled, balanceProxy };
-  }, [bets, openRacePredictions]);
+  }, [bets, openRacePredictions.length]);
 
   const selectedRace = useMemo(
     () => openRacePredictions.find((race) => race.id === selectedRaceId) ?? openRacePredictions[0],
@@ -175,14 +179,6 @@ const PredictionPage = () => {
           <div className="space-y-3">
             <p className="text-headline-lg font-bold text-primary mb-2">Prediction Center</p>
           </div>
-          <button
-            type="button"
-            onClick={() => openPredictionModal()}
-            className="inline-flex items-center gap-2 rounded-md bg-secondary px-6 py-3 text-sm font-semibold text-white transition hover:bg-secondary-container/90"
-          >
-            New Prediction
-            <ArrowRight className="w-4 h-4" />
-          </button>
         </div>
 
         {errorMessage && (
@@ -302,7 +298,7 @@ const PredictionPage = () => {
                     </div>
                     <div className="mt-4 flex items-center justify-between gap-4 text-sm text-on-surface-variant">
                       <span>{formatPoints(prediction.amount)} stake</span>
-                      <span>{formatPoints(prediction.potentialPayout)} potential payout</span>
+                      <span>{formatPoints(prediction.potentialPayout)} {payoutLabel(prediction.status)}</span>
                     </div>
                     <p className="mt-3 text-sm text-on-surface-variant">Odds {prediction.odds || '-'}</p>
                   </article>

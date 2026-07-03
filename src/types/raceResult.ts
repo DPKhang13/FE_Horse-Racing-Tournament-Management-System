@@ -15,7 +15,6 @@ export type RaceResultEntry = {
   isDisqualified: boolean;
   disqualificationReason?: string;
   prizeAmount?: string;
-  odds?: string;
 };
 
 export type PrizeDistribution = {
@@ -62,11 +61,10 @@ export type RaceResultListItem = {
     horseName: string;
     jockeyName: string;
     finishTime: string;
-    odds?: string;
   }>;
 };
 
-export type RankingCategory = 'horse' | 'jockey' | 'owner';
+export type RankingCategory = 'horse' | 'jockey';
 
 export type RankingEntry = {
   rank: number;

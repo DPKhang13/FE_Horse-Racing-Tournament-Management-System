@@ -1,13 +1,24 @@
-import type { RaceResultEntry } from '../../../types/raceResult';
+import type { PrizeDistribution, RaceResultEntry } from '../../../types/raceResult';
 import RankBadge from './RankBadge';
 
 type RaceResultTableProps = {
   entries: RaceResultEntry[];
+  prizeDistributions?: PrizeDistribution[];
   showPrize?: boolean;
   showPoints?: boolean;
 };
 
-const RaceResultTable = ({ entries, showPrize = true, showPoints = true }: RaceResultTableProps) => {
+const getEntryPrize = (entry: RaceResultEntry, prizeDistributions: PrizeDistribution[]) =>
+  entry.prizeAmount ??
+  prizeDistributions.find((prize) => prize.position === entry.finishPosition)?.amount ??
+  '-';
+
+const RaceResultTable = ({
+  entries,
+  prizeDistributions = [],
+  showPrize = true,
+  showPoints = true,
+}: RaceResultTableProps) => {
   const sortedEntries = [...entries].sort((a, b) => {
     if (a.isDisqualified && !b.isDisqualified) {
       return 1;
@@ -21,22 +32,21 @@ const RaceResultTable = ({ entries, showPrize = true, showPoints = true }: RaceR
   });
 
   return (
-    <div className="overflow-x-auto">
-      <table className="w-full text-left">
+    <div className="w-full overflow-hidden">
+      <table className="w-full table-fixed text-left">
         <thead className="bg-surface-container border-b border-outline-variant">
           <tr>
-            <th className="px-6 py-4 text-label-sm text-outline uppercase tracking-wider">Rank</th>
-            <th className="px-6 py-4 text-label-sm text-outline uppercase tracking-wider">Gate</th>
-            <th className="px-6 py-4 text-label-sm text-outline uppercase tracking-wider">Horse</th>
-            <th className="px-6 py-4 text-label-sm text-outline uppercase tracking-wider">Jockey</th>
-            <th className="px-6 py-4 text-label-sm text-outline uppercase tracking-wider text-right">Time</th>
+            <th className="w-[9%] px-3 py-4 text-label-sm text-outline uppercase tracking-wider">Rank</th>
+            <th className="w-[8%] px-3 py-4 text-label-sm text-outline uppercase tracking-wider">Gate</th>
+            <th className="w-[24%] px-3 py-4 text-label-sm text-outline uppercase tracking-wider">Horse</th>
+            <th className="w-[22%] px-3 py-4 text-label-sm text-outline uppercase tracking-wider">Jockey</th>
+            <th className="w-[15%] px-3 py-4 text-label-sm text-outline uppercase tracking-wider text-right">Time</th>
             {showPoints && (
-              <th className="px-6 py-4 text-label-sm text-outline uppercase tracking-wider text-right">Points</th>
+              <th className="w-[10%] px-3 py-4 text-label-sm text-outline uppercase tracking-wider text-right">Points</th>
             )}
             {showPrize && (
-              <th className="px-6 py-4 text-label-sm text-outline uppercase tracking-wider text-right">Prize</th>
+              <th className="w-[12%] px-3 py-4 text-label-sm text-outline uppercase tracking-wider text-right">Prize</th>
             )}
-            <th className="px-6 py-4 text-label-sm text-outline uppercase tracking-wider text-right">Odds</th>
           </tr>
         </thead>
         <tbody className="divide-y divide-outline-variant">
@@ -45,7 +55,7 @@ const RaceResultTable = ({ entries, showPrize = true, showPoints = true }: RaceR
               key={entry.id}
               className={`hover:bg-surface-container-lowest transition-colors ${entry.isDisqualified ? 'bg-error-container/30' : ''}`}
             >
-              <td className="px-6 py-4">
+              <td className="px-3 py-4">
                 {entry.isDisqualified ? (
                   <span className="inline-flex rounded px-2 py-1 text-label-sm uppercase tracking-wider bg-error-container text-on-error-container">
                     DQ
@@ -58,14 +68,14 @@ const RaceResultTable = ({ entries, showPrize = true, showPoints = true }: RaceR
                   </span>
                 )}
               </td>
-              <td className="px-6 py-4">
+              <td className="px-3 py-4">
                 <span className="text-body-sm font-medium text-on-surface-variant tabular-nums">
                   {entry.gateNumber}
                 </span>
               </td>
-              <td className="px-6 py-4">
+              <td className="px-3 py-4">
                 <div>
-                  <span className="text-body-sm font-bold text-primary">{entry.horseName}</span>
+                  <span className="break-words text-body-sm font-bold text-primary">{entry.horseName}</span>
                   {entry.isDisqualified && entry.disqualificationReason && (
                     <p className="text-label-sm text-on-error-container mt-1 normal-case tracking-normal font-normal">
                       {entry.disqualificationReason}
@@ -73,33 +83,28 @@ const RaceResultTable = ({ entries, showPrize = true, showPoints = true }: RaceR
                   )}
                 </div>
               </td>
-              <td className="px-6 py-4">
-                <span className="text-body-sm text-on-surface-variant font-medium">{entry.jockeyName}</span>
+              <td className="px-3 py-4">
+                <span className="break-words text-body-sm text-on-surface-variant font-medium">{entry.jockeyName}</span>
               </td>
-              <td className="px-6 py-4 text-right">
+              <td className="px-3 py-4 text-right">
                 <span className="text-body-sm font-medium text-on-surface-variant tabular-nums">
                   {entry.finishTime ?? '-'}
                 </span>
               </td>
               {showPoints && (
-                <td className="px-6 py-4 text-right">
+                <td className="px-3 py-4 text-right">
                   <span className="text-body-sm font-semibold text-primary tabular-nums">
                     {entry.pointsAwarded}
                   </span>
                 </td>
               )}
               {showPrize && (
-                <td className="px-6 py-4 text-right">
+                <td className="px-3 py-4 text-right">
                   <span className="text-body-sm font-bold text-secondary tabular-nums">
-                    {entry.prizeAmount ?? '-'}
+                    {getEntryPrize(entry, prizeDistributions)}
                   </span>
                 </td>
               )}
-              <td className="px-6 py-4 text-right">
-                <span className="text-body-sm font-bold text-secondary tabular-nums">
-                  {entry.odds ?? '-'}
-                </span>
-              </td>
             </tr>
           ))}
         </tbody>

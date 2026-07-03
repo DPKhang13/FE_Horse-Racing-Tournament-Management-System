@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { BarChart3, Trophy } from 'lucide-react';
+import { useToastNotifications } from '../../hooks/useToastNotifications';
 import { raceResultService } from '../../services/raceResultService';
 import type { RankingBoard, RankingCategory } from '../../types/raceResult';
 import RankingTable from './components/RankingTable';
@@ -8,7 +9,6 @@ import ResultNav from './components/ResultNav';
 const categoryOptions: { value: RankingCategory; label: string }[] = [
   { value: 'horse', label: 'Horses' },
   { value: 'jockey', label: 'Jockeys' },
-  { value: 'owner', label: 'Owners' },
 ];
 
 const formatLastUpdated = (dateString: string) => {
@@ -26,6 +26,10 @@ const RankingPage = () => {
   const [rankingBoard, setRankingBoard] = useState<RankingBoard | undefined>();
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState('');
+
+  useToastNotifications([
+    errorMessage ? { tone: 'error', text: errorMessage } : null,
+  ]);
 
   useEffect(() => {
     let isMounted = true;
@@ -135,12 +139,6 @@ const RankingPage = () => {
           )}
         </div>
 
-        {errorMessage && (
-          <div className="mb-6 rounded-md border border-error/30 bg-error-container/20 px-4 py-3 text-body-sm font-semibold text-error">
-            {errorMessage}
-          </div>
-        )}
-
         {isLoading ? (
           <div className="rounded-lg border border-outline-variant bg-white p-12 text-center">
             <BarChart3 className="w-10 h-10 text-outline mx-auto mb-4" />
@@ -155,7 +153,11 @@ const RankingPage = () => {
                 {categoryOptions.find((option) => option.value === category)?.label} Rankings
               </h2>
             </div>
-            <RankingTable entries={rankingBoard.entries} showSubtitle={category !== 'jockey'} />
+            <RankingTable
+              entries={rankingBoard.entries}
+              formLabel={category === 'jockey' ? 'Kinh nghiệm' : 'Form'}
+              showSubtitle={category !== 'jockey'}
+            />
           </section>
         ) : (
           <div className="rounded-lg border border-outline-variant bg-white p-12 text-center">

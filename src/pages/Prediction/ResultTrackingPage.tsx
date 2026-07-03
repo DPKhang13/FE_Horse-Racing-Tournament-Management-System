@@ -218,7 +218,7 @@ const ResultTrackingPage = () => {
                 <h3 className="text-lg font-bold text-primary">Settlement rules</h3>
               </div>
               <ul className="space-y-3 text-sm text-on-surface-variant">
-                <li className="rounded-2xl bg-surface-container p-4">Only predictions placed before prediction_closes_at are eligible.</li>
+                <li className="rounded-2xl bg-surface-container p-4">Only predictions placed before prediction closes at are eligible.</li>
                 <li className="rounded-2xl bg-surface-container p-4">Points are updated once RaceResults are published.</li>
                 <li className="rounded-2xl bg-surface-container p-4">Lost predictions are still recorded for performance tracking.</li>
               </ul>

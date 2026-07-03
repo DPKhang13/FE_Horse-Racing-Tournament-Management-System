@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { ArrowLeft, Calendar, MapPin, Trophy } from 'lucide-react';
 import { Link, useParams } from 'react-router-dom';
 import { raceResultService } from '../../services/raceResultService';
-import type { RaceResultSummary } from '../../types/raceResult';
+import type { RaceResultEntry, RaceResultSummary } from '../../types/raceResult';
 import PrizeBreakdown from './components/PrizeBreakdown';
 import RaceResultTable from './components/RaceResultTable';
 import ResultStatusChip from './components/ResultStatusChip';
@@ -30,6 +30,11 @@ const formatPublishedAt = (dateString?: string) => {
     minute: '2-digit',
   });
 };
+
+const getEntryPrize = (entry: RaceResultEntry, result: RaceResultSummary) =>
+  entry.prizeAmount ??
+  result.prizeDistributions.find((prize) => prize.position === entry.finishPosition)?.amount ??
+  '-';
 
 const RaceResultDetail = () => {
   const { resultId } = useParams<{ resultId: string }>();
@@ -202,7 +207,7 @@ const RaceResultDetail = () => {
                   </div>
                   <div className="flex items-center justify-between text-body-sm">
                     <span className="text-on-surface-variant tabular-nums">{entry.finishTime}</span>
-                    <span className="font-bold text-secondary tabular-nums">{entry.prizeAmount ?? '-'}</span>
+                    <span className="font-bold text-secondary tabular-nums">{getEntryPrize(entry, result)}</span>
                   </div>
                 </article>
               ))}
@@ -216,7 +221,7 @@ const RaceResultDetail = () => {
               <p className="text-label-md text-secondary uppercase tracking-widest mb-1">Full Standings</p>
               <h2 className="text-headline-md font-bold text-primary">Race Result Table</h2>
             </div>
-            <RaceResultTable entries={result.entries} />
+            <RaceResultTable entries={result.entries} prizeDistributions={result.prizeDistributions} />
           </section>
 
           <PrizeBreakdown

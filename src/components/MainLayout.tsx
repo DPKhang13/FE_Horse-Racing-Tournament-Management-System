@@ -313,11 +313,12 @@ const LandingTopBar = ({
             <>
               <Bell className="h-5 w-5 text-on-surface-variant" />
               <Link
-                to={dashboardRoute}
-                className="gold-gradient rounded-lg px-6 py-2 text-label-md font-bold text-on-primary transition-transform active:scale-95"
-                aria-label="Open dashboard"
+                to="/profile"
+                className="flex h-10 w-10 items-center justify-center rounded-full border border-outline-variant text-on-surface transition-colors hover:border-primary hover:text-primary"
+                aria-label="Open profile"
+                title="Profile"
               >
-                Join the Race
+                <User className="h-5 w-5" />
               </Link>
             </>
           ) : (

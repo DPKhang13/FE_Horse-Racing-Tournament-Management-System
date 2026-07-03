@@ -3,10 +3,11 @@ import RankBadge from './RankBadge';
 
 type RankingTableProps = {
   entries: RankingEntry[];
+  formLabel?: string;
   showSubtitle?: boolean;
 };
 
-const RankingTable = ({ entries, showSubtitle = true }: RankingTableProps) => {
+const RankingTable = ({ entries, formLabel = 'Form', showSubtitle = true }: RankingTableProps) => {
   return (
     <div className="overflow-x-auto">
       <table className="w-full text-left">
@@ -18,7 +19,7 @@ const RankingTable = ({ entries, showSubtitle = true }: RankingTableProps) => {
             <th className="px-6 py-4 text-label-sm text-outline uppercase tracking-wider text-right">Wins</th>
             <th className="px-6 py-4 text-label-sm text-outline uppercase tracking-wider text-right">Races</th>
             <th className="px-6 py-4 text-label-sm text-outline uppercase tracking-wider text-right">Win Rate</th>
-            <th className="px-6 py-4 text-label-sm text-outline uppercase tracking-wider text-right">Form</th>
+            <th className="px-6 py-4 text-label-sm text-outline uppercase tracking-wider text-right">{formLabel}</th>
           </tr>
         </thead>
         <tbody className="divide-y divide-outline-variant">
