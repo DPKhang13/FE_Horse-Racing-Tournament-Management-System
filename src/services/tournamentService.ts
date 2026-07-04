@@ -1,4 +1,4 @@
-import { apiClient, unwrapApiData, unwrapApiList } from './apiClient';
+import { apiClient, publicApiClient, unwrapApiData, unwrapApiList } from './apiClient';
 import type { TournamentApiItem } from './scheduleService';
 import type {
   CreatePrizeRequest,
@@ -555,7 +555,7 @@ const cancelMockTournament = (tournamentId: number | string): Tournament => {
 
 export const tournamentService = {
   async getTournaments(status?: string): Promise<TournamentApiItem[]> {
-    const response = await apiClient.get('/api/tournaments/get-tournament-list', {
+    const response = await publicApiClient.get('/api/tournaments/get-tournament-list', {
       params: status ? { status } : undefined,
     });
     return unwrapApiList<TournamentApiItem>(response);
@@ -563,7 +563,7 @@ export const tournamentService = {
 
   async getGlobalTournamentCount(useMockFallback = false): Promise<number> {
     try {
-      const response = await apiClient.get('/api/tournaments/get-global-tournament-count');
+      const response = await publicApiClient.get('/api/tournaments/get-global-tournament-count');
       const data = unwrapApiData<TournamentCountResponse | number>(response);
 
       if (typeof data === 'number') {
@@ -582,7 +582,7 @@ export const tournamentService = {
 
   async getAllTournaments(useMockFallback = true): Promise<Tournament[]> {
     try {
-      const response = await apiClient.get('/api/tournaments/get-tournament-list');
+      const response = await publicApiClient.get('/api/tournaments/get-tournament-list');
       const tournaments = unwrapApiList<RawTournament>(response);
 
       return Promise.all(
@@ -594,7 +594,7 @@ export const tournamentService = {
           }
 
           try {
-            const detailResponse = await apiClient.get(`/api/tournaments/get-tournament/${tournamentId}`);
+            const detailResponse = await publicApiClient.get(`/api/tournaments/get-tournament/${tournamentId}`);
             return mapApiTournament({
               ...item,
               ...unwrapApiData<RawTournament>(detailResponse),
@@ -615,7 +615,7 @@ export const tournamentService = {
 
   async getTournamentById(tournamentId: number | string): Promise<Tournament> {
     try {
-      const response = await apiClient.get(`/api/tournaments/get-tournament/${tournamentId}`);
+      const response = await publicApiClient.get(`/api/tournaments/get-tournament/${tournamentId}`);
       return mapApiTournament(unwrapApiData<RawTournament>(response), 0);
     } catch {
       return getMockTournamentById(tournamentId);
@@ -757,4 +757,3 @@ export const tournamentService = {
     return unwrapApiData<RefereeAssignmentItem>(response);
   },
 };
-
