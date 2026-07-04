@@ -7,13 +7,6 @@ import { walletService } from '../../services/walletService';
 
 const amountOptions = [10000, 20000, 50000, 100000];
 
-const bankOptions = [
-  { value: '', label: 'Auto select' },
-  { value: 'VNPAYQR', label: 'VNPAYQR' },
-  { value: 'VNBANK', label: 'Domestic bank' },
-  { value: 'INTCARD', label: 'International card' },
-];
-
 const revealContainer = {
   hidden: {},
   visible: {
@@ -40,8 +33,6 @@ const formatPoints = (value: number) => new Intl.NumberFormat('vi-VN', {
 
 const WalletPaymentPage = () => {
   const [amount, setAmount] = useState(10000);
-  const [bankCode, setBankCode] = useState('');
-  const [locale, setLocale] = useState('vn');
   const [walletBalance, setWalletBalance] = useState<number | undefined>();
   const [walletStatus, setWalletStatus] = useState('');
   const [isLoadingWallet, setIsLoadingWallet] = useState(true);
@@ -83,7 +74,7 @@ const WalletPaymentPage = () => {
     setErrorMessage('');
 
     try {
-      const response = await paymentService.createVnpayPayment({ amount, bankCode, locale });
+      const response = await paymentService.createVnpayPayment({ amount, locale: 'vn' });
 
       if (!response.paymentUrl) {
         throw new Error('Payment URL was not returned.');
@@ -206,35 +197,6 @@ const WalletPaymentPage = () => {
                     {formatCurrency(option)}
                   </button>
                 ))}
-              </div>
-
-              <div className="grid gap-4 md:grid-cols-2">
-                <label className="grid gap-2">
-                  <span className="text-xs font-bold uppercase tracking-[0.16em] text-outline">Payment method</span>
-                  <select
-                    value={bankCode}
-                    onChange={(event) => setBankCode(event.target.value)}
-                    className="rounded-lg border border-outline-variant bg-surface-container-lowest px-4 py-3 text-sm font-semibold text-on-surface outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20"
-                  >
-                    {bankOptions.map((option) => (
-                      <option key={option.value} value={option.value}>
-                        {option.label}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-
-                <label className="grid gap-2">
-                  <span className="text-xs font-bold uppercase tracking-[0.16em] text-outline">Language</span>
-                  <select
-                    value={locale}
-                    onChange={(event) => setLocale(event.target.value)}
-                    className="rounded-lg border border-outline-variant bg-surface-container-lowest px-4 py-3 text-sm font-semibold text-on-surface outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20"
-                  >
-                    <option value="vn">Vietnamese</option>
-                    <option value="en">English</option>
-                  </select>
-                </label>
               </div>
 
               <motion.button
