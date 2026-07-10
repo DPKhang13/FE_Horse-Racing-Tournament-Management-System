@@ -7,12 +7,12 @@ import {
   type RaceDraftResultItemInput,
   type RacePointRuleItem,
   type RaceResultDraftData,
-  type RaceResultWorkflowItem,
   type RefereeAssignedRaceItem,
   type RefereeReportFormData,
   type RefereeReportItem,
 } from '../../services/raceOperationsService';
 import { useToastNotifications } from '../../hooks/useToastNotifications';
+import { useAdminRaceResults } from '../../hooks/useAdminRaceResults';
 
 const createEmptyDraftItem = (): RaceDraftResultItemInput => ({
   assignmentId: 0,
@@ -46,7 +46,6 @@ const RaceControlPage = () => {
   const [assignedRaces, setAssignedRaces] = useState<RefereeAssignedRaceItem[]>([]);
   const [reports, setReports] = useState<RefereeReportItem[]>([]);
   const [draft, setDraft] = useState<RaceResultDraftData | null>(null);
-  const [adminResults, setAdminResults] = useState<RaceResultWorkflowItem[]>([]);
   const [pointRules, setPointRules] = useState<RacePointRuleItem[]>([createEmptyPointRule()]);
   const [reportForm, setReportForm] = useState<RefereeReportFormData>(initialReportForm);
   const [draftReportId, setDraftReportId] = useState('');
@@ -58,6 +57,15 @@ const RaceControlPage = () => {
   const [isLoadingRaceData, setIsLoadingRaceData] = useState(false);
   const [message, setMessage] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
+  const {
+    resultList: adminResults,
+    isLoading: isLoadingAdminResults,
+    setResultList: setAdminResults,
+    fetchRaceResults: fetchAdminRaceResults,
+    handleConfirm: confirmAdminResults,
+    handleCancel: cancelAdminResults,
+    handlePublish: publishAdminResults,
+  } = useAdminRaceResults({ autoFetch: false });
 
   useToastNotifications([
     message ? { tone: 'success', text: message } : null,
@@ -129,12 +137,11 @@ const RaceControlPage = () => {
       }
 
       if (isAdmin) {
-        const [resultData, ruleData] = await Promise.all([
-          raceOperationsService.getAdminResults(raceId).catch(() => []),
+        const [, ruleData] = await Promise.all([
+          fetchAdminRaceResults(raceId),
           raceOperationsService.getPointRules(raceId).catch(() => []),
         ]);
 
-        setAdminResults(resultData);
         setPointRules(ruleData.length > 0 ? ruleData : [createEmptyPointRule()]);
       }
     } catch (error) {
@@ -255,11 +262,9 @@ const RaceControlPage = () => {
       return;
     }
 
-    await withBusy(async () => {
-      const confirmed = await raceOperationsService.confirmResults(normalizedRaceId);
-      setAdminResults(confirmed);
-      setMessage('Race results confirmed.');
-    });
+    setMessage('');
+    setErrorMessage('');
+    await confirmAdminResults(normalizedRaceId);
   };
 
   const handleCancelResults = async () => {
@@ -268,12 +273,13 @@ const RaceControlPage = () => {
       return;
     }
 
-    await withBusy(async () => {
-      await raceOperationsService.cancelResults(normalizedRaceId, cancelReason);
+    setMessage('');
+    setErrorMessage('');
+    const cancelled = await cancelAdminResults(normalizedRaceId, cancelReason);
+
+    if (cancelled) {
       setCancelReason('');
-      setMessage('Race results cancelled.');
-      await loadRaceData(normalizedRaceId);
-    });
+    }
   };
 
   const handlePublishResults = async () => {
@@ -282,11 +288,9 @@ const RaceControlPage = () => {
       return;
     }
 
-    await withBusy(async () => {
-      const published = await raceOperationsService.publishResults(normalizedRaceId);
-      setMessage(published.message ?? 'Race results published.');
-      await loadRaceData(normalizedRaceId);
-    });
+    setMessage('');
+    setErrorMessage('');
+    await publishAdminResults(normalizedRaceId);
   };
 
   const publishedCount = adminResults.filter((item) => String(item.status ?? '').toLowerCase() === 'published').length;
@@ -376,7 +380,7 @@ const RaceControlPage = () => {
             </div>
             {!normalizedRaceId ? (
               <p className="text-body-sm text-on-surface-variant">Select or enter a race to load workflow data.</p>
-            ) : isLoadingRaceData ? (
+            ) : isLoadingRaceData || isLoadingAdminResults ? (
               <p className="text-body-sm text-on-surface-variant">Loading workflow data...</p>
             ) : (
               <div className="grid gap-4 md:grid-cols-3">
@@ -544,15 +548,15 @@ const RaceControlPage = () => {
                 <div className="mb-5 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
                   <h2 className="font-display text-title-large font-bold text-primary">Admin race results</h2>
                   <div className="flex flex-wrap gap-3">
-                    <button type="button" onClick={() => void handleConfirmResults()} disabled={isBusy} className="rounded-md bg-secondary px-4 py-2 text-label-sm font-bold text-white">Confirm</button>
-                    <button type="button" onClick={() => void handlePublishResults()} disabled={isBusy} className="rounded-md bg-primary px-4 py-2 text-label-sm font-bold text-on-primary">Publish</button>
+                    <button type="button" onClick={() => void handleConfirmResults()} disabled={isBusy || isLoadingAdminResults} className="rounded-md bg-secondary px-4 py-2 text-label-sm font-bold text-white">Confirm</button>
+                    <button type="button" onClick={() => void handlePublishResults()} disabled={isBusy || isLoadingAdminResults} className="rounded-md bg-primary px-4 py-2 text-label-sm font-bold text-on-primary">Publish</button>
                   </div>
                 </div>
                 <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-end">
                   <div className="min-w-0 flex-1">
                     <TextArea label="Cancel reason" value={cancelReason} onChange={setCancelReason} />
                   </div>
-                  <button type="button" onClick={() => void handleCancelResults()} disabled={isBusy} className="rounded-md border border-error/40 px-4 py-3 text-label-sm font-bold text-error">
+                  <button type="button" onClick={() => void handleCancelResults()} disabled={isBusy || isLoadingAdminResults} className="rounded-md border border-error/40 px-4 py-3 text-label-sm font-bold text-error">
                     Cancel results
                   </button>
                 </div>
