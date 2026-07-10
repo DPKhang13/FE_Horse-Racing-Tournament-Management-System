@@ -56,6 +56,18 @@ export type AdminUserPage = {
   size: number;
 };
 
+export type AdminRefereeOption = {
+  refereeId: number;
+  userId?: number | string;
+  username: string;
+  email?: string;
+  fullName: string;
+  status?: AdminUserStatus;
+  licenseNumber?: string;
+  address?: string;
+  createdAt?: string;
+};
+
 export type AdminUserQueryParams = {
   roleType?: UserRoleType | 'All';
   status?: AdminUserStatus | 'All';
@@ -117,16 +129,37 @@ const normalizeProfile = <T>(value: unknown): T | undefined => {
   return value as T;
 };
 
+const asRawRecord = (value: unknown): RawRecord | undefined => {
+  if (!value || typeof value !== 'object') {
+    return undefined;
+  }
+
+  return value as RawRecord;
+};
+
 const mapAdminUser = (raw: RawRecord, index = 0): AdminUser => {
   const horseOwnerProfile = normalizeProfile<AdminHorseOwnerProfile>(
     raw.horseOwnerProfile ?? raw.ownerProfile,
   );
+  const directRefereeId = raw.refereeId ?? raw.refereeProfileId;
+  const inferredRefereeId = directRefereeId ??
+    ((raw.userId || raw.refereeUserId || raw.accountId) && raw.id ? raw.id : undefined);
+  const refereeProfile = normalizeProfile<AdminRefereeProfile>(raw.refereeProfile) ??
+    (inferredRefereeId
+      ? {
+          refereeId: asNumber(inferredRefereeId),
+          licenseNumber: raw.licenseNumber === undefined || raw.licenseNumber === null ? undefined : asString(raw.licenseNumber),
+          address: raw.address === undefined || raw.address === null ? undefined : asString(raw.address),
+          status: raw.refereeStatus === undefined || raw.refereeStatus === null ? undefined : asString(raw.refereeStatus),
+          createdAt: raw.createdAt === undefined || raw.createdAt === null ? undefined : asString(raw.createdAt),
+        }
+      : undefined);
 
   return {
-    userId: (raw.userId ?? raw.id ?? raw.accountId ?? index + 1) as number | string,
-    username: asString(raw.username, 'unknown-user'),
+    userId: (raw.userId ?? raw.refereeUserId ?? raw.id ?? raw.accountId ?? index + 1) as number | string,
+    username: asString(raw.username ?? raw.refereeUsername, 'unknown-user'),
     email: asString(raw.email),
-    fullName: asString(raw.fullName ?? raw.name ?? raw.username, 'Unknown User'),
+    fullName: asString(raw.fullName ?? raw.refereeFullName ?? raw.name ?? raw.username, 'Unknown User'),
     phone: raw.phone === undefined || raw.phone === null ? undefined : asString(raw.phone),
     roleType: normalizeRoleType(raw.roleType ?? raw.role),
     status: normalizeStatus(raw.status),
@@ -136,7 +169,7 @@ const mapAdminUser = (raw: RawRecord, index = 0): AdminUser => {
     horseOwnerProfile,
     ownerProfile: horseOwnerProfile,
     jockeyProfile: normalizeProfile<AdminJockeyProfile>(raw.jockeyProfile),
-    refereeProfile: normalizeProfile<AdminRefereeProfile>(raw.refereeProfile),
+    refereeProfile,
   };
 };
 
@@ -190,6 +223,59 @@ const normalizeUserPage = (data: unknown, params: AdminUserQueryParams = {}): Ad
   };
 };
 
+const getRawList = (data: unknown): RawRecord[] => {
+  if (Array.isArray(data)) {
+    return data.map((item) => item as RawRecord);
+  }
+
+  if (!data || typeof data !== 'object') {
+    return [];
+  }
+
+  const objectData = data as RawRecord;
+  const listKeys = ['content', 'items', 'data', 'referees', 'users', 'results', 'list'];
+
+  for (const key of listKeys) {
+    if (Array.isArray(objectData[key])) {
+      return (objectData[key] as unknown[]).map((item) => item as RawRecord);
+    }
+  }
+
+  return [];
+};
+
+const mapRefereeOption = (raw: RawRecord, index = 0): AdminRefereeOption => {
+  const refereeProfile = asRawRecord(raw.refereeProfile ?? raw.profile);
+  const user = asRawRecord(raw.user ?? raw.account);
+  const userId = raw.userId ?? raw.refereeUserId ?? user?.userId ?? user?.id ?? raw.accountId;
+  const refereeId = asNumber(
+    raw.refereeId ??
+      raw.refereeProfileId ??
+      refereeProfile?.refereeId ??
+      refereeProfile?.id ??
+      raw.id,
+    index + 1,
+  );
+  const username = asString(raw.username ?? raw.refereeUsername ?? user?.username, 'unknown-user');
+  const email = asString(raw.email ?? user?.email);
+  const fullName = asString(
+    raw.fullName ?? raw.refereeFullName ?? raw.name ?? user?.fullName ?? user?.name ?? username,
+    `Referee ${refereeId}`,
+  );
+
+  return {
+    refereeId,
+    userId: userId as number | string | undefined,
+    username,
+    email: email || undefined,
+    fullName,
+    status: normalizeStatus(raw.status ?? refereeProfile?.status),
+    licenseNumber: asString(raw.licenseNumber ?? refereeProfile?.licenseNumber) || undefined,
+    address: asString(raw.address ?? refereeProfile?.address) || undefined,
+    createdAt: asString(raw.createdAt ?? refereeProfile?.createdAt) || undefined,
+  };
+};
+
 const cleanUserPayload = (data: AdminCreateUserRequest | AdminUpdateUserRequest) => ({
   username: data.username.trim(),
   email: data.email.trim(),
@@ -206,6 +292,13 @@ const cleanUserPayload = (data: AdminCreateUserRequest | AdminUpdateUserRequest)
 });
 
 export const adminUserService = {
+  async getReferees(): Promise<AdminRefereeOption[]> {
+    const response = await apiClient.get('/api/admin/users/referees');
+    return getRawList(unwrapApiData<unknown>(response))
+      .map(mapRefereeOption)
+      .filter((referee) => Number.isFinite(referee.refereeId) && referee.refereeId > 0);
+  },
+
   async getUsers(params: AdminUserQueryParams = {}): Promise<AdminUserPage> {
     const response = await apiClient.get('/api/admin/users', {
       params: {
