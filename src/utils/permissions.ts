@@ -88,6 +88,7 @@ export const navigationItems: NavigationItem[] = [
   { label: 'Tournaments', to: '/tournaments', allowedRoles: ['admin'], requiresAuth: true },
   { label: 'Schedule', to: '/admin/schedule', allowedRoles: ['admin'], requiresAuth: true },
   { label: 'Races', to: '/admin/races', allowedRoles: ['admin'], requiresAuth: true },
+  { label: 'Bet Management', to: '/admin/bets', allowedRoles: ['admin'], requiresAuth: true },
   { label: 'Horses', to: '/admin/horses', allowedRoles: ['admin'], requiresAuth: true },
   { label: 'Race Registrations', to: '/admin/registrations', allowedRoles: ['admin'], requiresAuth: true },
   { label: 'Race Control', to: '/race-control', allowedRoles: ['admin', 'race_referee'], requiresAuth: true },
