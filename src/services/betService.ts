@@ -33,14 +33,20 @@ export type BetFormData = {
 export type BetOptionItem = {
   optionId: number;
   raceId?: number;
+  assignmentId?: number;
   raceName: string;
   horseId?: number;
   horseName: string;
+  horseAvatarUrl?: string;
   jockeyId?: number;
+  jockeyName?: string;
   jockeyFullName?: string;
+  jockeyAvatarUrl?: string;
+  gateNumber?: number;
   currentRate: number;
   totalBetPoints: number;
   totalBetCount: number;
+  updatedAt?: string;
 };
 
 type RawBet = Record<string, unknown>;
@@ -94,14 +100,20 @@ const mapBet = (raw: RawBet): BetItem => {
 const mapBetOption = (raw: RawBetOption): BetOptionItem => ({
   optionId: asNumber(raw.optionId ?? raw.id),
   raceId: raw.raceId === undefined ? undefined : asNumber(raw.raceId),
+  assignmentId: raw.assignmentId === undefined ? undefined : asNumber(raw.assignmentId),
   raceName: asString(raw.raceName, 'Race'),
   horseId: raw.horseId === undefined ? undefined : asNumber(raw.horseId),
   horseName: asString(raw.horseName, 'Horse'),
+  horseAvatarUrl: raw.horseAvatarUrl ? asString(raw.horseAvatarUrl) : undefined,
   jockeyId: raw.jockeyId === undefined ? undefined : asNumber(raw.jockeyId),
+  jockeyName: raw.jockeyName ? asString(raw.jockeyName) : undefined,
   jockeyFullName: raw.jockeyFullName ? asString(raw.jockeyFullName) : undefined,
+  jockeyAvatarUrl: raw.jockeyAvatarUrl ? asString(raw.jockeyAvatarUrl) : undefined,
+  gateNumber: raw.gateNumber === undefined ? undefined : asNumber(raw.gateNumber),
   currentRate: asNumber(raw.currentRate ?? raw.betRate ?? raw.odds),
   totalBetPoints: asNumber(raw.totalBetPoints),
   totalBetCount: asNumber(raw.totalBetCount),
+  updatedAt: raw.updatedAt ? asString(raw.updatedAt) : undefined,
 });
 
 export const betService = {
@@ -151,14 +163,27 @@ export const betService = {
   },
 
   async getBetOptions(raceId?: number | string): Promise<BetOptionItem[]> {
-    const response = await apiClient.get('/api/bet-options/get-all', {
-      params: raceId ? { raceId } : undefined,
-    });
+    const response = raceId
+      ? await apiClient.get(`/api/bet-options/get-by-race/${raceId}`)
+      : await apiClient.get('/api/bet-options/get-all');
+
     return unwrapApiList<RawBetOption>(response).map(mapBetOption);
   },
 
   async getBetOptionById(id: number | string): Promise<BetOptionItem> {
     const response = await apiClient.get(`/api/bet-options/get-by-id/${id}`);
+    return mapBetOption(unwrapApiData<RawBetOption>(response));
+  },
+
+  async generateBetOptionsForRace(raceId: number | string): Promise<BetOptionItem[]> {
+    const response = await apiClient.post(`/api/admin/bet-options/generate-by-race/${raceId}`);
+    return unwrapApiList<RawBetOption>(response).map(mapBetOption);
+  },
+
+  async updateBetOptionRate(optionId: number | string, currentRate: number): Promise<BetOptionItem> {
+    const response = await apiClient.put(`/api/admin/bet-options/${optionId}/rate`, {
+      currentRate: Number(currentRate),
+    });
     return mapBetOption(unwrapApiData<RawBetOption>(response));
   },
 };
