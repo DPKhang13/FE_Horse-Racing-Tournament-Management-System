@@ -260,6 +260,10 @@ const getRefereeOptionLabel = (referee: AdminRefereeOption) => {
   const name = referee.fullName || referee.username || 'Unnamed referee';
   const username = referee.username ? `@${referee.username}` : referee.email;
 
+  if (!referee.hasRefereeProfile) {
+    return `${name}${username ? ` (${username})` : ''} - missing referee profile`;
+  }
+
   return `${name}${username ? ` (${username})` : ''} - Ref #${referee.refereeId}`;
 };
 
@@ -561,6 +565,11 @@ const AdminRacesPage = () => {
 
     if (!Number.isFinite(refereeId) || refereeId <= 0) {
       setError('Select a referee before assigning.');
+      return;
+    }
+
+    if (!selectedReferee?.hasRefereeProfile) {
+      setError('This referee user does not have a referee profile ID yet.');
       return;
     }
 
@@ -1222,7 +1231,10 @@ const RefereeAssignmentPanel = ({
   onChange: <K extends keyof RefereeAssignmentFormData>(field: K, value: RefereeAssignmentFormData[K]) => void;
   onRefresh: () => void;
   onCancel: () => void;
-}) => (
+}) => {
+  const hasAssignableReferees = refereeOptions.some((referee) => referee.hasRefereeProfile);
+
+  return (
   <form onSubmit={onSubmit} className="space-y-6 p-6">
     <div className="grid gap-5 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] md:items-end">
       <Field label="Referee">
@@ -1236,15 +1248,18 @@ const RefereeAssignmentPanel = ({
             {isRefereeOptionsLoading
               ? 'Loading referees...'
               : refereeOptions.length > 0
-                ? 'Select referee'
-                : 'No active referees found'}
+                ? hasAssignableReferees
+                  ? 'Select referee'
+                  : 'No assignable referee profiles found'
+                : 'No referee users found'}
           </option>
           {refereeOptions.map((referee) => {
             const refereeId = referee.refereeId;
             const isAssigned = refereeList.some((assignment) => assignment.refereeId === refereeId);
+            const isMissingProfile = !referee.hasRefereeProfile;
 
             return (
-              <option key={`${referee.userId ?? 'referee'}-${refereeId}`} value={refereeId} disabled={isAssigned}>
+              <option key={`${referee.userId ?? 'referee'}-${refereeId}`} value={refereeId} disabled={isAssigned || isMissingProfile}>
                 {getRefereeOptionLabel(referee)}{isAssigned ? ' (assigned)' : ''}
               </option>
             );
@@ -1347,7 +1362,8 @@ const RefereeAssignmentPanel = ({
       </button>
     </div>
   </form>
-);
+  );
+};
 
 const PointRulesEditor = ({
   rules,
