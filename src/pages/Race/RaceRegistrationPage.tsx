@@ -229,19 +229,6 @@ const RaceRegistrationPage = () => {
     }
   };
 
-  const handleDelete = async (id: number | string) => {
-    setMessage('');
-    setErrorMessage('');
-
-    try {
-      await raceRegistrationService.delete(id);
-      setMessage('Registration deleted.');
-      await loadRegistrations();
-    } catch (error) {
-      setErrorMessage(getApiErrorMessage(error, 'Could not delete registration.'));
-    }
-  };
-
   return (
     <div className="min-h-screen bg-surface py-12">
       <div className="mx-auto max-w-container px-4 md:px-margin-desktop">
@@ -520,15 +507,6 @@ const RaceRegistrationPage = () => {
                                   Reject
                                 </button>
                               </>
-                            )}
-                            {isOwner && (
-                              <button
-                                type="button"
-                                onClick={() => void handleDelete(id)}
-                                className="rounded-md border border-outline-variant px-3 py-2 text-label-sm font-bold text-primary"
-                              >
-                                Delete
-                              </button>
                             )}
                           </div>
                         </td>

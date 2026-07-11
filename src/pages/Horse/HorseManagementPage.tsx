@@ -234,7 +234,7 @@ const HorseManagementPage = () => {
   };
 
   const handleDelete = async (horse: Horse) => {
-    const confirmed = window.confirm(`Delete "${horse.name}" from the horse list?`);
+    const confirmed = window.confirm(`Set "${horse.name}" to inactive?`);
 
     if (!confirmed) {
       return;
@@ -243,10 +243,10 @@ const HorseManagementPage = () => {
     setErrorMessage('');
 
     try {
-      await HorseService.deleteHorse(horse.horseId);
-      setHorses((current) => current.filter((item) => item.horseId !== horse.horseId));
+      const updatedHorse = await HorseService.deleteHorse(horse.horseId);
+      setHorses((current) => current.map((item) => (item.horseId === horse.horseId ? updatedHorse : item)));
     } catch (error) {
-      setErrorMessage(getApiErrorMessage(error, 'Unable to delete horse.'));
+      setErrorMessage(getApiErrorMessage(error, 'Unable to deactivate horse.'));
     }
   };
 
@@ -395,7 +395,7 @@ const HorseManagementPage = () => {
                         <IconButton label={`Edit ${horse.name}`} onClick={() => openEditModal(horse)}>
                           <Pencil className="w-4 h-4" />
                         </IconButton>
-                        <IconButton label={`Delete ${horse.name}`} onClick={() => void handleDelete(horse)}>
+                        <IconButton label={`Deactivate ${horse.name}`} onClick={() => void handleDelete(horse)}>
                           <Trash2 className="w-4 h-4" />
                         </IconButton>
                       </div>

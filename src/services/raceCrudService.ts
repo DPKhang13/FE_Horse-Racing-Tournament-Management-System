@@ -246,10 +246,17 @@ export const raceCrudService = {
 
   async deleteRace(raceId: number | string, tournamentId: number | string): Promise<void> {
     try {
-      await apiClient.delete(`/api/races/delete/${raceId}`);
+      await apiClient.patch(`/api/v1/admin/races/cancel-race/${raceId}`);
     } catch {
       const races = await ensureMockRaces(tournamentId);
-      mockRacesByTournament.set(String(tournamentId), races.filter((race) => String(race.raceId) !== String(raceId)));
+      mockRacesByTournament.set(
+        String(tournamentId),
+        races.map((race) =>
+          String(race.raceId) === String(raceId)
+            ? { ...race, status: 'cancelled' }
+            : race,
+        ),
+      );
     }
   },
 
@@ -278,7 +285,6 @@ export const raceCrudService = {
   },
 
   async deleteRound(roundId: number | string, raceId: number | string): Promise<void> {
-    const rounds = mockRoundsByRace.get(String(raceId)) ?? [];
-    mockRoundsByRace.set(String(raceId), rounds.filter((round) => String(round.roundId) !== String(roundId)));
+    throw new Error(`Backend does not provide delete API for lap ${roundId} in race ${raceId}.`);
   },
 };

@@ -195,10 +195,10 @@ const JockeyAssignmentsPage = () => {
 
     try {
       await jockeyAssignmentService.delete(id);
-      setMessage('Invitation deleted.');
+      setMessage('Invitation cancelled.');
       await loadAssignments();
     } catch (error) {
-      setErrorMessage(getApiErrorMessage(error, 'Could not delete invitation.'));
+      setErrorMessage(getApiErrorMessage(error, 'Could not cancel invitation.'));
     }
   };
 
@@ -417,8 +417,8 @@ const JockeyAssignmentsPage = () => {
                                 {status === 'accepted' && (
                                   <button type="button" onClick={() => void handleConfirm(id)} className="rounded-md bg-secondary px-3 py-2 text-label-sm font-bold text-on-secondary">Confirm</button>
                                 )}
-                                {status !== 'confirmed' && (
-                                  <button type="button" onClick={() => void handleDelete(id)} className="rounded-md border border-outline-variant px-3 py-2 text-label-sm font-bold text-primary">Delete</button>
+                                {status === 'pending' && (
+                                  <button type="button" onClick={() => void handleDelete(id)} className="rounded-md border border-outline-variant px-3 py-2 text-label-sm font-bold text-primary">Cancel</button>
                                 )}
                               </>
                             )}

@@ -159,7 +159,7 @@ export const betService = {
   },
 
   async deleteBet(id: number | string): Promise<void> {
-    await apiClient.delete(`/api/bets/delete/${id}`);
+    throw new Error(`Backend does not provide delete API for bet ${id}.`);
   },
 
   async getBetOptions(raceId?: number | string): Promise<BetOptionItem[]> {

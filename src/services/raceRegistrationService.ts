@@ -83,6 +83,6 @@ export const raceRegistrationService = {
   },
 
   async delete(id: number | string): Promise<void> {
-    await apiClient.delete(`/api/race-registrations/delete/${id}`);
+    throw new Error(`Backend does not provide delete/cancel API for race registration ${id}.`);
   },
 };

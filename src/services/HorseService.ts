@@ -108,7 +108,17 @@ export const HorseService = {
     return mapHorse(unwrapApiData<RawHorse>(response));
   },
 
-  async deleteHorse(id: number): Promise<void> {
-    await apiClient.delete(`/api/horses/delete/${id}`);
+  async deleteHorse(id: number): Promise<Horse> {
+    const currentHorse = await this.getHorseById(id);
+    const response = await apiClient.put(`/api/horses/update/${id}`, {
+      status: 'inactive',
+    });
+    const updatedHorse = mapHorse(unwrapApiData<RawHorse>(response));
+
+    return {
+      ...currentHorse,
+      ...updatedHorse,
+      status: 'inactive',
+    };
   },
 };
