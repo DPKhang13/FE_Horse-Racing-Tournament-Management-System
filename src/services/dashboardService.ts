@@ -1,4 +1,5 @@
 import { apiClient, unwrapApiData } from './apiClient';
+import { notificationService } from './notificationService';
 import type { BetItem } from './betService';
 import type { NotificationItem } from './notificationService';
 import type { RaceScheduleItem } from './scheduleService';
@@ -214,13 +215,15 @@ export const dashboardService = {
     const response = await apiClient.get('/api/bets/dashboard');
     const data = unwrapApiData<RawObject>(response);
 
+    const notificationResults = await notificationService.getNotifications();
+
     return {
       wallet: mapWallet(data.wallet),
       summaryCount: mapSummaryCount(data.summaryCount),
       upcomingRaces: asArray(data.upcomingRaces).map(mapUpcomingRace),
       activeBets: asArray(data.activeBets).map(mapBet),
       latestResults: mapResultList(asArray(data.latestResults)),
-      notifications: asArray(data.notifications).map(mapNotification),
+      notifications: notificationResults,
     };
   },
 };

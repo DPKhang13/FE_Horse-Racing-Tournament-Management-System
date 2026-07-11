@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
 import { BarChart3, CheckCircle2, Clock3 } from 'lucide-react';
 import { getApiErrorMessage } from '../../services/apiClient';
+import { authService } from '../../services/authService';
 import { betService, type BetItem } from '../../services/betService';
+import type { UserProfile } from '../../types/user';
 
 const formatPoints = (value: number) => new Intl.NumberFormat('en-US', {
   maximumFractionDigits: 0,
@@ -23,6 +25,7 @@ const statusClassName = (status: string) => {
 
 const ResultTrackingPage = () => {
   const [trackedResults, setTrackedResults] = useState<BetItem[]>([]);
+  const [profile, setProfile] = useState<UserProfile | undefined>(() => authService.getStoredUserProfile());
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState('');
 
@@ -35,9 +38,13 @@ const ResultTrackingPage = () => {
 
       try {
         const data = await betService.getBets();
+        const currentProfile = profile ?? authService.getStoredUserProfile();
+        const activeProfile = currentProfile ?? await authService.getCurrentUser().catch(() => undefined);
+        const filteredData = activeProfile?.userId ? data.filter((bet) => bet.userId === activeProfile.userId) : data;
 
         if (isMounted) {
-          setTrackedResults(data);
+          setProfile(activeProfile ?? currentProfile);
+          setTrackedResults(filteredData);
         }
       } catch (error) {
         if (isMounted) {

@@ -3,12 +3,14 @@ import { Bell, CalendarDays, Clock3, Trophy } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import { getApiErrorMessage } from '../../services/apiClient';
+import { authService } from '../../services/authService';
 import { betService, type BetItem } from '../../services/betService';
 import { dashboardService, type DashboardSummaryCount } from '../../services/dashboardService';
 import type { NotificationItem } from '../../services/notificationService';
 import { predictionService } from '../../services/predictionService';
 import type { RaceScheduleItem } from '../../services/scheduleService';
 import type { RaceResultListItem } from '../../types/raceResult';
+import type { UserProfile } from '../../types/user';
 import { spectatorDashboardMockData } from './mockData';
 
 // Animation variants
@@ -58,7 +60,7 @@ const formatRaceStatus = (status: string) => {
   const value = status.toLowerCase();
 
   if (value === 'registration_open') {
-    return 'Registering';
+    return 'Reg.';
   }
 
   return status.replace(/_/g, ' ');
@@ -67,6 +69,7 @@ const formatRaceStatus = (status: string) => {
 const SpectatorDashboard: React.FC = () => {
   const navigate = useNavigate();
   const [upcomingRaces, setUpcomingRaces] = useState<RaceScheduleItem[]>([]);
+  const [profile, setProfile] = useState<UserProfile | undefined>(() => authService.getStoredUserProfile());
   const [myPredictions, setMyPredictions] = useState<BetItem[]>([]);
   const [latestResults, setLatestResults] = useState<RaceResultListItem[]>([]);
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
@@ -89,10 +92,15 @@ const SpectatorDashboard: React.FC = () => {
           predictionService.getOpenPredictionRaces(),
         ]);
 
+        const currentProfile = profile ?? authService.getStoredUserProfile();
+        const activeProfile = currentProfile ?? await authService.getCurrentUser().catch(() => undefined);
+        const filteredBets = activeProfile?.userId ? bets.filter((bet) => bet.userId === activeProfile.userId) : bets;
+
         if (isMounted) {
+          setProfile(activeProfile ?? currentProfile);
           setSummaryCount(dashboard.summaryCount);
           setUpcomingRaces(dashboard.upcomingRaces.slice(0, 6));
-          setMyPredictions(bets.slice(0, 5));
+          setMyPredictions(filteredBets.slice(0, 5));
           setOpenPredictionRaceCount(openPredictionRaces.length);
           setLatestResults(dashboard.latestResults.slice(0, 5));
           setNotifications(dashboard.notifications.slice(0, 5));
@@ -225,7 +233,7 @@ const SpectatorDashboard: React.FC = () => {
                     whileHover={{ y: -4, scale: 1.02 }}
                     transition={{ delay: index * 0.08 }}
                   >
-                    <div className="flex flex-wrap items-start justify-between gap-2 text-xs text-on-surface-variant">
+                    <div className="flex items-center justify-between gap-2 text-xs text-on-surface-variant">
                       <span className="max-w-full break-words leading-5">{race.tournamentName}</span>
                       <span className="shrink-0 rounded-full bg-secondary-container/45 px-2 py-1 font-bold uppercase tracking-[0.12em] text-on-secondary-container">
                         {formatRaceStatus(race.status)}
