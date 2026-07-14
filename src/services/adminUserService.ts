@@ -436,7 +436,7 @@ export const adminUserService = {
   },
 
   async resetPassword(userId: number | string, newPassword: string): Promise<unknown> {
-    const response = await apiClient.post(`/api/admin/users/${userId}/reset-password`, { newPassword });
+    const response = await apiClient.patch(`/api/admin/users/${userId}/reset-password`, { newPassword });
     return unwrapApiData<unknown>(response);
   },
 };

@@ -96,12 +96,12 @@ export const adminRaceResultService = {
   },
 
   async publishResults(raceId: RaceResultId): Promise<unknown> {
-    const response = await apiClient.post(`/api/v1/admin/races/${raceId}/results/publish`);
+    const response = await apiClient.patch(`/api/v1/admin/races/${raceId}/results/publish`);
     return unwrapApiData<unknown>(response);
   },
 
   async confirmResults(raceId: RaceResultId): Promise<unknown> {
-    const response = await apiClient.post(`/api/v1/admin/races/${raceId}/results/confirm`);
+    const response = await apiClient.patch(`/api/v1/admin/races/${raceId}/results/confirm`);
     return unwrapApiData<unknown>(response);
   },
 
@@ -109,7 +109,7 @@ export const adminRaceResultService = {
     raceId: RaceResultId,
     payload?: AdminRaceResultCancelPayload | string,
   ): Promise<unknown> {
-    const response = await apiClient.post(
+    const response = await apiClient.patch(
       `/api/v1/admin/races/${raceId}/results/cancel`,
       normalizeCancelPayload(payload),
     );

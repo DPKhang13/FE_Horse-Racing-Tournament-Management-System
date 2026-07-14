@@ -10,6 +10,11 @@ import type { UserProfile } from '../../types/user';
 
 const normalizeStatus = (value?: string) => value?.trim().toLowerCase() ?? '';
 
+const isActiveAssignmentStatus = (value?: string) => ['pending', 'accepted', 'confirmed'].includes(normalizeStatus(value));
+
+const hasAssignedJockey = (registration: RaceRegistrationItem) =>
+  Boolean(registration.jockeyId || registration.jockeyFullName);
+
 const formatDateTime = (value?: string) => {
   if (!value) {
     return '-';
@@ -81,14 +86,27 @@ const JockeyAssignmentsPage = () => {
   const acceptedAssignments = assignments.filter((item) => normalizeStatus(item.status) === 'accepted').length;
   const confirmedAssignments = assignments.filter((item) => normalizeStatus(item.status) === 'confirmed').length;
 
-  const approvedRegistrations = useMemo(
+  const invitableRegistrations = useMemo(
     () =>
       registrations.filter((registration) => {
+        const registrationId = registration.regId ?? registration.id;
         const status = normalizeStatus(registration.status);
-        const confirmationStatus = normalizeStatus(registration.ownerConfirmationStatus);
-        return status === 'approved' && confirmationStatus !== 'confirmed';
+        const hasActiveInvitation = assignments.some((assignment) =>
+          (assignment.regId ?? assignment.registrationId) === registrationId &&
+          isActiveAssignmentStatus(assignment.status),
+        );
+
+        if (status !== 'approved') {
+          return false;
+        }
+
+        if (hasAssignedJockey(registration)) {
+          return false;
+        }
+
+        return !hasActiveInvitation;
       }),
-    [registrations],
+    [assignments, registrations],
   );
 
   const availableJockeys = useMemo(() => {
@@ -101,7 +119,7 @@ const JockeyAssignmentsPage = () => {
       const hasActiveInvitation = assignments.some((assignment) =>
         (assignment.regId ?? assignment.registrationId) === registrationId &&
         assignment.jockeyId === jockey.jockeyId &&
-        ['pending', 'accepted', 'confirmed'].includes(normalizeStatus(assignment.status)),
+        isActiveAssignmentStatus(assignment.status),
       );
 
       return !hasActiveInvitation;
@@ -182,6 +200,7 @@ const JockeyAssignmentsPage = () => {
 
     try {
       await jockeyAssignmentService.confirm(id);
+
       setMessage('Horse and jockey assignment confirmed.');
       await loadAssignments();
     } catch (error) {
@@ -212,7 +231,7 @@ const JockeyAssignmentsPage = () => {
               <h1 className="font-display mt-2 text-headline-lg font-extrabold text-primary">Invitation workspace</h1>
               <p className="mt-2 max-w-2xl text-body-sm text-on-surface-variant">
                 {isOwner
-                  ? 'Pick an approved registration, then choose an available jockey for that horse and race.'
+                  ? 'Invite a jockey after admin approves the race registration.'
                   : 'Review your invitations and respond from one focused queue.'}
               </p>
             </div>
@@ -244,9 +263,9 @@ const JockeyAssignmentsPage = () => {
             <div className="mb-5 flex items-center gap-3">
               <Send className="h-5 w-5 text-secondary" />
               <div>
-                <h2 className="font-display text-title-large font-bold text-primary">Approved registrations</h2>
+                <h2 className="font-display text-title-large font-bold text-primary">Approved registrations ready for invitation</h2>
                 <p className="mt-1 text-body-sm text-on-surface-variant">
-                  Select one approved registration to invite an available jockey.
+                  Select an approved registration without a jockey, then invite an available jockey.
                 </p>
               </div>
             </div>
@@ -257,15 +276,15 @@ const JockeyAssignmentsPage = () => {
                 description="Fetching approved registrations and available jockeys."
                 icon={<Search className="h-5 w-5" />}
               />
-            ) : approvedRegistrations.length === 0 ? (
+            ) : invitableRegistrations.length === 0 ? (
               <EmptyState
-                title="No approved registrations"
-                description="Once admin approves a registration, it will show up here for jockey invitation."
+                title="No approved registration is waiting for a jockey"
+                description="Once admin approves a registration, it will appear here for jockey invitation."
                 icon={<Send className="h-5 w-5" />}
               />
             ) : (
               <div className="grid gap-4 lg:grid-cols-2">
-                {approvedRegistrations.map((registration) => {
+                {invitableRegistrations.map((registration) => {
                   const registrationId = registration.regId ?? registration.id ?? 0;
 
                   return (
@@ -292,7 +311,7 @@ const JockeyAssignmentsPage = () => {
                       </div>
 
                       <p className="text-body-sm font-semibold text-on-surface-variant">
-                        Stable {registration.ownerStableName ?? registration.ownerFullName ?? '-'}
+                        Status {registration.status ?? '-'} / Stable {registration.ownerStableName ?? registration.ownerFullName ?? '-'}
                       </p>
                     </button>
                   );
@@ -415,7 +434,13 @@ const JockeyAssignmentsPage = () => {
                             {isOwner && (
                               <>
                                 {status === 'accepted' && (
-                                  <button type="button" onClick={() => void handleConfirm(id)} className="rounded-md bg-secondary px-3 py-2 text-label-sm font-bold text-on-secondary">Confirm</button>
+                                  <button
+                                    type="button"
+                                    onClick={() => void handleConfirm(id)}
+                                    className="rounded-md bg-secondary px-3 py-2 text-label-sm font-bold text-on-secondary"
+                                  >
+                                    Confirm
+                                  </button>
                                 )}
                                 {status === 'pending' && (
                                   <button type="button" onClick={() => void handleDelete(id)} className="rounded-md border border-outline-variant px-3 py-2 text-label-sm font-bold text-primary">Cancel</button>

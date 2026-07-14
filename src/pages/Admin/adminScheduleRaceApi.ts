@@ -387,10 +387,10 @@ export const adminScheduleRaceApi = {
   },
 
   async completeRace(raceId: number | string): Promise<void> {
-    await apiClient.post(`/api/v1/admin/races/${raceId}/complete`);
+    await apiClient.patch(`/api/v1/admin/races/${raceId}/complete`);
   },
 
   async cancelRace(raceId: number | string): Promise<void> {
-    await apiClient.post(`/api/v1/admin/races/cancel-race/${raceId}`);
+    await apiClient.patch(`/api/v1/admin/races/cancel-race/${raceId}`);
   },
 };

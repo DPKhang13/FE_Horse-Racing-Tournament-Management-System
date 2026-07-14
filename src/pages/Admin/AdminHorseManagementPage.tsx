@@ -318,23 +318,25 @@ const updateAdminHorse = async (horseId: number, data: AdminHorseFormData) => {
     breed: data.breed.trim(),
     age: Number(data.age),
     weightKg: Number(data.weightKg),
-    rankGroup: data.rankGroup.trim(),
-    rankingPoints: Number(data.rankingPoints),
     avatarUrl: data.avatarUrl.trim() || fallbackHorseImage,
-    totalWins: Number(data.totalWins),
-    status: data.status || 'active',
   });
+
+  if (data.status && ['active', 'inactive', 'retired'].includes(data.status)) {
+    await apiClient.patch(`/api/horses/admin/${horseId}/status`, {
+      status: data.status,
+    });
+  }
 };
 
 const deleteAdminHorse = async (horseId: number) => {
-  await apiClient.put(`/api/horses/update/${horseId}`, {
-    status: 'deleted',
+  await apiClient.patch(`/api/horses/admin/${horseId}/status`, {
+    status: 'inactive',
   });
 };
 
 const updateHorseRequestStatus = async (horseId: number, status: 'active' | 'declined') => {
-  await apiClient.put(`/api/horses/update/${horseId}`, {
-    status,
+  await apiClient.patch(`/api/horses/admin/${horseId}/status`, {
+    status: status === 'active' ? 'active' : 'inactive',
   });
 };
 

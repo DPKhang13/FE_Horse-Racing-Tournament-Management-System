@@ -52,8 +52,8 @@ const toPayload = (horse: HorseFormData) => ({
   breed: horse.breed.trim(),
   age: Number(horse.age),
   weightKg: Number(horse.weightKg),
-  rankGroup: horse.rankGroup.trim(),
-  avatarUrl: horse.avatarUrl.trim(),
+  rankGroup: 'D',
+  avatarUrl: horse.avatarUrl.trim() || fallbackHorseImage,
 });
 
 const toUpdatePayload = (horse: HorseFormData) => ({
@@ -61,11 +61,7 @@ const toUpdatePayload = (horse: HorseFormData) => ({
   breed: horse.breed.trim(),
   age: Number(horse.age),
   weightKg: Number(horse.weightKg),
-  rankGroup: horse.rankGroup.trim(),
-  rankingPoints: Number(horse.rankingPoints),
-  avatarUrl: horse.avatarUrl.trim(),
-  totalWins: Number(horse.totalWins),
-  status: horse.status,
+  avatarUrl: horse.avatarUrl.trim() || fallbackHorseImage,
 });
 
 const getOwnerScopedHorses = (horseList: Horse[], currentProfile: UserProfile): Horse[] => {
@@ -109,16 +105,6 @@ export const HorseService = {
   },
 
   async deleteHorse(id: number): Promise<Horse> {
-    const currentHorse = await this.getHorseById(id);
-    const response = await apiClient.put(`/api/horses/update/${id}`, {
-      status: 'inactive',
-    });
-    const updatedHorse = mapHorse(unwrapApiData<RawHorse>(response));
-
-    return {
-      ...currentHorse,
-      ...updatedHorse,
-      status: 'inactive',
-    };
+    throw new Error(`Backend does not provide owner delete/deactivate API for horse ${id}.`);
   },
 };
