@@ -56,6 +56,19 @@ export type AdminUserPage = {
   size: number;
 };
 
+export type AdminRefereeOption = {
+  refereeId: number;
+  userId?: number | string;
+  username: string;
+  email?: string;
+  fullName: string;
+  status?: AdminUserStatus;
+  licenseNumber?: string;
+  address?: string;
+  createdAt?: string;
+  hasRefereeProfile: boolean;
+};
+
 export type AdminUserQueryParams = {
   roleType?: UserRoleType | 'All';
   status?: AdminUserStatus | 'All';
@@ -95,6 +108,64 @@ const asNumber = (value: unknown, fallback = 0) => {
   return Number.isFinite(numericValue) ? numericValue : fallback;
 };
 
+const asPositiveNumber = (value: unknown): number | undefined => {
+  const numericValue = Number(value);
+  return Number.isFinite(numericValue) && numericValue > 0 ? numericValue : undefined;
+};
+
+const isSameNumericValue = (first: unknown, second: unknown) => {
+  const firstNumber = asPositiveNumber(first);
+  const secondNumber = asPositiveNumber(second);
+
+  return firstNumber !== undefined && secondNumber !== undefined && firstNumber === secondNumber;
+};
+
+const canUseRawIdAsRefereeId = (raw: RawRecord, userId: unknown, hasExplicitRefereeId: boolean) => {
+  if (hasExplicitRefereeId || asPositiveNumber(raw.id) === undefined) {
+    return false;
+  }
+
+  if (raw.roleType !== undefined || raw.role !== undefined || raw.roles !== undefined) {
+    return false;
+  }
+
+  if ('refereeProfile' in raw) {
+    return false;
+  }
+
+  const hasSeparateUserReference = userId !== undefined || raw.user !== undefined || raw.account !== undefined;
+  const hasRefereeProfileShape =
+    raw.licenseNumber !== undefined ||
+    raw.refereeLicenseNumber !== undefined ||
+    raw.refereeStatus !== undefined ||
+    raw.address !== undefined ||
+    raw.assignedRaceCount !== undefined ||
+    raw.submittedReportCount !== undefined ||
+    raw.pendingReportCount !== undefined;
+
+  return (hasSeparateUserReference || hasRefereeProfileShape) && !isSameNumericValue(raw.id, userId);
+};
+
+const isUserLikeRecord = (raw: RawRecord, nestedUser?: RawRecord) =>
+  Boolean(nestedUser) ||
+  raw.userId !== undefined ||
+  raw.refereeUserId !== undefined ||
+  raw.accountId !== undefined ||
+  raw.roleType !== undefined ||
+  raw.role !== undefined ||
+  raw.roles !== undefined ||
+  raw.email !== undefined ||
+  raw.phone !== undefined ||
+  raw.refereeProfile !== undefined;
+
+const getUserIdFromRecord = (raw: RawRecord, nestedUser?: RawRecord) =>
+  raw.userId ??
+  raw.refereeUserId ??
+  nestedUser?.userId ??
+  nestedUser?.id ??
+  raw.accountId ??
+  (isUserLikeRecord(raw, nestedUser) ? raw.id : undefined);
+
 const normalizeStatus = (value: unknown): AdminUserStatus => {
   const normalizedValue = asString(value, 'active').trim().toLowerCase();
 
@@ -117,16 +188,44 @@ const normalizeProfile = <T>(value: unknown): T | undefined => {
   return value as T;
 };
 
+const asRawRecord = (value: unknown): RawRecord | undefined => {
+  if (!value || typeof value !== 'object') {
+    return undefined;
+  }
+
+  return value as RawRecord;
+};
+
 const mapAdminUser = (raw: RawRecord, index = 0): AdminUser => {
   const horseOwnerProfile = normalizeProfile<AdminHorseOwnerProfile>(
     raw.horseOwnerProfile ?? raw.ownerProfile,
   );
+  const rawRefereeProfile = asRawRecord(raw.refereeProfile);
+  const directRefereeId = asPositiveNumber(
+    raw.refereeId ??
+      raw.refereeProfileId ??
+      rawRefereeProfile?.refereeId ??
+      rawRefereeProfile?.id,
+  );
+  const userId = raw.userId ?? raw.refereeUserId ?? raw.accountId;
+  const inferredRefereeId = directRefereeId ??
+    (canUseRawIdAsRefereeId(raw, userId, directRefereeId !== undefined) ? asPositiveNumber(raw.id) : undefined);
+  const refereeProfile = normalizeProfile<AdminRefereeProfile>(raw.refereeProfile) ??
+    (inferredRefereeId
+      ? {
+          refereeId: inferredRefereeId,
+          licenseNumber: raw.licenseNumber === undefined || raw.licenseNumber === null ? undefined : asString(raw.licenseNumber),
+          address: raw.address === undefined || raw.address === null ? undefined : asString(raw.address),
+          status: raw.refereeStatus === undefined || raw.refereeStatus === null ? undefined : asString(raw.refereeStatus),
+          createdAt: raw.createdAt === undefined || raw.createdAt === null ? undefined : asString(raw.createdAt),
+        }
+      : undefined);
 
   return {
-    userId: (raw.userId ?? raw.id ?? raw.accountId ?? index + 1) as number | string,
-    username: asString(raw.username, 'unknown-user'),
+    userId: (raw.userId ?? raw.refereeUserId ?? raw.id ?? raw.accountId ?? index + 1) as number | string,
+    username: asString(raw.username ?? raw.refereeUsername, 'unknown-user'),
     email: asString(raw.email),
-    fullName: asString(raw.fullName ?? raw.name ?? raw.username, 'Unknown User'),
+    fullName: asString(raw.fullName ?? raw.refereeFullName ?? raw.name ?? raw.username, 'Unknown User'),
     phone: raw.phone === undefined || raw.phone === null ? undefined : asString(raw.phone),
     roleType: normalizeRoleType(raw.roleType ?? raw.role),
     status: normalizeStatus(raw.status),
@@ -136,7 +235,7 @@ const mapAdminUser = (raw: RawRecord, index = 0): AdminUser => {
     horseOwnerProfile,
     ownerProfile: horseOwnerProfile,
     jockeyProfile: normalizeProfile<AdminJockeyProfile>(raw.jockeyProfile),
-    refereeProfile: normalizeProfile<AdminRefereeProfile>(raw.refereeProfile),
+    refereeProfile,
   };
 };
 
@@ -190,6 +289,94 @@ const normalizeUserPage = (data: unknown, params: AdminUserQueryParams = {}): Ad
   };
 };
 
+const getRawList = (data: unknown): RawRecord[] => {
+  if (Array.isArray(data)) {
+    return data.map((item) => item as RawRecord);
+  }
+
+  if (!data || typeof data !== 'object') {
+    return [];
+  }
+
+  const objectData = data as RawRecord;
+  const listKeys = ['content', 'items', 'data', 'referees', 'users', 'results', 'list'];
+
+  for (const key of listKeys) {
+    if (Array.isArray(objectData[key])) {
+      return (objectData[key] as unknown[]).map((item) => item as RawRecord);
+    }
+  }
+
+  return [];
+};
+
+const mapRefereeOption = (raw: RawRecord): AdminRefereeOption => {
+  const refereeProfile = asRawRecord(raw.refereeProfile ?? raw.profile);
+  const user = asRawRecord(raw.user ?? raw.account);
+  const userId = getUserIdFromRecord(raw, user);
+  const explicitRefereeId = asPositiveNumber(
+    raw.refereeId ??
+      raw.refereeProfileId ??
+      refereeProfile?.refereeId ??
+      refereeProfile?.id,
+  );
+  const inferredRefereeId = canUseRawIdAsRefereeId(raw, userId, explicitRefereeId !== undefined)
+    ? asPositiveNumber(raw.id)
+    : undefined;
+  const refereeId = explicitRefereeId ?? inferredRefereeId ??
+    0;
+  const username = asString(raw.username ?? raw.refereeUsername ?? user?.username, 'unknown-user');
+  const email = asString(raw.email ?? user?.email);
+  const fullName = asString(
+    raw.fullName ?? raw.refereeFullName ?? raw.name ?? user?.fullName ?? user?.name ?? username,
+    `Referee ${refereeId}`,
+  );
+
+  return {
+    refereeId,
+    userId: userId as number | string | undefined,
+    username,
+    email: email || undefined,
+    fullName,
+    status: normalizeStatus(raw.status ?? refereeProfile?.status),
+    licenseNumber: asString(raw.licenseNumber ?? refereeProfile?.licenseNumber) || undefined,
+    address: asString(raw.address ?? refereeProfile?.address) || undefined,
+    createdAt: asString(raw.createdAt ?? refereeProfile?.createdAt) || undefined,
+    hasRefereeProfile: refereeId > 0,
+  };
+};
+
+const mergeRefereeProfileFromUser = (referee: AdminRefereeOption, user: AdminUser): AdminRefereeOption => {
+  const refereeId = asPositiveNumber(user.refereeProfile?.refereeId) ?? referee.refereeId;
+
+  return {
+    ...referee,
+    refereeId,
+    userId: user.userId ?? referee.userId,
+    username: user.username || referee.username,
+    email: user.email || referee.email,
+    fullName: user.fullName || referee.fullName,
+    status: normalizeStatus(user.refereeProfile?.status ?? user.status ?? referee.status),
+    licenseNumber: user.refereeProfile?.licenseNumber ?? referee.licenseNumber,
+    address: user.refereeProfile?.address ?? referee.address,
+    createdAt: user.refereeProfile?.createdAt ?? referee.createdAt,
+    hasRefereeProfile: refereeId > 0,
+  };
+};
+
+const enrichRefereeOption = async (referee: AdminRefereeOption): Promise<AdminRefereeOption> => {
+  if (referee.hasRefereeProfile || !referee.userId) {
+    return referee;
+  }
+
+  try {
+    const response = await apiClient.get(`/api/admin/users/${referee.userId}`);
+    return mergeRefereeProfileFromUser(referee, mapAdminUser(unwrapApiData<RawRecord>(response)));
+  } catch {
+    return referee;
+  }
+};
+
 const cleanUserPayload = (data: AdminCreateUserRequest | AdminUpdateUserRequest) => ({
   username: data.username.trim(),
   email: data.email.trim(),
@@ -206,6 +393,13 @@ const cleanUserPayload = (data: AdminCreateUserRequest | AdminUpdateUserRequest)
 });
 
 export const adminUserService = {
+  async getReferees(): Promise<AdminRefereeOption[]> {
+    const response = await apiClient.get('/api/admin/users/referees');
+    const referees = getRawList(unwrapApiData<unknown>(response)).map(mapRefereeOption);
+
+    return Promise.all(referees.map(enrichRefereeOption));
+  },
+
   async getUsers(params: AdminUserQueryParams = {}): Promise<AdminUserPage> {
     const response = await apiClient.get('/api/admin/users', {
       params: {
@@ -242,7 +436,7 @@ export const adminUserService = {
   },
 
   async resetPassword(userId: number | string, newPassword: string): Promise<unknown> {
-    const response = await apiClient.post(`/api/admin/users/${userId}/reset-password`, { newPassword });
+    const response = await apiClient.patch(`/api/admin/users/${userId}/reset-password`, { newPassword });
     return unwrapApiData<unknown>(response);
   },
 };

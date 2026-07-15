@@ -99,6 +99,15 @@ const isTerminalRegistrationStatus = (status?: string | null) => {
   return ['approved', 'rejected', 'cancelled', 'canceled', 'deleted'].includes(normalized);
 };
 
+const canApproveRegistration = (registration: RegistrationResponse) =>
+  normalizeStatus(registration.status) === 'pending';
+
+const getApprovalBlockReason = (registration: RegistrationResponse) => {
+  return canApproveRegistration(registration)
+    ? ''
+    : 'Only pending registrations can be approved.';
+};
+
 const getHorseImage = (registration: RegistrationResponse) => registration.horseAvatarUrl || fallbackHorseImage;
 
 const compareText = (first?: string | null, second?: string | null) =>
@@ -133,7 +142,7 @@ const RegistrationManagementPage = () => {
     setNotice(null);
 
     try {
-      setRegistrations(await registrationService.getAllRegistrations());
+      setRegistrations(await registrationService.getPendingApprovalRegistrations());
     } catch (error) {
       setNotice({ tone: 'error', text: getApiErrorMessage(error, 'Unable to load race registrations.') });
     } finally {
@@ -358,7 +367,7 @@ const RegistrationManagementPage = () => {
               <p className="mb-3 text-label-sm font-bold uppercase tracking-[0.18em] text-secondary">Admin Race Registration</p>
               <h1 className="font-display mb-2 text-headline-lg font-extrabold text-primary">Race Registration Management</h1>
               <p className="max-w-2xl text-body-md text-on-surface-variant">
-                Review every submitted race entry, inspect registration details, and approve or reject requests from one queue.
+                Review pending race entries and approve them before they appear in race lists.
               </p>
             </div>
 
@@ -522,6 +531,8 @@ const RegistrationsTable = ({
         <tbody className="divide-y divide-outline-variant">
           {!isLoading && registrations.map((registration) => {
             const canProcess = !isTerminalRegistrationStatus(registration.status);
+            const canApprove = canApproveRegistration(registration);
+            const approveBlockReason = getApprovalBlockReason(registration);
 
             return (
               <tr key={String(getRegistrationKey(registration))} className="transition-colors hover:bg-surface-container-lowest">
@@ -576,8 +587,9 @@ const RegistrationsTable = ({
                     <IconButton
                       label={`Approve ${getRegistrationCode(registration)}`}
                       onClick={() => onApprove(registration)}
-                      disabled={!canProcess}
+                      disabled={!canApprove}
                       success
+                      title={canApprove ? `Approve ${getRegistrationCode(registration)}` : approveBlockReason}
                     >
                       <CheckCircle2 className="h-4 w-4" />
                     </IconButton>
@@ -622,6 +634,8 @@ const RegistrationDetailModal = ({
   onReject: (registration: RegistrationResponse) => void;
 }) => {
   const canProcess = !isTerminalRegistrationStatus(registration.status);
+  const canApprove = canApproveRegistration(registration);
+  const approveBlockReason = getApprovalBlockReason(registration);
 
   return (
     <Modal title="Registration Details" subtitle={getRegistrationCode(registration)} onClose={onClose}>
@@ -687,13 +701,19 @@ const RegistrationDetailModal = ({
           <button
             type="button"
             onClick={() => onApprove(registration)}
-            disabled={!canProcess}
+            disabled={!canApprove}
             className="inline-flex items-center justify-center gap-2 rounded-md bg-secondary px-6 py-3 text-body-sm font-bold text-on-secondary transition-opacity hover:bg-opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+            title={canApprove ? 'Approve registration' : approveBlockReason}
           >
             <CheckCircle2 className="h-4 w-4" />
             Approve
           </button>
         </div>
+        {!canApprove && !isTerminalRegistrationStatus(registration.status) && (
+          <div className="rounded-md border border-outline-variant bg-surface-container-low px-4 py-3 text-body-sm font-semibold text-on-surface-variant">
+            {approveBlockReason}
+          </div>
+        )}
       </div>
     </Modal>
   );
@@ -822,6 +842,7 @@ const IconButton = ({
   disabled = false,
   danger = false,
   success = false,
+  title,
   onClick,
 }: {
   label: string;
@@ -829,6 +850,7 @@ const IconButton = ({
   disabled?: boolean;
   danger?: boolean;
   success?: boolean;
+  title?: string;
   onClick: () => void;
 }) => (
   <button
@@ -843,7 +865,7 @@ const IconButton = ({
           : 'border-outline-variant hover:border-primary hover:text-primary'
     }`}
     aria-label={label}
-    title={label}
+    title={title ?? label}
   >
     {children}
   </button>

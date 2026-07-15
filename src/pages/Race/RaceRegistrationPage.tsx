@@ -55,6 +55,11 @@ const getQueueStatusClassName = (status?: string) => {
   return 'bg-surface-container-high text-on-surface-variant';
 };
 
+const canApproveRegistration = (item: RaceRegistrationItem) => {
+  const status = normalizeStatus(item.status);
+  return status === 'pending';
+};
+
 const RaceRegistrationPage = () => {
   const [profile, setProfile] = useState<UserProfile | undefined>(() => authService.getStoredUserProfile());
   const [items, setItems] = useState<RaceRegistrationItem[]>([]);
@@ -100,6 +105,8 @@ const RaceRegistrationPage = () => {
         setHorses(horseList);
         setRaces(raceList);
         setTournaments(tournamentList);
+      } else if (currentProfile.roleType === 'admin') {
+        setItems(await raceRegistrationService.getPendingApproval());
       } else {
         setItems(await raceRegistrationService.getAll());
       }
@@ -192,7 +199,7 @@ const RaceRegistrationPage = () => {
         horseId: horse.horseId,
       });
 
-      setMessage(`Registered ${horse.name} for ${selectedRace.raceName}.`);
+      setMessage(`Registration for ${horse.name} was sent to admin for approval.`);
       setIsHorsePickerOpen(false);
       setSelectedRace(null);
       await loadRegistrations();
@@ -229,19 +236,6 @@ const RaceRegistrationPage = () => {
     }
   };
 
-  const handleDelete = async (id: number | string) => {
-    setMessage('');
-    setErrorMessage('');
-
-    try {
-      await raceRegistrationService.delete(id);
-      setMessage('Registration deleted.');
-      await loadRegistrations();
-    } catch (error) {
-      setErrorMessage(getApiErrorMessage(error, 'Could not delete registration.'));
-    }
-  };
-
   return (
     <div className="min-h-screen bg-surface py-12">
       <div className="mx-auto max-w-container px-4 md:px-margin-desktop">
@@ -251,8 +245,8 @@ const RaceRegistrationPage = () => {
             <h1 className="mt-2 text-headline-lg font-bold text-primary">Entry management</h1>
             <p className="mt-2 max-w-2xl text-body-md text-on-surface-variant">
               {isOwner
-                ? 'Choose a tournament with registration open, then pick a race and horse in order.'
-                : 'Review the registration queue and process approvals from one place.'}
+                ? 'Choose a tournament with registration open, then send the horse registration for admin approval.'
+                : 'Review pending race registrations and approve entries before they appear in race lists.'}
             </p>
           </div>
 
@@ -468,6 +462,7 @@ const RaceRegistrationPage = () => {
                     <th className="px-4 py-3 text-label-sm uppercase tracking-wider text-outline">Race</th>
                     <th className="px-4 py-3 text-label-sm uppercase tracking-wider text-outline">Horse</th>
                     <th className="px-4 py-3 text-label-sm uppercase tracking-wider text-outline">Owner</th>
+                    <th className="px-4 py-3 text-label-sm uppercase tracking-wider text-outline">Jockey</th>
                     <th className="px-4 py-3 text-label-sm uppercase tracking-wider text-outline">Status</th>
                     <th className="px-4 py-3 text-label-sm uppercase tracking-wider text-outline text-right">Action</th>
                   </tr>
@@ -475,12 +470,13 @@ const RaceRegistrationPage = () => {
                 <tbody className="divide-y divide-outline-variant">
                   {isLoading ? (
                     <tr>
-                      <td colSpan={6} className="px-4 py-8 text-center text-body-sm text-on-surface-variant">
+                      <td colSpan={7} className="px-4 py-8 text-center text-body-sm text-on-surface-variant">
                         Loading registrations...
                       </td>
                     </tr>
                   ) : filteredQueue.map((item) => {
                     const id = item.regId ?? item.id ?? '';
+                    const canApproveRegistrationItem = canApproveRegistration(item);
 
                     return (
                       <tr key={id}>
@@ -496,10 +492,18 @@ const RaceRegistrationPage = () => {
                         <td className="px-4 py-4 text-body-sm text-on-surface-variant">
                           {item.ownerStableName ?? item.ownerFullName ?? '-'}
                         </td>
+                        <td className="px-4 py-4 text-body-sm text-on-surface-variant">
+                          {item.jockeyFullName ?? '-'}
+                        </td>
                         <td className="px-4 py-4">
-                          <span className={`inline-flex rounded-full px-3 py-1 text-[11px] font-bold uppercase tracking-wider ${getQueueStatusClassName(item.status)}`}>
-                            {item.status ?? '-'}
-                          </span>
+                          <div className="grid gap-2">
+                            <span className={`inline-flex rounded-full px-3 py-1 text-[11px] font-bold uppercase tracking-wider ${getQueueStatusClassName(item.status)}`}>
+                              {item.status ?? '-'}
+                            </span>
+                            <span className="text-[11px] font-semibold uppercase tracking-wider text-on-surface-variant">
+                              Owner: {item.ownerConfirmationStatus ?? '-'}
+                            </span>
+                          </div>
                         </td>
                         <td className="px-4 py-4">
                           <div className="flex justify-end gap-2">
@@ -508,7 +512,9 @@ const RaceRegistrationPage = () => {
                                 <button
                                   type="button"
                                   onClick={() => void handleApprove(id)}
+                                  disabled={!canApproveRegistrationItem}
                                   className="rounded-md bg-secondary px-3 py-2 text-label-sm font-bold text-white"
+                                  title={canApproveRegistrationItem ? 'Approve registration' : 'Only pending registrations can be approved.'}
                                 >
                                   Approve
                                 </button>
@@ -521,15 +527,6 @@ const RaceRegistrationPage = () => {
                                 </button>
                               </>
                             )}
-                            {isOwner && (
-                              <button
-                                type="button"
-                                onClick={() => void handleDelete(id)}
-                                className="rounded-md border border-outline-variant px-3 py-2 text-label-sm font-bold text-primary"
-                              >
-                                Delete
-                              </button>
-                            )}
                           </div>
                         </td>
                       </tr>
@@ -537,7 +534,7 @@ const RaceRegistrationPage = () => {
                   })}
                   {!isLoading && filteredQueue.length === 0 && (
                     <tr>
-                      <td colSpan={6} className="px-4 py-8 text-center text-body-sm text-on-surface-variant">
+                      <td colSpan={7} className="px-4 py-8 text-center text-body-sm text-on-surface-variant">
                         No registrations found.
                       </td>
                     </tr>

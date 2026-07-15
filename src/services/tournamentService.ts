@@ -24,8 +24,11 @@ export type TournamentFormData = {
 export type PrizeItem = PrizeResponse;
 
 export type RefereeAssignmentItem = {
+  id?: number;
+  refAssignId?: number;
   assignmentId?: number;
   raceId?: number;
+  raceName?: string;
   refereeId?: number;
   refereeRole?: string;
   refereeFullName?: string;
@@ -143,7 +146,13 @@ const normalizeTournamentStatus = (value: unknown): TournamentStatus => {
     return 'Registration Closed';
   }
 
-  if (normalizedValue.includes('ongoing') || normalizedValue === 'active') {
+  if (
+    normalizedValue.includes('ongoing')
+    || normalizedValue.includes('progress')
+    || normalizedValue.includes('running')
+    || normalizedValue === 'active'
+    || normalizedValue === 'live'
+  ) {
     return 'Ongoing';
   }
 
@@ -757,4 +766,3 @@ export const tournamentService = {
     return unwrapApiData<RefereeAssignmentItem>(response);
   },
 };
-

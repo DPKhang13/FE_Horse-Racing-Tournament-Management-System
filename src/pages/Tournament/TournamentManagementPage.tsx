@@ -1468,7 +1468,7 @@ const RaceCrudPanel = ({ tournament }: { tournament: Tournament }) => {
   };
 
   const deleteRace = async (race: RaceCrudItem) => {
-    const confirmed = window.confirm(`Delete race "${race.name}"?`);
+    const confirmed = window.confirm(`Cancel race "${race.name}"?`);
 
     if (!confirmed) {
       return;
@@ -1479,13 +1479,13 @@ const RaceCrudPanel = ({ tournament }: { tournament: Tournament }) => {
 
     try {
       await raceCrudService.deleteRace(race.raceId, tournament.tournamentId);
-      setMessage('Race deleted.');
+      setMessage('Race cancelled.');
       if (selectedRace?.raceId === race.raceId) {
         setSelectedRace(null);
       }
       await loadRaces();
     } catch (error) {
-      setErrorMessage(getApiErrorMessage(error, 'Unable to delete race.'));
+      setErrorMessage(getApiErrorMessage(error, 'Unable to cancel race.'));
     }
   };
 
@@ -1530,29 +1530,6 @@ const RaceCrudPanel = ({ tournament }: { tournament: Tournament }) => {
       await loadRounds(selectedRace);
     } catch (error) {
       setErrorMessage(getApiErrorMessage(error, 'Unable to save lap.'));
-    }
-  };
-
-  const deleteRound = async (round: RaceRoundItem) => {
-    if (!selectedRace) {
-      return;
-    }
-
-    const confirmed = window.confirm(`Delete lap ${round.roundNumber}?`);
-
-    if (!confirmed) {
-      return;
-    }
-
-    setMessage('');
-    setErrorMessage('');
-
-    try {
-      await raceCrudService.deleteRound(round.roundId, selectedRace.raceId);
-      setMessage('Lap deleted.');
-      await loadRounds(selectedRace);
-    } catch (error) {
-      setErrorMessage(getApiErrorMessage(error, 'Unable to delete lap.'));
     }
   };
 
@@ -1660,7 +1637,7 @@ const RaceCrudPanel = ({ tournament }: { tournament: Tournament }) => {
                       <IconButton label={`Update ${race.name}`} onClick={(e) => { e.stopPropagation(); editRace(race); }}>
                         <Pencil className="h-4 w-4" />
                       </IconButton>
-                      <IconButton label={`Delete ${race.name}`} onClick={(e) => { e.stopPropagation(); void deleteRace(race); }} danger>
+                      <IconButton label={`Cancel ${race.name}`} onClick={(e) => { e.stopPropagation(); void deleteRace(race); }} danger>
                         <Trash2 className="h-4 w-4" />
                       </IconButton>
                     </div>
@@ -1807,9 +1784,6 @@ const RaceCrudPanel = ({ tournament }: { tournament: Tournament }) => {
                       <div className="flex gap-2">
                         <IconButton label={`Update lap ${round.roundNumber}`} onClick={() => editRound(round)}>
                           <Pencil className="h-4 w-4" />
-                        </IconButton>
-                        <IconButton label={`Delete lap ${round.roundNumber}`} onClick={() => void deleteRound(round)} danger>
-                          <Trash2 className="h-4 w-4" />
                         </IconButton>
                       </div>
                     </motion.div>

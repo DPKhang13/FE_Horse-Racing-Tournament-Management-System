@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react';
 import {
   Activity,
   Ban,
@@ -13,10 +13,14 @@ import {
   Search,
   Trash2,
   Trophy,
+  UserPlus,
+  Users,
   X,
 } from 'lucide-react';
 import { getApiErrorMessage } from '../../services/apiClient';
+import { adminUserService, type AdminRefereeOption } from '../../services/adminUserService';
 import { pointRuleService } from '../../services/pointRuleService';
+import { tournamentService, type RefereeAssignmentItem } from '../../services/tournamentService';
 import type { PointRuleRequest, PointRuleResponse } from '../../types/pointRule';
 import {
   adminScheduleRaceApi,
@@ -41,6 +45,10 @@ type PointRuleFormData = PointRuleRequest & {
 type PointRuleFormErrors = Partial<Record<keyof PointRuleRequest, string>>;
 type RaceAction = 'start' | 'complete' | 'cancel';
 type RaceStatusFilter = 'All' | 'scheduled' | 'ongoing' | 'completed' | 'cancelled';
+type RefereeAssignmentFormData = {
+  refereeId: number | '';
+  refereeRole: string;
+};
 
 const emptyRaceForm: AdminRaceFormData = {
   name: '',
@@ -60,6 +68,11 @@ const createDefaultPointRules = (): PointRuleFormData[] => [
   { finishPosition: 2, points: 0, note: '' },
   { finishPosition: 3, points: 0, note: '' },
 ];
+
+const emptyRefereeForm: RefereeAssignmentFormData = {
+  refereeId: '',
+  refereeRole: '',
+};
 
 const statusFilterOptions: RaceStatusFilter[] = ['All', 'scheduled', 'ongoing', 'completed', 'cancelled'];
 
@@ -88,7 +101,7 @@ const normalizeStatus = (status: string) => status.trim().toLowerCase().replace(
 const getRaceStatusClassName = (status: string) => {
   const value = normalizeStatus(status);
 
-  if (value.includes('ongoing') || value.includes('running') || value.includes('live')) {
+  if (value.includes('ongoing') || value.includes('progress') || value.includes('running') || value.includes('live')) {
     return 'border-secondary/30 bg-secondary/10 text-secondary';
   }
 
@@ -106,7 +119,7 @@ const getRaceStatusClassName = (status: string) => {
 const getStatusFilterValue = (status: string): Exclude<RaceStatusFilter, 'All'> => {
   const value = normalizeStatus(status);
 
-  if (value.includes('ongoing') || value.includes('running') || value.includes('live')) {
+  if (value.includes('ongoing') || value.includes('progress') || value.includes('running') || value.includes('live')) {
     return 'ongoing';
   }
 
@@ -243,6 +256,17 @@ const defaultScheduledAt = (schedule: AdminScheduleItem | null) => {
   return `${schedule.raceDate}T09:00`;
 };
 
+const getRefereeOptionLabel = (referee: AdminRefereeOption) => {
+  const name = referee.fullName || referee.username || 'Unnamed referee';
+  const username = referee.username ? `@${referee.username}` : referee.email;
+
+  if (!referee.hasRefereeProfile) {
+    return `${name}${username ? ` (${username})` : ''} - missing referee profile`;
+  }
+
+  return `${name}${username ? ` (${username})` : ''} - Ref #${referee.refereeId}`;
+};
+
 const AdminRacesPage = () => {
   const [tournaments, setTournaments] = useState<AdminTournamentOption[]>([]);
   const [selectedTournamentId, setSelectedTournamentId] = useState<number | ''>('');
@@ -266,6 +290,14 @@ const AdminRacesPage = () => {
   const [pointRuleErrors, setPointRuleErrors] = useState<PointRuleFormErrors[]>([]);
   const [pointRuleListError, setPointRuleListError] = useState('');
   const [notice, setNotice] = useState<Notice | null>(null);
+  const [selectedRefereeRace, setSelectedRefereeRace] = useState<AdminRaceItem | null>(null);
+  const [refereeList, setRefereeList] = useState<RefereeAssignmentItem[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [refereeOptions, setRefereeOptions] = useState<AdminRefereeOption[]>([]);
+  const [isRefereeOptionsLoading, setIsRefereeOptionsLoading] = useState(false);
+  const [isAssigningReferee, setIsAssigningReferee] = useState(false);
+  const [refereeForm, setRefereeForm] = useState<RefereeAssignmentFormData>(emptyRefereeForm);
 
   const selectedTournament = useMemo(
     () => tournaments.find((tournament) => tournament.tournamentId === selectedTournamentId) ?? null,
@@ -276,6 +308,43 @@ const AdminRacesPage = () => {
     () => schedules.find((schedule) => schedule.scheduleId === selectedScheduleId) ?? null,
     [schedules, selectedScheduleId],
   );
+
+  const raceId = selectedRefereeRace?.raceId;
+
+  const fetchRefereeList = useCallback(async () => {
+    if (!raceId) {
+      setRefereeList([]);
+      setError(null);
+      return;
+    }
+
+    setLoading(true);
+    setError(null);
+
+    try {
+      const data = await tournamentService.getRaceReferees(raceId);
+      setRefereeList(data);
+    } catch (apiError) {
+      setRefereeList([]);
+      setError(getApiErrorMessage(apiError, 'Unable to load referee assignments.'));
+    } finally {
+      setLoading(false);
+    }
+  }, [raceId]);
+
+  const loadRefereeOptions = async () => {
+    setIsRefereeOptionsLoading(true);
+
+    try {
+      const data = await adminUserService.getReferees();
+      setRefereeOptions(data);
+    } catch (apiError) {
+      setRefereeOptions([]);
+      setError(getApiErrorMessage(apiError, 'Unable to load referee users.'));
+    } finally {
+      setIsRefereeOptionsLoading(false);
+    }
+  };
 
   const loadTournaments = async () => {
     setIsTournamentLoading(true);
@@ -349,6 +418,14 @@ const AdminRacesPage = () => {
     void loadSchedules();
     void loadRaces();
   }, [selectedTournamentId]);
+
+  useEffect(() => {
+    const timeoutId = window.setTimeout(() => {
+      void fetchRefereeList();
+    }, 0);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [fetchRefereeList]);
 
   const scheduleRaces = useMemo(() => {
     if (!selectedScheduleId) {
@@ -450,6 +527,93 @@ const AdminRacesPage = () => {
     setPointRuleListError('');
     setIsPointRulesLoading(false);
     setDeletingPointRuleId(null);
+  };
+
+  const openRefereeModal = (race: AdminRaceItem) => {
+    setSelectedRefereeRace(race);
+    setRefereeForm(emptyRefereeForm);
+    setError(null);
+    void loadRefereeOptions();
+  };
+
+  const closeRefereeModal = () => {
+    setSelectedRefereeRace(null);
+    setRefereeList([]);
+    setRefereeForm(emptyRefereeForm);
+    setError(null);
+  };
+
+  const handleRefereeFormChange = <K extends keyof RefereeAssignmentFormData>(
+    field: K,
+    value: RefereeAssignmentFormData[K],
+  ) => {
+    setRefereeForm((current) => ({ ...current, [field]: value }));
+    setError(null);
+  };
+
+  const handleAssignReferee = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+
+    if (!raceId) {
+      setError('Select a race before assigning a referee.');
+      return;
+    }
+
+    const refereeId = Number(refereeForm.refereeId);
+    const refereeRole = refereeForm.refereeRole.trim();
+    const selectedReferee = refereeOptions.find((referee) => referee.refereeId === refereeId);
+
+    if (!Number.isFinite(refereeId) || refereeId <= 0) {
+      setError('Select a referee before assigning.');
+      return;
+    }
+
+    if (!selectedReferee?.hasRefereeProfile) {
+      setError('This referee user does not have a referee profile ID yet.');
+      return;
+    }
+
+    if (!refereeRole) {
+      setError('Referee role is required.');
+      return;
+    }
+
+    setIsAssigningReferee(true);
+    setError(null);
+
+    try {
+      const createdAssignment = await tournamentService.assignReferee(raceId, refereeId, refereeRole);
+      const selectedRefereeUserId = Number(selectedReferee?.userId);
+      const nextAssignment: RefereeAssignmentItem = {
+        ...createdAssignment,
+        raceId: createdAssignment.raceId ?? raceId,
+        raceName: createdAssignment.raceName ?? selectedRefereeRace?.name,
+        refereeId: createdAssignment.refereeId ?? refereeId,
+        refereeUserId: createdAssignment.refereeUserId ?? (Number.isFinite(selectedRefereeUserId) ? selectedRefereeUserId : undefined),
+        refereeUsername: createdAssignment.refereeUsername ?? selectedReferee?.username,
+        refereeFullName: createdAssignment.refereeFullName ?? selectedReferee?.fullName,
+        refereeRole: createdAssignment.refereeRole ?? refereeRole,
+        assignedAt: createdAssignment.assignedAt ?? new Date().toISOString(),
+      };
+
+      setRefereeList((current) => [...current, nextAssignment]);
+      setRefereeForm(emptyRefereeForm);
+      setRaces((current) =>
+        current.map((race) =>
+          race.raceId === raceId
+            ? {
+                ...race,
+                assignedRefereeCount: (race.assignedRefereeCount ?? refereeList.length) + 1,
+              }
+            : race,
+        ),
+      );
+      setNotice({ tone: 'success', text: 'Referee assigned successfully.' });
+    } catch (apiError) {
+      setError(getApiErrorMessage(apiError, 'Unable to assign referee.'));
+    } finally {
+      setIsAssigningReferee(false);
+    }
   };
 
   const handleFieldChange = <K extends keyof AdminRaceFormData>(field: K, value: AdminRaceFormData[K]) => {
@@ -571,7 +735,10 @@ const AdminRacesPage = () => {
 
     try {
       if (action === 'start') {
-        await adminScheduleRaceApi.startRace(race.raceId);
+        await adminScheduleRaceApi.startRace(race.raceId, {
+          forceCloseBetting: true,
+          note: `Started from admin race management: ${race.name}`,
+        });
         setNotice({ tone: 'success', text: 'Race started successfully.' });
       } else if (action === 'complete') {
         await adminScheduleRaceApi.completeRace(race.raceId);
@@ -748,6 +915,9 @@ const AdminRacesPage = () => {
                         <IconButton label={`Edit ${race.name}`} onClick={() => void openEditModal(race)} disabled={actionRaceId === race.raceId}>
                           <Pencil className="h-4 w-4" />
                         </IconButton>
+                        <IconButton label={`Manage referees for ${race.name}`} onClick={() => openRefereeModal(race)} disabled={actionRaceId === race.raceId}>
+                          <Users className="h-4 w-4" />
+                        </IconButton>
                         <IconButton label={`Start ${race.name}`} onClick={() => void handleRaceAction(race, 'start')} disabled={actionRaceId === race.raceId}>
                           <Play className="h-4 w-4" />
                         </IconButton>
@@ -801,6 +971,29 @@ const AdminRacesPage = () => {
               onAddPointRule={handleAddPointRule}
               onRemovePointRule={(index) => void handleRemovePointRule(index)}
               onCancel={closeFormModal}
+            />
+          </Modal>
+        )}
+
+        {selectedRefereeRace && (
+          <Modal
+            title="Manage referees"
+            subtitle={`Race #${selectedRefereeRace.raceNumber} / ${selectedRefereeRace.name}`}
+            onClose={closeRefereeModal}
+          >
+            <RefereeAssignmentPanel
+              race={selectedRefereeRace}
+              refereeList={refereeList}
+              refereeOptions={refereeOptions}
+              formData={refereeForm}
+              loading={loading}
+              isRefereeOptionsLoading={isRefereeOptionsLoading}
+              error={error}
+              isAssigning={isAssigningReferee}
+              onSubmit={handleAssignReferee}
+              onChange={handleRefereeFormChange}
+              onRefresh={() => void fetchRefereeList()}
+              onCancel={closeRefereeModal}
             />
           </Modal>
         )}
@@ -1011,6 +1204,166 @@ const RaceForm = ({
     </div>
   </form>
 );
+
+const RefereeAssignmentPanel = ({
+  race,
+  refereeList,
+  refereeOptions,
+  formData,
+  loading,
+  isRefereeOptionsLoading,
+  error,
+  isAssigning,
+  onSubmit,
+  onChange,
+  onRefresh,
+  onCancel,
+}: {
+  race: AdminRaceItem;
+  refereeList: RefereeAssignmentItem[];
+  refereeOptions: AdminRefereeOption[];
+  formData: RefereeAssignmentFormData;
+  loading: boolean;
+  isRefereeOptionsLoading: boolean;
+  error: string | null;
+  isAssigning: boolean;
+  onSubmit: (event: FormEvent<HTMLFormElement>) => void;
+  onChange: <K extends keyof RefereeAssignmentFormData>(field: K, value: RefereeAssignmentFormData[K]) => void;
+  onRefresh: () => void;
+  onCancel: () => void;
+}) => {
+  const hasAssignableReferees = refereeOptions.some((referee) => referee.hasRefereeProfile);
+
+  return (
+  <form onSubmit={onSubmit} className="space-y-6 p-6">
+    <div className="grid gap-5 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] md:items-end">
+      <Field label="Referee">
+        <select
+          value={formData.refereeId || ''}
+          onChange={(event) => onChange('refereeId', event.target.value ? Number(event.target.value) : '')}
+          disabled={isRefereeOptionsLoading || refereeOptions.length === 0}
+          className={inputClassName}
+        >
+          <option value="">
+            {isRefereeOptionsLoading
+              ? 'Loading referees...'
+              : refereeOptions.length > 0
+                ? hasAssignableReferees
+                  ? 'Select referee'
+                  : 'No assignable referee profiles found'
+                : 'No referee users found'}
+          </option>
+          {refereeOptions.map((referee) => {
+            const refereeId = referee.refereeId;
+            const isAssigned = refereeList.some((assignment) => assignment.refereeId === refereeId);
+            const isMissingProfile = !referee.hasRefereeProfile;
+
+            return (
+              <option key={`${referee.userId ?? 'referee'}-${refereeId}`} value={refereeId} disabled={isAssigned || isMissingProfile}>
+                {getRefereeOptionLabel(referee)}{isAssigned ? ' (assigned)' : ''}
+              </option>
+            );
+          })}
+        </select>
+      </Field>
+      <Field label="Referee Role">
+        <input
+          type="text"
+          value={formData.refereeRole}
+          onChange={(event) => onChange('refereeRole', event.target.value)}
+          className={inputClassName}
+        />
+      </Field>
+      <button
+        type="submit"
+        disabled={isAssigning || isRefereeOptionsLoading}
+        className="inline-flex h-[46px] items-center justify-center gap-2 rounded-md bg-secondary px-5 text-body-sm font-bold text-on-secondary transition-all hover:bg-opacity-90 disabled:cursor-not-allowed disabled:opacity-70"
+      >
+        <UserPlus className="h-4 w-4" />
+        {isAssigning ? 'Assigning...' : 'Assign'}
+      </button>
+    </div>
+
+    {error && (
+      <div className="rounded-md border border-error/30 bg-error-container/20 px-4 py-3 text-body-sm font-semibold text-error">
+        {error}
+      </div>
+    )}
+
+    <section className="space-y-4 border-t border-outline-variant pt-5">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h3 className="text-body-lg font-bold text-primary">Assigned Referees</h3>
+          <p className="mt-1 text-label-sm text-on-surface-variant">
+            {refereeList.length}/{race.maxReferees} referees assigned
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={onRefresh}
+          disabled={loading}
+          className="inline-flex items-center justify-center gap-2 rounded-md border border-outline-variant px-4 py-2 text-label-sm font-bold text-on-surface-variant transition-colors hover:border-primary hover:text-primary disabled:cursor-not-allowed disabled:opacity-60"
+        >
+          <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+          Refresh
+        </button>
+      </div>
+
+      {loading ? (
+        <div className="rounded-md border border-outline-variant bg-surface-container-low px-4 py-8 text-center text-body-sm font-semibold text-on-surface-variant">
+          Loading referee assignments...
+        </div>
+      ) : refereeList.length > 0 ? (
+        <div className="overflow-x-auto rounded-md border border-outline-variant">
+          <table className="w-full min-w-[720px] text-left">
+            <thead className="border-b border-outline-variant bg-surface-container-low">
+              <tr>
+                <th className="px-4 py-3 text-label-sm uppercase tracking-wider text-outline">Referee</th>
+                <th className="px-4 py-3 text-label-sm uppercase tracking-wider text-outline">Role</th>
+                <th className="px-4 py-3 text-label-sm uppercase tracking-wider text-outline">Assigned At</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-outline-variant bg-surface-container-lowest">
+              {refereeList.map((assignment, index) => (
+                <tr key={assignment.id ?? assignment.refAssignId ?? assignment.assignmentId ?? `${assignment.refereeId ?? 'referee'}-${index}`}>
+                  <td className="px-4 py-3">
+                    <p className="text-body-sm font-bold text-primary">
+                      {assignment.refereeFullName ?? assignment.refereeUsername ?? `Referee ${assignment.refereeId ?? '-'}`}
+                    </p>
+                    <p className="mt-1 text-label-sm text-on-surface-variant">
+                      ID {assignment.refereeId ?? '-'} / User {assignment.refereeUserId ?? '-'}
+                    </p>
+                  </td>
+                  <td className="px-4 py-3 text-body-sm font-semibold text-on-surface-variant">
+                    {assignment.refereeRole ?? '-'}
+                  </td>
+                  <td className="px-4 py-3 text-body-sm font-semibold text-on-surface-variant">
+                    {formatDateTime(assignment.assignedAt)}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : (
+        <div className="rounded-md border border-outline-variant bg-surface-container-low px-4 py-8 text-center text-body-sm font-semibold text-on-surface-variant">
+          No referees assigned yet.
+        </div>
+      )}
+    </section>
+
+    <div className="flex flex-col-reverse gap-3 border-t border-outline-variant pt-5 sm:flex-row sm:justify-end">
+      <button
+        type="button"
+        onClick={onCancel}
+        className="rounded-md border border-outline-variant px-6 py-3 text-body-sm font-bold text-on-surface-variant transition-colors hover:border-primary hover:text-primary"
+      >
+        Close
+      </button>
+    </div>
+  </form>
+  );
+};
 
 const PointRulesEditor = ({
   rules,
