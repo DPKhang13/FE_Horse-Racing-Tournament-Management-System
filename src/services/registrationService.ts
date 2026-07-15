@@ -11,6 +11,11 @@ export const registrationService = {
     return unwrapApiList<RegistrationResponse>(response);
   },
 
+  async getPendingApprovalRegistrations(): Promise<RegistrationResponse[]> {
+    const response = await apiClient.get('/api/v1/admin/race-registrations/pending-approval');
+    return unwrapApiList<RegistrationResponse>(response);
+  },
+
   async getMyRegistrations(): Promise<RegistrationResponse[]> {
     const response = await apiClient.get('/api/race-registrations/get-my-registrations');
     return unwrapApiList<RegistrationResponse>(response);

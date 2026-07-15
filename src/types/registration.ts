@@ -10,7 +10,9 @@ export type RegistrationResponse = {
   jockeyId?: number | null;
   status: RegistrationStatus;
   ownerConfirmationStatus?: string | null;
+  ownerConfirmedAt?: string | null;
   registeredAt?: string | null;
+  approvedAt?: string | null;
   tournamentName?: string | null;
   raceName?: string | null;
   raceNumber?: number | null;
@@ -20,6 +22,8 @@ export type RegistrationResponse = {
   ownerFullName?: string | null;
   ownerStableName?: string | null;
   jockeyFullName?: string | null;
+  jockeyStatus?: string | null;
+  approvedByFullName?: string | null;
 };
 
 export type ApproveRegistrationRequest = {
