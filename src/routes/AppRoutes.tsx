@@ -26,6 +26,8 @@ import RaceControlPage from '../pages/Race/RaceControlPage';
 import NotificationsPage from '../pages/Notifications/NotificationsPage';
 import WalletPaymentPage from '../pages/Wallet/WalletPaymentPage';
 import PaymentResultPage from '../pages/Wallet/PaymentResultPage';
+import WalletHistoryPage from '../pages/Wallet/WalletHistoryPage';
+import WalletTransactionDetailPage from '../pages/Wallet/WalletTransactionDetailPage';
 import TournamentManagementPage from '../pages/Tournament/TournamentManagementPage';
 import TournamentSchedulePage from '../pages/Tournament/TournamentSchedulePage';
 import UserManagementPage from '../pages/Admin/UserManagementPage';
@@ -75,6 +77,8 @@ const AppRoutes = () => {
       <Route path="/race-control" element={protectedPage(<RaceControlPage />, ['admin', 'race_referee'])} />
       <Route path="/notifications" element={protectedPage(<NotificationsPage />)} />
       <Route path="/wallet" element={protectedPage(<WalletPaymentPage />, ['spectator'])} />
+      <Route path="/wallet/history" element={protectedPage(<WalletHistoryPage />, ['spectator'])} />
+      <Route path="/wallet/transactions/:txId" element={protectedPage(<WalletTransactionDetailPage />, ['spectator'])} />
       <Route path="/payment-result" element={protectedPage(<PaymentResultPage />, ['spectator'])} />
     </Routes>
   );

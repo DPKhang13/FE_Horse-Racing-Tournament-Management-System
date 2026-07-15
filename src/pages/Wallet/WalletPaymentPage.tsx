@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
+import { Link } from 'react-router-dom';
 import { motion } from 'motion/react';
 import { ArrowUpRight, CreditCard, Loader2, RefreshCw, Wallet } from 'lucide-react';
 import { getApiErrorMessage } from '../../services/apiClient';
@@ -11,6 +12,7 @@ const bankOptions = [
   { value: '', label: 'Auto select' },
   { value: 'VNPAYQR', label: 'VNPAYQR' },
   { value: 'VNBANK', label: 'Domestic bank' },
+  { value: 'NCB', label: 'NCB bank' },
   { value: 'INTCARD', label: 'International card' },
 ];
 
@@ -109,24 +111,31 @@ const WalletPaymentPage = () => {
             <p className="text-xs font-semibold uppercase tracking-[0.2em] text-secondary">Wallet</p>
             <h1 className="mt-2 font-display text-3xl font-bold text-on-surface md:text-4xl">Racing wallet</h1>
           </div>
-          <motion.button
-            type="button"
-            onClick={() => void loadWallet()}
-            className="inline-flex items-center justify-center gap-2 rounded-lg border border-outline-variant px-4 py-3 text-sm font-bold text-on-surface-variant transition hover:border-primary hover:text-primary"
-            whileHover={{ y: -1 }}
-            whileTap={{ scale: 0.98 }}
-          >
-            <RefreshCw className="h-4 w-4" />
-            Refresh
-          </motion.button>
-        </motion.div>
+            <div className="flex flex-wrap gap-3">
+              <Link
+                to="/wallet/history"
+                className="inline-flex items-center justify-center rounded-lg border border-outline-variant px-4 py-3 text-sm font-bold text-on-surface-variant transition hover:border-primary hover:text-primary"
+              >
+                View top-up history
+              </Link>
+              <motion.button
+                type="button"
+                onClick={() => void loadWallet()}
+                className="inline-flex items-center justify-center gap-2 rounded-lg border border-outline-variant px-4 py-3 text-sm font-bold text-on-surface-variant transition hover:border-primary hover:text-primary"
+                whileHover={{ y: -1 }}
+                whileTap={{ scale: 0.98 }}
+              >
+                <RefreshCw className="h-4 w-4" />
+                Refresh
+              </motion.button>
+            </div>
+          </motion.div>
 
         {errorMessage && (
           <motion.div
             className="mb-6 rounded-lg border border-error/40 bg-error-container/20 px-4 py-3 text-sm font-semibold text-error"
-            initial="hidden"
-            animate="visible"
-            variants={revealUp}
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
           >
             {errorMessage}
           </motion.div>
