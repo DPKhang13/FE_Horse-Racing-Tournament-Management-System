@@ -2,6 +2,7 @@ import { useMemo, useState, type FormEvent } from 'react';
 import { motion } from 'motion/react';
 import { ArrowLeft, ArrowRight, CheckCircle2, Eye, Gavel, Medal, Shield, UserRound } from 'lucide-react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { AppLogo } from '../../components/ui';
 
 type RegistrationRole = 'horse_owner' | 'jockey' | 'race_referee' | 'spectator';
 
@@ -78,9 +79,9 @@ const RegistrationPage = () => {
 
   return (
     <main className="racing-grid min-h-screen bg-surface text-on-surface">
-      <header className="fixed left-0 top-0 z-50 flex h-16 w-full items-center justify-between border-b border-outline-variant/30 bg-surface-container-low/80 px-4 shadow-sm backdrop-blur-md md:px-8">
-        <Link to="/" className="font-display text-xl font-extrabold text-primary">HTMS</Link>
-        <Link to="/login" state={{ mode: 'login' }} className="text-label-md font-bold text-on-surface-variant transition-colors hover:text-primary">
+      <header className="fixed left-0 top-0 z-50 flex h-16 w-full items-center justify-between border-b border-line bg-white/90 px-4 backdrop-blur-md sm:px-6">
+        <Link to="/" aria-label="HTMS home"><AppLogo /></Link>
+        <Link to="/login" state={{ mode: 'login' }} className="inline-flex h-9 items-center rounded-md border border-line-strong bg-white px-4 text-xs font-bold text-slate-600 transition-colors hover:bg-slate-50 hover:text-ink">
           Login
         </Link>
       </header>
@@ -121,8 +122,8 @@ const RegistrationPage = () => {
                         key={role.id}
                         type="button"
                         onClick={() => setSelectedRole(role.id)}
-                        className={`glass-panel relative min-h-[180px] rounded-xl p-6 text-left transition-all hover:border-primary/60 ${
-                          isSelected ? 'border-primary bg-surface-container-highest/30' : ''
+                        className={`relative min-h-[180px] rounded-lg border bg-white p-6 text-left shadow-sm transition-all hover:border-primary/60 hover:shadow-md ${
+                          isSelected ? 'border-primary ring-2 ring-primary/15' : 'border-line'
                         }`}
                         variants={revealUp}
                         whileHover={{ y: -2, scale: 1.01 }}
@@ -146,7 +147,7 @@ const RegistrationPage = () => {
                   <p className="mt-3 text-on-surface-variant">Complete your {selectedRoleMeta.title.toLowerCase()} profile details.</p>
                 </motion.div>
 
-                <motion.div className="glass-panel mx-auto max-w-xl space-y-6 rounded-2xl p-8" variants={revealUp}>
+                <motion.div className="mx-auto max-w-xl space-y-6 rounded-lg border border-line bg-white p-8 shadow-sm" variants={revealUp}>
                   <RegistrationInput label="Display name" value={displayName} onChange={setDisplayName} placeholder="Your professional display name" />
                   <RegistrationInput label="License number" value={licenseNumber} onChange={setLicenseNumber} placeholder="Optional license or credential ID" />
                   <RegistrationInput label={selectedRole === 'horse_owner' ? 'Stable name' : 'Organization'} value={organization} onChange={setOrganization} placeholder="Stable, team, venue, or organization" />
@@ -224,7 +225,7 @@ const RegistrationInput = ({
       value={value}
       onChange={(event) => onChange(event.target.value)}
       placeholder={placeholder}
-      className="w-full rounded-lg border border-outline-variant/50 bg-surface-container-lowest px-4 py-3 text-on-surface transition-all focus:border-primary focus:outline-none"
+      className="h-11 w-full rounded-md border border-line-strong bg-white px-4 py-3 text-on-surface transition-all focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
     />
   </label>
 );

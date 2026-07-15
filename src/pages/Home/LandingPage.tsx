@@ -386,15 +386,16 @@ const LandingPage = () => {
   }, [featuredTournament]);
 
   return (
-    <div className="overflow-x-hidden bg-background text-body-md text-on-surface">
-      <section id="home" data-landing-section className="relative flex min-h-screen scroll-mt-24 items-center overflow-hidden pt-16">
+    <div className="landing-page overflow-x-hidden bg-background text-body-md text-on-surface">
+      <section id="home" data-landing-section className="relative flex min-h-[calc(100svh-40px)] scroll-mt-24 items-center overflow-hidden pb-10 pt-20">
         <div className="absolute inset-0 z-0">
           <img
-            className="h-full w-full object-cover opacity-40 blur-[2px]"
+            className="h-full w-full object-cover"
             src={heroImage}
             alt="Powerful thoroughbred horses galloping through early morning mist on a turf track"
           />
-          <div className="absolute inset-0 bg-gradient-to-r from-background via-background/80 to-transparent" />
+          <div className="absolute inset-0 bg-gradient-to-r from-slate-950/95 via-slate-950/75 to-slate-950/25" />
+          <div className="absolute inset-0 bg-gradient-to-t from-background via-transparent to-transparent" />
         </div>
 
         <motion.div
@@ -430,7 +431,7 @@ const LandingPage = () => {
               <Link to="/login" state={{ mode: 'signup' }} className="gold-gradient rounded-xl px-8 py-4 font-display text-xl font-bold text-on-primary shadow-lg shadow-primary/20 transition-transform active:scale-95">
                 Join the Race
               </Link>
-              <Link to="/tournaments" className="rounded-xl border border-outline-variant bg-surface-container-highest px-8 py-4 font-display text-xl font-bold text-on-surface transition-colors hover:bg-surface-bright">
+              <Link to="/tournaments" className="rounded-lg border border-white/25 bg-white/10 px-8 py-4 font-display text-xl font-bold text-white backdrop-blur-sm transition-colors hover:bg-white/20">
                 Explore Tournaments
               </Link>
             </motion.div>
@@ -719,7 +720,7 @@ const LandingPage = () => {
       {!isAuthenticated && (
         <section className="relative overflow-hidden bg-background px-8 py-24 md:px-32">
           <motion.div
-            className="glass-card relative overflow-hidden rounded-[32px] border-primary/30 p-12 text-center md:p-24"
+            className="glass-card relative overflow-hidden rounded-lg border-primary/30 p-12 text-center md:p-20"
             initial={{ opacity: 0, y: 36, scale: 0.98 }}
             whileInView={{ opacity: 1, y: 0, scale: 1 }}
             viewport={viewportReveal}

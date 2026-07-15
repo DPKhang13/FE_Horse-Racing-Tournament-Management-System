@@ -152,9 +152,9 @@ const AuthPage = () => {
   };
 
   return (
-    <div className="racing-grid flex min-h-screen bg-surface text-on-surface">
-      <div className="relative hidden overflow-hidden border-r border-outline-variant/30 bg-surface-container-low p-16 lg:flex lg:w-1/2 lg:flex-col lg:justify-between">
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(242,202,80,0.14),transparent_34rem)]" />
+    <div className="racing-grid grid min-h-screen bg-canvas text-on-surface lg:grid-cols-2">
+      <div className="auth-visual relative hidden overflow-hidden p-10 lg:flex lg:flex-col lg:justify-between xl:p-14">
+        <div className="absolute inset-0 z-[1] bg-gradient-to-t from-slate-950/90 via-slate-950/70 to-slate-950/55" />
 
         <motion.div 
           className="relative z-10"
@@ -226,18 +226,18 @@ const AuthPage = () => {
           </div>
         </motion.div>
 
-        <div className="pointer-events-none absolute bottom-0 right-0 h-1/2 w-full overflow-hidden opacity-25">
+        <div className="pointer-events-none absolute inset-0 overflow-hidden">
           <img
             src={heroImage}
             alt="Racing background"
-            className="w-full h-full object-cover"
+            className="h-full w-full object-cover"
           />
         </div>
       </div>
 
-      <div className="flex w-full flex-col items-center justify-center p-6 md:p-12 lg:w-1/2">
+      <div className="flex w-full flex-col items-center justify-center p-6 md:p-12">
         <motion.div 
-          className="glass-panel relative w-full max-w-md overflow-hidden rounded-2xl p-7 shadow-2xl md:p-10"
+          className="relative w-full max-w-md overflow-hidden rounded-lg border border-line bg-white p-7 shadow-xl shadow-slate-200/70 md:p-10"
           initial={{ opacity: 0, x: 42, scale: 0.96 }}
           animate={{ opacity: 1, x: 0, scale: 1 }}
           transition={{ delay: 0.2, type: 'spring', stiffness: 150, damping: 18 }}
@@ -509,9 +509,9 @@ const AuthPage = () => {
 
 const iconClassName = 'absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-on-surface-variant/70';
 const inputClassName =
-  'w-full bg-surface-container-lowest border border-outline-variant/50 rounded-lg py-3 pl-10 pr-4 text-body-sm text-on-surface focus:outline-none focus:border-primary transition-all';
+  'h-11 w-full rounded-md border border-line-strong bg-white py-3 pl-10 pr-4 text-body-sm text-on-surface transition-all focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20';
 const primaryButtonClassName =
-  'gold-gradient w-full py-4 rounded-xl font-extrabold text-on-primary flex items-center justify-center gap-2 transition-all shadow-lg shadow-primary/10 disabled:opacity-70 disabled:cursor-not-allowed';
+  'gold-gradient flex h-11 w-full items-center justify-center gap-2 rounded-md font-extrabold text-on-primary shadow-sm shadow-primary/20 transition-all disabled:cursor-not-allowed disabled:opacity-70';
 
 const AuthField = ({
   label,

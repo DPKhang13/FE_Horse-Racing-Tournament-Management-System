@@ -9,6 +9,7 @@ import type { NotificationItem } from '../../services/notificationService';
 import { predictionService } from '../../services/predictionService';
 import type { RaceScheduleItem } from '../../services/scheduleService';
 import type { RaceResultListItem } from '../../types/raceResult';
+import { Badge, MetricCard, type Tone } from '../../components/ui';
 import { spectatorDashboardMockData } from './mockData';
 
 // Animation variants
@@ -125,19 +126,22 @@ const SpectatorDashboard: React.FC = () => {
     {
       label: 'Upcoming Races',
       value: String(summaryCount?.upcomingRaceCount ?? upcomingRaces.length).padStart(2, '0'),
-      tone: 'text-secondary',
+      tone: 'gold' as Tone,
+      icon: CalendarDays,
       action: () => document.getElementById('race-schedule')?.scrollIntoView({ behavior: 'smooth', block: 'start' }),
     },
     {
       label: 'Open prediction races',
       value: String(openPredictionRaceCount).padStart(2, '0'),
-      tone: 'text-primary',
+      tone: 'emerald' as Tone,
+      icon: Trophy,
       action: () => navigate('/prediction'),
     },
     {
       label: 'Unread Notifications',
       value: String(summaryCount?.unreadNotificationCount ?? notifications.length).padStart(2, '0'),
-      tone: 'text-on-surface',
+      tone: 'blue' as Tone,
+      icon: Bell,
       action: () => navigate('/notifications'),
     },
   ], [navigate, notifications.length, openPredictionRaceCount, summaryCount, upcomingRaces.length]);
@@ -177,25 +181,23 @@ const SpectatorDashboard: React.FC = () => {
             variants={revealContainer}
           >
             {metrics.map((item, index) => (
-              <motion.button
+              <motion.div
                 key={item.label}
-                type="button"
-                onClick={item.action}
-                aria-label={`${item.label}: ${item.value}. Open details`}
-                className="glass-panel w-full rounded-xl p-5 text-left transition hover:-translate-y-0.5 hover:border-primary/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-surface"
                 variants={revealUp}
                 whileHover={{ y: -4, scale: 1.02 }}
                 whileTap={{ scale: 0.98 }}
                 transition={{ delay: index * 0.1 }}
               >
-                <p className="text-sm text-on-surface-variant">{item.label}</p>
-                <div className="mt-3 flex items-end justify-between gap-3">
-                  <strong className={`font-display text-4xl font-extrabold ${item.tone}`}>{item.value}</strong>
-                  <span className="rounded-full border border-outline-variant/50 bg-surface-container-lowest px-3 py-1 text-xs font-bold uppercase tracking-[0.16em] text-on-surface-variant">
-                    Today
-                  </span>
-                </div>
-              </motion.button>
+                <MetricCard
+                  label={item.label}
+                  value={item.value}
+                  tone={item.tone}
+                  icon={item.icon}
+                  onClick={item.action}
+                  detail={<Badge tone="slate">Today</Badge>}
+                  className="min-h-32"
+                />
+              </motion.div>
             ))}
           </motion.div>
         </div>

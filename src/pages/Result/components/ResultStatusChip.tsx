@@ -1,21 +1,22 @@
 import type { RaceResultStatus } from '../../../types/raceResult';
+import { Badge, type Tone } from '../../../components/ui';
 
 type ResultStatusChipProps = {
   status: RaceResultStatus;
 };
 
-const statusConfig: Record<RaceResultStatus, { label: string; className: string }> = {
+const statusConfig: Record<RaceResultStatus, { label: string; tone: Tone }> = {
   draft: {
     label: 'Draft',
-    className: 'bg-surface-container text-on-surface-variant',
+    tone: 'slate',
   },
   confirmed: {
     label: 'Confirmed',
-    className: 'bg-tertiary-fixed text-on-tertiary-fixed-variant',
+    tone: 'blue',
   },
   published: {
     label: 'Published',
-    className: 'bg-secondary-container text-on-secondary-container',
+    tone: 'emerald',
   },
 };
 
@@ -23,11 +24,9 @@ const ResultStatusChip = ({ status }: ResultStatusChipProps) => {
   const config = statusConfig[status];
 
   return (
-    <span
-      className={`inline-flex rounded px-2.5 py-1 text-label-sm uppercase tracking-wider ${config.className}`}
-    >
+    <Badge tone={config.tone} dot className="uppercase">
       {config.label}
-    </span>
+    </Badge>
   );
 };
 
