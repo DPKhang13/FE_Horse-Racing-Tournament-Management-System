@@ -84,7 +84,8 @@ export const jockeyAssignmentService = {
     return unwrapApiData<JockeyAssignmentItem>(response);
   },
 
-  async delete(id: number | string): Promise<void> {
-    await apiClient.delete(`/api/jockey-assignments/delete/${id}`);
+  async delete(id: number | string): Promise<JockeyAssignmentItem> {
+    const response = await apiClient.patch(`/api/v1/owner/jockey-assignments/${id}/cancel`);
+    return unwrapApiData<JockeyAssignmentItem>(response);
   },
 };

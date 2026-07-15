@@ -39,12 +39,16 @@ const PaymentResultPage = () => {
   const isSuccess = useMemo(() => {
     const normalizedStatus = transactionStatus?.toLowerCase();
 
+    if (searchParams.get('success') === 'true') {
+      return true;
+    }
+
     if (normalizedStatus === 'completed' || normalizedStatus === 'success') {
       return true;
     }
 
     return responseCode === '00' && (!transactionStatus || transactionStatus === '00');
-  }, [responseCode, transactionStatus]);
+  }, [responseCode, searchParams, transactionStatus]);
 
   useEffect(() => {
     if (!location.search || !hasRawVnpayReturn) {

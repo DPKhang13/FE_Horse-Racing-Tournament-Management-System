@@ -57,6 +57,11 @@ export const raceRegistrationService = {
     return unwrapApiList<RaceRegistrationItem>(response);
   },
 
+  async getPendingApproval(): Promise<RaceRegistrationItem[]> {
+    const response = await apiClient.get('/api/v1/admin/race-registrations/pending-approval');
+    return unwrapApiList<RaceRegistrationItem>(response);
+  },
+
   async getMine(): Promise<RaceRegistrationItem[]> {
     const response = await apiClient.get('/api/race-registrations/get-my-registrations');
     return unwrapApiList<RaceRegistrationItem>(response);
@@ -83,6 +88,6 @@ export const raceRegistrationService = {
   },
 
   async delete(id: number | string): Promise<void> {
-    await apiClient.delete(`/api/race-registrations/delete/${id}`);
+    throw new Error(`Backend does not provide delete/cancel API for race registration ${id}.`);
   },
 };

@@ -376,16 +376,21 @@ export const adminScheduleRaceApi = {
     return mapRace({ ...payload, raceId, ...responseData }, 0);
   },
 
-  async startRace(raceId: number | string): Promise<void> {
-    await apiClient.post(`/api/v1/admin/races/${raceId}/start`);
+  async startRace(
+    raceId: number | string,
+    data: { forceCloseBetting?: boolean; note?: string } = {},
+  ): Promise<void> {
+    await apiClient.patch(`/api/v1/admin/races/${raceId}/start`, {
+      forceCloseBetting: data.forceCloseBetting ?? true,
+      note: data.note?.trim() || undefined,
+    });
   },
 
   async completeRace(raceId: number | string): Promise<void> {
-    await apiClient.post(`/api/v1/admin/races/${raceId}/complete`);
+    await apiClient.patch(`/api/v1/admin/races/${raceId}/complete`);
   },
 
   async cancelRace(raceId: number | string): Promise<void> {
-    await apiClient.post(`/api/v1/admin/races/cancel-race/${raceId}`);
+    await apiClient.patch(`/api/v1/admin/races/cancel-race/${raceId}`);
   },
 };
-
