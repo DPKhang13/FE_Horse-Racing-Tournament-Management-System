@@ -50,16 +50,6 @@ const normalizeRaceStatus = (status: unknown): OpenRacePrediction['status'] => {
   return 'Open';
 };
 
-const isFutureDate = (value: string) => {
-  const time = new Date(value).getTime();
-
-  return Number.isFinite(time) && time > Date.now();
-};
-
-const isOpenRacePrediction = (race: OpenRacePrediction) => {
-  return race.status === 'Open' && isFutureDate(race.closesAt);
-};
-
 const getOptions = (raw: RawObject): PredictionOption[] => {
   const options = Array.isArray(raw.options) ? raw.options : [];
 
@@ -143,16 +133,13 @@ const readOpenPredictionRaces = (raw: unknown) => {
   }
 
   return openPredictionRaces
-    .map((item) => mapOpenRace(item as RawObject))
-    .filter(isOpenRacePrediction);
+    .map((item) => mapOpenRace(item as RawObject));
 };
 
 export const predictionService = {
   async getOpenPredictionRaces(): Promise<OpenRacePrediction[]> {
     const response = await apiClient.get('/api/bets/open-predictions');
-    return unwrapApiList<RawObject>(response)
-      .map(mapOpenRace)
-      .filter(isOpenRacePrediction);
+    return unwrapApiList<RawObject>(response).map(mapOpenRace);
   },
 
   async getPredictionOverview(): Promise<PredictionOverview> {

@@ -5,15 +5,22 @@ export type BetStatus = 'pending' | 'won' | 'lost' | 'cancelled' | string;
 
 export type BetItem = {
   betId: number;
+  optionId?: number;
+  assignmentId?: number;
   raceId?: number;
+  raceNumber?: number;
   userId?: number;
   horseId?: number;
+  jockeyId?: number;
   amount: number;
   odds: number;
+  currentRate?: number;
   potentialPayout: number;
   status: BetStatus;
   createdAt?: string;
   settledAt?: string;
+  scheduledAt?: string;
+  predictionClosesAt?: string;
   raceName: string;
   tournamentName?: string;
   horseName: string;
@@ -74,15 +81,22 @@ const mapBet = (raw: RawBet): BetItem => {
 
   return {
     betId: asNumber(raw.betId ?? raw.id),
+    optionId: raw.optionId === undefined ? undefined : asNumber(raw.optionId),
+    assignmentId: raw.assignmentId === undefined ? undefined : asNumber(raw.assignmentId),
     raceId: raw.raceId === undefined ? undefined : asNumber(raw.raceId),
+    raceNumber: raw.raceNumber === undefined ? undefined : asNumber(raw.raceNumber),
     userId: raw.userId === undefined ? undefined : asNumber(raw.userId),
     horseId: raw.horseId === undefined ? undefined : asNumber(raw.horseId),
+    jockeyId: raw.jockeyId === undefined ? undefined : asNumber(raw.jockeyId),
     amount,
     odds,
+    currentRate: raw.currentRate === undefined ? undefined : asNumber(raw.currentRate),
     potentialPayout,
     status,
     createdAt: raw.placedAt ? asString(raw.placedAt) : raw.createdAt ? asString(raw.createdAt) : undefined,
     settledAt: raw.settledAt ? asString(raw.settledAt) : undefined,
+    scheduledAt: raw.scheduledAt ? asString(raw.scheduledAt) : undefined,
+    predictionClosesAt: raw.predictionClosesAt ? asString(raw.predictionClosesAt) : undefined,
     raceName: asString(raw.raceName ?? raw.name, 'Race'),
     tournamentName: raw.tournamentName ? asString(raw.tournamentName) : undefined,
     horseName: asString(raw.horseName ?? raw.selectionName, 'Horse'),
@@ -125,9 +139,24 @@ export const betService = {
     return bets.filter((bet) => bet.userId === currentUserId);
   },
 
+  async getDashboardBets(): Promise<BetItem[]> {
+    const response = await apiClient.get('/api/bets/dashboard');
+    const data = unwrapApiData<RawBet>(response);
+    const activeBets = Array.isArray(data.activeBets) ? data.activeBets : [];
+
+    return activeBets
+      .filter((item): item is RawBet => Boolean(item) && typeof item === 'object')
+      .map(mapBet);
+  },
+
   async getBetById(id: number | string): Promise<BetItem> {
     const response = await apiClient.get(`/api/bets/get-by-id/${id}`);
     return mapBet(response.data?.data ?? response.data);
+  },
+
+  async getMyBetDetail(id: number | string): Promise<BetItem> {
+    const response = await apiClient.get(`/api/bets/detail/${encodeURIComponent(String(id))}`);
+    return mapBet(unwrapApiData<RawBet>(response));
   },
 
   async createBet(data: BetFormData): Promise<BetItem> {
