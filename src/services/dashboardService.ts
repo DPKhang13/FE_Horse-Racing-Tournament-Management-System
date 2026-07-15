@@ -130,16 +130,6 @@ const mapBet = (raw: RawObject): BetItem => ({
   pointsAwarded: raw.pointsAwarded === undefined ? undefined : asNumber(raw.pointsAwarded),
 });
 
-const mapNotification = (raw: RawObject): NotificationItem => ({
-  notificationId: asNumber(raw.notificationId ?? raw.id),
-  userId: raw.userId === undefined ? undefined : asNumber(raw.userId),
-  title: asString(raw.title, 'Notification'),
-  message: asString(raw.message ?? raw.content ?? raw.detail),
-  type: raw.type ? asString(raw.type) : undefined,
-  status: raw.status ? asString(raw.status) : raw.isRead === undefined ? undefined : raw.isRead ? 'read' : 'unread',
-  createdAt: raw.createdAt ? asString(raw.createdAt) : undefined,
-  readAt: raw.readAt ? asString(raw.readAt) : undefined,
-});
 
 const mapResultList = (items: RawObject[]): RaceResultListItem[] => {
   const groupedResults = new Map<string, RaceResultListItem>();

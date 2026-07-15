@@ -8,6 +8,7 @@ import { betService, type BetItem } from '../../services/betService';
 import { dashboardService, type DashboardSummaryCount } from '../../services/dashboardService';
 import type { NotificationItem } from '../../services/notificationService';
 import { predictionService } from '../../services/predictionService';
+import { raceResultService } from '../../services/raceResultService';
 import type { RaceScheduleItem } from '../../services/scheduleService';
 import type { RaceResultListItem } from '../../types/raceResult';
 import type { UserProfile } from '../../types/user';
@@ -66,6 +67,17 @@ const formatRaceStatus = (status: string) => {
   return status.replace(/_/g, ' ');
 };
 
+const getLatestRaceResults = (results: RaceResultListItem[], limit = 3) => (
+  [...results]
+    .sort((first, second) => {
+      const firstTime = new Date(first.publishedAt ?? first.date).getTime();
+      const secondTime = new Date(second.publishedAt ?? second.date).getTime();
+
+      return secondTime - firstTime;
+    })
+    .slice(0, limit)
+);
+
 const SpectatorDashboard: React.FC = () => {
   const navigate = useNavigate();
   const [upcomingRaces, setUpcomingRaces] = useState<RaceScheduleItem[]>([]);
@@ -86,10 +98,11 @@ const SpectatorDashboard: React.FC = () => {
       setErrorMessage('');
 
       try {
-        const [dashboard, bets, openPredictionRaces] = await Promise.all([
+        const [dashboard, bets, openPredictionRaces, publishedResults] = await Promise.all([
           dashboardService.getSpectatorDashboard(),
           betService.getBets(),
           predictionService.getOpenPredictionRaces(),
+          raceResultService.getRaceResultList().catch(() => []),
         ]);
 
         const currentProfile = profile ?? authService.getStoredUserProfile();
@@ -102,7 +115,7 @@ const SpectatorDashboard: React.FC = () => {
           setUpcomingRaces(dashboard.upcomingRaces.slice(0, 6));
           setMyPredictions(filteredBets.slice(0, 5));
           setOpenPredictionRaceCount(openPredictionRaces.length);
-          setLatestResults(dashboard.latestResults.slice(0, 5));
+          setLatestResults(getLatestRaceResults(publishedResults.length > 0 ? publishedResults : dashboard.latestResults));
           setNotifications(dashboard.notifications.slice(0, 5));
         }
       } catch (error) {
@@ -112,7 +125,7 @@ const SpectatorDashboard: React.FC = () => {
           setOpenPredictionRaceCount(0);
           setUpcomingRaces(spectatorDashboardMockData.upcomingRaces);
           setMyPredictions(spectatorDashboardMockData.myPredictions);
-          setLatestResults(spectatorDashboardMockData.latestResults);
+          setLatestResults(getLatestRaceResults(spectatorDashboardMockData.latestResults));
           setNotifications(spectatorDashboardMockData.notifications);
         }
       } finally {
@@ -149,6 +162,8 @@ const SpectatorDashboard: React.FC = () => {
       action: () => navigate('/notifications'),
     },
   ], [navigate, notifications.length, openPredictionRaceCount, summaryCount, upcomingRaces.length]);
+
+  const visibleUpcomingRaces = upcomingRaces.slice(0, 6);
 
   return (
     <main className="min-h-screen bg-surface text-on-surface">
@@ -222,7 +237,7 @@ const SpectatorDashboard: React.FC = () => {
               <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
                 {isLoading && <EmptyState text="Loading races..." />}
 
-                {!isLoading && upcomingRaces.map((race, index) => (
+                {!isLoading && visibleUpcomingRaces.map((race, index) => (
                   <motion.article 
                     key={race.raceId} 
                     className="rounded-xl border border-outline-variant/40 bg-surface-container-lowest/70 p-4 transition hover:border-primary/60"
@@ -250,6 +265,7 @@ const SpectatorDashboard: React.FC = () => {
 
                 {!isLoading && upcomingRaces.length === 0 && <EmptyState text="No upcoming races found." />}
               </div>
+
             </DashboardPanel>
           </motion.div>
 
