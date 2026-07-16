@@ -1,9 +1,11 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { Clock3, Ticket, TrendingUp, X } from 'lucide-react';
 import { getApiErrorMessage } from '../../services/apiClient';
+import { authService } from '../../services/authService';
 import { betService, type BetItem } from '../../services/betService';
 import { predictionService } from '../../services/predictionService';
 import type { OpenRacePrediction } from '../../types/prediction';
+import type { UserProfile } from '../../types/user';
 
 const formatPoints = (value: number) => new Intl.NumberFormat('en-US', {
   maximumFractionDigits: 0,
@@ -36,6 +38,7 @@ const payoutLabel = (status: string) => {
 
 const PredictionPage = () => {
   const [bets, setBets] = useState<BetItem[]>([]);
+  const [profile, setProfile] = useState<UserProfile | undefined>(() => authService.getStoredUserProfile());
   const [openRacePredictions, setOpenRacePredictions] = useState<OpenRacePrediction[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -64,12 +67,23 @@ const PredictionPage = () => {
           return;
         }
 
+        const currentProfile = profile ?? authService.getStoredUserProfile();
+        const activeProfile = currentProfile ?? await authService.getCurrentUser().catch(() => undefined);
+
+        if (activeProfile) {
+          setProfile(activeProfile);
+        }
+
+        const filteredBets = activeProfile?.userId
+          ? betsData.filter((bet) => bet.userId === activeProfile.userId)
+          : betsData;
+
         const nextOpenRaces = overview.openRaces;
         setOpenRacePredictions(nextOpenRaces);
         setSelectedRaceId(nextOpenRaces[0]?.id ?? 0);
         setSelectedHorseId(nextOpenRaces[0]?.options[0]?.horseId ?? 0);
         setWalletBalance(overview.walletBalance ?? 0);
-        setBets(betsData);
+        setBets(filteredBets);
       } catch (error) {
         if (isMounted) {
           setErrorMessage(getApiErrorMessage(error, 'Unable to load predictions.'));
