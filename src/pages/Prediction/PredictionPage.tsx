@@ -4,6 +4,7 @@ import { getApiErrorMessage } from '../../services/apiClient';
 import { betService, type BetItem } from '../../services/betService';
 import { predictionService } from '../../services/predictionService';
 import type { OpenRacePrediction } from '../../types/prediction';
+import { PageHeader, PageShell } from '../../components/ui';
 
 const formatPoints = (value: number) => new Intl.NumberFormat('en-US', {
   maximumFractionDigits: 0,
@@ -173,13 +174,13 @@ const PredictionPage = () => {
   };
 
   return (
-    <div className="bg-surface min-h-screen py-12">
-      <div className="max-w-container mx-auto px-4 md:px-margin-desktop">
-        <div className="flex flex-col gap-8 lg:flex-row lg:items-end lg:justify-between mb-10">
-          <div className="space-y-3">
-            <p className="text-headline-lg font-bold text-primary mb-2">Prediction Center</p>
-          </div>
-        </div>
+    <PageShell>
+      <PageHeader
+        eyebrow="Spectator"
+        title="Prediction Center"
+        description="Review open prediction windows, manage active stakes, and track potential payouts."
+        icon={Ticket}
+      />
 
         {errorMessage && (
           <div className="mb-8 rounded-md border border-error/30 bg-error-container/20 px-4 py-3 text-body-sm font-semibold text-error">
@@ -187,9 +188,9 @@ const PredictionPage = () => {
           </div>
         )}
 
-        <div className="grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
-          <div className="space-y-6">
-            <section className="rounded-3xl border border-outline-variant bg-white p-6 shadow-sm">
+      <div className="grid gap-4 xl:grid-cols-[minmax(0,1.2fr)_minmax(320px,0.8fr)]">
+          <div className="space-y-4">
+            <section className="rounded-lg border border-outline-variant bg-white p-5 shadow-sm">
               <div className="flex items-center justify-between gap-4 mb-6">
                 <div>
                   <p className="text-xs font-semibold uppercase tracking-[0.2em] text-secondary">Wallet</p>
@@ -215,7 +216,7 @@ const PredictionPage = () => {
               </div>
             </section>
 
-            <section className="rounded-3xl border border-outline-variant bg-white p-6 shadow-sm">
+            <section className="rounded-lg border border-outline-variant bg-white p-5 shadow-sm">
               <div className="mb-6 flex items-center justify-between gap-4">
                 <div>
                   <p className="text-xs font-semibold uppercase tracking-[0.2em] text-secondary">Open prediction races</p>
@@ -267,8 +268,8 @@ const PredictionPage = () => {
             </section>
           </div>
 
-          <aside className="space-y-6">
-            <section className="rounded-3xl border border-outline-variant bg-white p-6 shadow-sm">
+          <aside className="space-y-4">
+            <section className="rounded-lg border border-outline-variant bg-white p-5 shadow-sm">
               <div className="mb-6 flex items-center justify-between gap-4">
                 <div>
                   <p className="text-xs font-semibold uppercase tracking-[0.2em] text-secondary">Active predictions</p>
@@ -312,7 +313,7 @@ const PredictionPage = () => {
               </div>
             </section>
 
-            <section className="rounded-3xl border border-outline-variant bg-white p-6 shadow-sm">
+            <section className="rounded-lg border border-outline-variant bg-white p-5 shadow-sm">
               <div className="flex items-center justify-between gap-4 mb-4">
                 <div>
                   <p className="text-xs font-semibold uppercase tracking-[0.2em] text-secondary">Prediction tips</p>
@@ -327,7 +328,6 @@ const PredictionPage = () => {
               </ul>
             </section>
           </aside>
-        </div>
       </div>
 
       {isPredictionModalOpen && selectedRace && selectedOption && (
@@ -452,7 +452,7 @@ const PredictionPage = () => {
           </section>
         </div>
       )}
-    </div>
+    </PageShell>
   );
 };
 

@@ -19,6 +19,7 @@ import { authService } from '../../services/authService';
 import { getApiErrorMessage } from '../../services/apiClient';
 import { notificationService, type NotificationFormData, type NotificationItem } from '../../services/notificationService';
 import type { UserProfile } from '../../types/user';
+import { MetricCard, MetricGrid, PageHeader, PageShell } from '../../components/ui';
 
 type ReadFilter = 'all' | 'unread' | 'read';
 type NotificationTone = 'success' | 'warning' | 'info' | 'premium';
@@ -272,40 +273,26 @@ const NotificationsPage = () => {
   };
 
   return (
-    <main className="min-h-screen bg-surface text-on-surface">
-      <section className="border-b border-outline-variant/40 bg-surface-container-low/80">
-        <div className="mx-auto max-w-[1440px] px-4 py-10 md:px-8">
-          <div className="flex flex-col gap-6 xl:flex-row xl:items-end xl:justify-between">
-            <div className="max-w-3xl">
-              <p className="text-xs font-bold uppercase tracking-[0.22em] text-secondary">Notification Center</p>
-              <h1 className="font-display mt-3 text-4xl font-extrabold text-primary md:text-5xl">Race operations inbox</h1>
-            </div>
+    <PageShell>
+      <PageHeader eyebrow="Notification Center" title="Race operations inbox" icon={Bell} />
 
-            <div className="grid gap-3 sm:grid-cols-2 xl:min-w-[520px] xl:grid-cols-4">
-              {metrics.map((item) => (
-                <div key={item.label} className="rounded-xl border border-outline-variant/40 bg-surface-container-lowest/60 p-4">
-                  <p className="text-xs font-bold uppercase tracking-[0.16em] text-on-surface-variant">{item.label}</p>
-                  <strong className={`font-display mt-2 block text-3xl font-extrabold ${item.tone}`}>
-                    {String(item.value).padStart(2, '0')}
-                  </strong>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      </section>
+      <MetricGrid columns={4}>
+        {metrics.map((item) => (
+          <MetricCard key={item.label} label={item.label} value={String(item.value).padStart(2, '0')} icon={Bell} tone={item.label === 'Unread' ? 'red' : 'slate'} />
+        ))}
+      </MetricGrid>
 
       {(message || errorMessage) && (
-        <section className="mx-auto grid max-w-[1440px] gap-3 px-4 pt-8 md:px-8">
+        <section className="grid gap-3">
           {message && <StatusBanner tone="success" text={message} />}
           {errorMessage && <StatusBanner tone="error" text={errorMessage} />}
         </section>
       )}
 
-      <section className={`mx-auto grid max-w-[1440px] gap-6 px-4 ${message || errorMessage ? 'py-6' : 'py-8'} md:px-8 ${canManageNotifications ? 'xl:grid-cols-[minmax(300px,420px)_minmax(0,1fr)]' : 'xl:grid-cols-1'}`}>
+      <section className={`grid gap-4 ${canManageNotifications ? 'xl:grid-cols-[360px_minmax(0,1fr)]' : 'xl:grid-cols-1'}`}>
         {canManageNotifications && (
           <aside className="space-y-6">
-            <section className="glass-panel rounded-xl p-5">
+            <section className="rounded-lg border border-line bg-white p-5 shadow-sm">
               <div className="mb-5 flex items-center justify-between gap-3">
                 <div>
                   <p className="text-xs font-bold uppercase tracking-[0.18em] text-secondary">Composer</p>
@@ -354,7 +341,7 @@ const NotificationsPage = () => {
           </aside>
         )}
 
-        <section className="glass-panel min-w-0 rounded-xl p-5 md:p-6">
+        <section className="min-w-0 rounded-lg border border-line bg-white p-5 shadow-sm">
           <div className="flex flex-col gap-5 border-b border-outline-variant/40 pb-5 lg:flex-row lg:items-center lg:justify-between">
             <div>
               <p className="text-xs font-bold uppercase tracking-[0.18em] text-secondary">Inbox</p>
@@ -420,7 +407,7 @@ const NotificationsPage = () => {
           </div>
         </section>
       </section>
-    </main>
+    </PageShell>
   );
 };
 

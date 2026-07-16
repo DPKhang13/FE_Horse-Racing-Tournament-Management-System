@@ -3,6 +3,7 @@ import { motion } from 'motion/react';
 import { ArrowLeft, CalendarDays, Clock, Filter, MapPin, Search, Trophy, Users } from 'lucide-react';
 import { Link, useParams } from 'react-router-dom';
 import { getApiErrorMessage } from '../../services/apiClient';
+import { DataPanel, MetricGrid, PageHeader, PageShell, Toolbar } from '../../components/ui';
 import { tournamentService } from '../../services/tournamentService';
 import type { MatchStatus, Tournament, TournamentMatch } from '../../types/tournament';
 
@@ -139,28 +140,19 @@ const TournamentSchedulePage = () => {
   const finishedCount = matches.filter((match) => match.matchStatus === 'Finished').length;
 
   return (
-    <div className="min-h-screen bg-surface py-8">
-      <div className="mx-auto max-w-[1440px] px-4 md:px-8">
-        <motion.div 
-          className="glass-panel mb-6 rounded-2xl p-6"
-          initial="hidden"
-          animate="visible"
-          variants={revealContainer}
-        >
-          <div className="flex flex-col gap-6 xl:flex-row xl:items-end xl:justify-between">
-            <motion.div variants={revealUp}>
-              <Link
+    <PageShell>
+      <PageHeader
+        eyebrow="Tournament Schedule"
+        title={tournament?.tournamentName ?? 'Tournament Schedule'}
+        icon={CalendarDays}
+        actions={<Link
                 to="/tournaments"
-                className="mb-4 inline-flex items-center gap-2 text-label-sm font-bold uppercase tracking-[0.14em] text-on-surface-variant transition-colors hover:text-primary"
+                className="inline-flex h-9 items-center gap-2 rounded-md border border-line-strong bg-white px-3 text-xs font-semibold text-slate-600 transition-colors hover:bg-slate-50 hover:text-ink"
               >
                 <ArrowLeft className="h-4 w-4" />
                 Tournament Management
-              </Link>
-              <p className="mb-3 text-label-sm font-bold uppercase tracking-[0.18em] text-secondary">Tournament Schedule</p>
-              <h1 className="font-display mb-2 text-headline-lg font-extrabold text-primary">
-                {tournament?.tournamentName ?? 'Tournament Schedule'}
-              </h1>
-              <div className="flex flex-wrap gap-x-6 gap-y-2 text-body-sm text-on-surface-variant">
+              </Link>}
+        meta={<>
                 <span className="inline-flex items-center gap-2">
                   <CalendarDays className="h-4 w-4 text-outline" />
                   {tournament ? `${formatDate(tournament.startDate)} - ${formatDate(tournament.endDate)}` : 'Schedule dates'}
@@ -169,13 +161,10 @@ const TournamentSchedulePage = () => {
                   <MapPin className="h-4 w-4 text-outline" />
                   {tournament?.location ?? 'Tournament location'}
                 </span>
-              </div>
-            </motion.div>
+              </>}
+      />
 
-            <motion.div 
-              className="grid min-w-full gap-3 sm:grid-cols-2 xl:min-w-[560px] xl:grid-cols-4"
-              variants={revealContainer}
-            >
+      <MetricGrid columns={4}>
               <motion.div variants={revealUp}>
                 <MetricCard icon={<Trophy className="h-4 w-4" />} label="Matches" value={String(matches.length).padStart(2, '0')} />
               </motion.div>
@@ -188,16 +177,9 @@ const TournamentSchedulePage = () => {
               <motion.div variants={revealUp}>
                 <MetricCard icon={<Users className="h-4 w-4" />} label="Finished" value={String(finishedCount).padStart(2, '0')} />
               </motion.div>
-            </motion.div>
-          </div>
-        </motion.div>
+      </MetricGrid>
 
-        <motion.div 
-          className="glass-panel mb-6 rounded-xl p-4"
-          initial="hidden"
-          animate="visible"
-          variants={revealUp}
-        >
+      <Toolbar>
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(220px,1fr)_180px_180px_180px]">
             <div className="relative">
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-outline" />
@@ -235,7 +217,7 @@ const TournamentSchedulePage = () => {
               className={plainFilterInputClassName}
             />
           </div>
-        </motion.div>
+      </Toolbar>
 
         {errorMessage && (
           <motion.div 
@@ -265,12 +247,7 @@ const TournamentSchedulePage = () => {
           </motion.div>
         ) : (
           <>
-            <motion.div 
-              className="glass-panel hidden overflow-hidden rounded-xl lg:block"
-              initial="hidden"
-              animate="visible"
-              variants={revealUp}
-            >
+            <DataPanel title="Match schedule" description="Tournament rounds, participants, times, and current status." icon={CalendarDays} className="hidden lg:block">
               <div className="overflow-x-auto">
                 <table className="w-full min-w-[1180px] text-left">
                   <thead className="border-b border-outline-variant bg-surface-container">
@@ -314,7 +291,7 @@ const TournamentSchedulePage = () => {
                   </tbody>
                 </table>
               </div>
-            </motion.div>
+            </DataPanel>
 
             <motion.div 
               className="grid gap-4 lg:hidden"
@@ -330,8 +307,7 @@ const TournamentSchedulePage = () => {
             </motion.div>
           </>
         )}
-      </div>
-    </div>
+    </PageShell>
   );
 };
 

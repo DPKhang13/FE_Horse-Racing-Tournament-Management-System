@@ -223,7 +223,8 @@ tbody tr:hover {
 }
 
 .rounded-xl,
-.rounded-2xl {
+.rounded-2xl,
+.rounded-3xl {
   border-radius: 0.5rem;
 }
 

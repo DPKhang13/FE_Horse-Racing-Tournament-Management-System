@@ -1,6 +1,7 @@
 import { Link, useSearchParams } from 'react-router-dom';
 import { motion } from 'motion/react';
 import { CheckCircle2, CircleX, Wallet } from 'lucide-react';
+import { PageShell } from '../../components/ui';
 
 const revealUp = {
   hidden: { opacity: 0, y: 24 },
@@ -20,10 +21,10 @@ const PaymentResultPage = () => {
   const message = searchParams.get('message');
 
   return (
-    <main className="min-h-screen bg-surface text-on-surface">
-      <section className="mx-auto flex max-w-[960px] px-4 py-16 md:px-8">
+    <PageShell>
+      <section className="mx-auto flex max-w-[960px] py-8">
         <motion.div
-          className="w-full rounded-xl border border-outline-variant/70 bg-surface-container-low p-8"
+          className="w-full rounded-lg border border-line bg-white p-6 shadow-sm sm:p-8"
           initial="hidden"
           animate="visible"
           variants={revealUp}
@@ -78,7 +79,7 @@ const PaymentResultPage = () => {
           </div>
         </motion.div>
       </section>
-    </main>
+    </PageShell>
   );
 };
 

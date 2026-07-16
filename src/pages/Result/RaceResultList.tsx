@@ -10,6 +10,7 @@ import type { RaceResultListItem, RaceResultStatus, RaceResultSummary } from '..
 import type { UserProfile } from '../../types/user';
 import RaceResultCard from './components/RaceResultCard';
 import ResultNav from './components/ResultNav';
+import { MetricCard, MetricGrid, PageHeader, PageShell, Toolbar } from '../../components/ui';
 
 type StatusFilter = RaceResultStatus | 'all';
 
@@ -173,19 +174,10 @@ const RaceResultList = () => {
 
   if (isOwner) {
     return (
-      <div className="bg-surface min-h-screen py-12">
-        <div className="max-w-container mx-auto px-4 md:px-margin-desktop">
-          <div className="flex flex-col gap-8 mb-10">
-            <div className="flex flex-col md:flex-row md:items-end justify-between gap-6">
-              <div>
-                <p className="text-label-md text-secondary uppercase tracking-widest mb-2">Owner Result Screen</p>
-                <h1 className="text-headline-lg font-bold text-primary mb-2">Horse Results</h1>
-              </div>
-              <ResultNav />
-            </div>
-          </div>
+      <PageShell>
+        <PageHeader eyebrow="Owner Result Screen" title="Horse Results" icon={Trophy} actions={<ResultNav />} />
 
-          <div className="grid gap-6 xl:grid-cols-[320px_minmax(0,1fr)]">
+          <div className="grid items-start gap-4 xl:grid-cols-[320px_minmax(0,1fr)]">
             <section className="rounded-lg border border-outline-variant bg-white p-5">
               <div className="mb-4">
                 <p className="text-label-sm text-secondary uppercase tracking-wider mb-1">Horse Menu</p>
@@ -310,41 +302,21 @@ const RaceResultList = () => {
               )}
             </section>
           </div>
-        </div>
-      </div>
+      </PageShell>
     );
   }
 
   return (
-    <div className="bg-surface min-h-screen py-12">
-      <div className="max-w-container mx-auto px-4 md:px-margin-desktop">
-        <div className="flex flex-col gap-8 mb-10">
-          <div className="flex flex-col md:flex-row md:items-end justify-between gap-6">
-            <div>
-              <p className="text-label-md text-secondary uppercase tracking-widest mb-2">Result Screen</p>
-              <h1 className="text-headline-lg font-bold text-primary mb-2">Race Results</h1>
-            </div>
-            <ResultNav />
-          </div>
+    <PageShell>
+      <PageHeader eyebrow="Result Screen" title="Race Results" icon={Trophy} actions={<ResultNav />} />
 
-          <div className="grid gap-4 sm:grid-cols-3">
-            {[
-              { label: 'Total Races', value: results.length.toString(), accent: 'text-primary' },
-              { label: 'Published', value: publishedCount.toString(), accent: 'text-secondary' },
-              { label: 'Tournaments', value: (tournamentOptions.length - 1).toString(), accent: 'text-tertiary' },
-            ].map((stat) => (
-              <article
-                key={stat.label}
-                className="rounded-lg border border-outline-variant bg-white p-5"
-              >
-                <p className="text-label-sm text-outline uppercase tracking-wider">{stat.label}</p>
-                <p className={`mt-2 text-headline-md font-bold tabular-nums ${stat.accent}`}>{stat.value}</p>
-              </article>
-            ))}
-          </div>
-        </div>
+      <MetricGrid columns={3}>
+        <MetricCard label="Total Races" value={results.length.toString()} icon={Trophy} tone="slate" />
+        <MetricCard label="Published" value={publishedCount.toString()} icon={Trophy} tone="emerald" />
+        <MetricCard label="Tournaments" value={(tournamentOptions.length - 1).toString()} icon={Trophy} tone="gold" />
+      </MetricGrid>
 
-        <div className="flex flex-col lg:flex-row lg:items-center gap-4 mb-8">
+      <Toolbar>
           <div className="relative flex-1 max-w-md">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-outline" />
             <input
@@ -384,21 +356,20 @@ const RaceResultList = () => {
               ))}
             </select>
           </div>
-        </div>
+      </Toolbar>
 
         {isLoading ? (
           <EmptyState title="Loading results" description="Fetching race results from the server." />
         ) : results.length === 0 ? (
           <EmptyState title="No results found" description="Try adjusting your search or filter criteria." />
         ) : (
-          <div className="space-y-10">
+          <div className="space-y-4">
             {results.map((result) => (
               <RaceResultCard key={result.id} result={result} />
             ))}
           </div>
         )}
-      </div>
-    </div>
+    </PageShell>
   );
 };
 

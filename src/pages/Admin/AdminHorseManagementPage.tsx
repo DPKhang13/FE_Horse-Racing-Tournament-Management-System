@@ -20,6 +20,7 @@ import {
   XCircle,
 } from 'lucide-react';
 import { apiClient, getApiErrorMessage, unwrapApiList } from '../../services/apiClient';
+import { MetricGrid, PageHeader, PageShell, Toolbar } from '../../components/ui';
 import { HorseService } from '../../services/HorseService';
 import type { Horse, HorseFormData } from '../../types/horse';
 
@@ -614,30 +615,24 @@ const AdminHorseManagementPage = () => {
   };
 
   return (
-    <div className="min-h-screen bg-surface py-8">
-      <div className="mx-auto max-w-[1440px] px-4 md:px-8">
-        <div className="glass-panel mb-6 rounded-2xl p-6">
-          <div className="flex flex-col gap-6 xl:flex-row xl:items-end xl:justify-between">
-            <div className="min-w-0 flex-1">
-              <p className="mb-3 text-label-sm font-bold uppercase tracking-[0.18em] text-secondary">Admin Horse Management</p>
-              <h1 className="font-display mb-2 text-headline-lg font-extrabold text-primary">Horse Management</h1>
-              <p className="max-w-2xl text-body-md text-on-surface-variant">
-                Manage horse profiles, owner records, competitive ranking, and registration metadata.
-              </p>
-            </div>
+    <PageShell>
+      <PageHeader
+        eyebrow="Admin Horse Management"
+        title="Horse Management"
+        description="Manage horse profiles, owner records, competitive ranking, and registration metadata."
+        icon={Trophy}
+      />
 
-            <div className="grid w-full gap-3 sm:grid-cols-2 xl:w-[760px] xl:flex-none xl:grid-cols-5">
-              <MetricCard icon={<Trophy className="h-4 w-4" />} label="Total" value={isLoading ? '...' : String(horses.length).padStart(2, '0')} />
-              <MetricCard icon={<Clock3 className="h-4 w-4" />} label="Pending" value={isLoading ? '...' : String(pendingHorseCount).padStart(2, '0')} />
-              <MetricCard icon={<ShieldCheck className="h-4 w-4" />} label="Active" value={isLoading ? '...' : String(activeHorseCount).padStart(2, '0')} />
-              <MetricCard icon={<Award className="h-4 w-4" />} label="Wins" value={isLoading ? '...' : formatNumber(totalWins)} />
-              <MetricCard icon={<Gauge className="h-4 w-4" />} label="Top Points" value={isLoading ? '...' : formatNumber(topPoints)} />
-            </div>
-          </div>
-        </div>
+      <MetricGrid columns={5}>
+        <MetricCard icon={<Trophy className="h-4 w-4" />} label="Total" value={isLoading ? '...' : String(horses.length).padStart(2, '0')} />
+        <MetricCard icon={<Clock3 className="h-4 w-4" />} label="Pending" value={isLoading ? '...' : String(pendingHorseCount).padStart(2, '0')} />
+        <MetricCard icon={<ShieldCheck className="h-4 w-4" />} label="Active" value={isLoading ? '...' : String(activeHorseCount).padStart(2, '0')} />
+        <MetricCard icon={<Award className="h-4 w-4" />} label="Wins" value={isLoading ? '...' : formatNumber(totalWins)} />
+        <MetricCard icon={<Gauge className="h-4 w-4" />} label="Top Points" value={isLoading ? '...' : formatNumber(topPoints)} />
+      </MetricGrid>
 
-        <div className="mb-6 flex flex-col gap-4 xl:flex-row xl:items-stretch xl:justify-between">
-          <div className="glass-panel flex-1 rounded-xl p-4">
+      <Toolbar>
+          <div className="min-w-0 flex-1">
             <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(260px,1fr)_180px_180px]">
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-outline" />
@@ -669,16 +664,16 @@ const AdminHorseManagementPage = () => {
           <button
             type="button"
             onClick={openCreateModal}
-            className="gold-gradient inline-flex min-h-[84px] items-center justify-center gap-2 rounded-xl px-6 py-4 text-body-sm font-extrabold text-on-primary transition-all xl:w-[194px]"
+            className="gold-gradient inline-flex h-10 items-center justify-center gap-2 rounded-md px-5 text-body-sm font-extrabold text-on-primary transition-all"
           >
             <Plus className="h-4 w-4" />
             Create Horse
           </button>
-        </div>
+      </Toolbar>
 
         {notice && <StatusBanner tone={notice.tone} text={notice.text} />}
 
-        <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex flex-wrap gap-2">
             <TabButton active={activeTab === 'horses'} onClick={() => setActiveTab('horses')}>
               All horses
@@ -723,7 +718,6 @@ const AdminHorseManagementPage = () => {
         ) : (
           <RankingTable rankedHorses={rankedHorses} isLoading={isRankingLoading} />
         )}
-      </div>
 
       {isFormOpen && (
         <HorseFormModal
@@ -748,7 +742,7 @@ const AdminHorseManagementPage = () => {
           onClose={() => setViewingHorse(null)}
         />
       )}
-    </div>
+    </PageShell>
   );
 };
 
@@ -1269,9 +1263,9 @@ const IconButton = ({
 );
 
 const Modal = ({ title, subtitle, onClose, children }: { title: string; subtitle: string; onClose: () => void; children: ReactNode }) => (
-  <div className="fixed inset-0 z-[60] overflow-y-auto bg-black/60 px-4 py-8">
-    <div className="mx-auto max-w-5xl rounded-lg border border-outline-variant bg-surface-container shadow-xl">
-      <div className="flex items-start justify-between gap-6 border-b border-outline-variant p-6">
+  <div className="fixed inset-0 z-[60] overflow-y-auto bg-slate-950/55 px-4 py-8 backdrop-blur-[2px]">
+    <div className="mx-auto max-w-5xl overflow-hidden rounded-lg border border-line bg-white shadow-2xl shadow-slate-950/20">
+      <div className="flex items-start justify-between gap-6 border-b border-line px-5 py-4">
         <div>
           <p className="mb-2 text-label-sm font-bold uppercase tracking-widest text-outline">{subtitle}</p>
           <h2 className="text-headline-md font-bold text-primary">{title}</h2>

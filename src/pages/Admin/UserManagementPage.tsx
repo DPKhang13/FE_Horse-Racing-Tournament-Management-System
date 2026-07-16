@@ -13,6 +13,7 @@ import {
   X,
 } from 'lucide-react';
 import { getApiErrorMessage } from '../../services/apiClient';
+import { DataPanel, MetricGrid, PageHeader, PageShell, Toolbar } from '../../components/ui';
 import {
   adminUserService,
   type AdminCreateUserRequest,
@@ -441,28 +442,22 @@ const UserManagementPage = () => {
   };
 
   return (
-    <div className="min-h-screen bg-slate-900 py-8">
-      <div className="mx-auto max-w-[1440px] px-4 md:px-8">
-        <div className="glass-panel mb-6 rounded-2xl border border-slate-700 p-6">
-          <div className="flex flex-col gap-6 xl:flex-row xl:items-end xl:justify-between">
-            <div>
-              <p className="mb-3 text-label-sm font-bold uppercase tracking-[0.18em] text-secondary">User Management</p>
-              <h1 className="font-display mb-2 text-headline-lg font-extrabold text-primary">User Management</h1>
-              <p className="max-w-2xl text-body-md text-gray-300">
-                Manage account access, role profiles, and security actions across the racing platform.
-              </p>
-            </div>
+    <PageShell>
+      <PageHeader
+        eyebrow="User Management"
+        title="User Management"
+        description="Manage account access, role profiles, and security actions across the racing platform."
+        icon={Users}
+      />
 
-            <div className="grid min-w-full gap-3 sm:grid-cols-2 xl:min-w-[640px] xl:grid-cols-4">
-              <MetricCard icon={<Users className="h-4 w-4" />} label="Total Users" value={String(stats.total).padStart(2, '0')} />
-              <MetricCard icon={<CheckCircle2 className="h-4 w-4" />} label="Active" value={String(stats.active).padStart(2, '0')} />
-              <MetricCard icon={<Shield className="h-4 w-4" />} label="Horse Owners" value={String(stats.owners).padStart(2, '0')} />
-              <MetricCard icon={<UserCheck className="h-4 w-4" />} label="Jockeys" value={String(stats.jockeys).padStart(2, '0')} />
-            </div>
-          </div>
-        </div>
+      <MetricGrid columns={4}>
+        <MetricCard icon={<Users className="h-4 w-4" />} label="Total Users" value={String(stats.total).padStart(2, '0')} />
+        <MetricCard icon={<CheckCircle2 className="h-4 w-4" />} label="Active" value={String(stats.active).padStart(2, '0')} />
+        <MetricCard icon={<Shield className="h-4 w-4" />} label="Horse Owners" value={String(stats.owners).padStart(2, '0')} />
+        <MetricCard icon={<UserCheck className="h-4 w-4" />} label="Jockeys" value={String(stats.jockeys).padStart(2, '0')} />
+      </MetricGrid>
 
-        <div className="mb-6 rounded-xl border border-slate-700 bg-slate-800/80 p-4 shadow-xl shadow-black/20">
+      <Toolbar>
           <div className="flex min-w-0 flex-row items-center gap-4 overflow-x-auto">
             <div className="relative min-w-[280px] flex-1">
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-outline" />
@@ -514,15 +509,15 @@ const UserManagementPage = () => {
               Create User
             </button>
           </div>
-        </div>
+      </Toolbar>
 
         {message && <StatusBanner tone="success" text={message} />}
         {errorMessage && <StatusBanner tone="error" text={errorMessage} />}
 
-        <div className="glass-panel overflow-hidden rounded-xl border border-slate-700">
+      <DataPanel title="User directory" description="Accounts, roles, status, and security actions." icon={Users}>
           <div className="overflow-x-auto">
             <table className="w-full min-w-[1120px] text-left">
-              <thead className="border-b border-slate-700 bg-slate-800">
+              <thead className="border-b border-line bg-slate-50">
                 <tr>
                   <th className="px-5 py-4 text-label-sm uppercase tracking-wider text-outline">Avatar</th>
                   <th className="px-5 py-4 text-label-sm uppercase tracking-wider text-outline">Username</th>
@@ -533,17 +528,17 @@ const UserManagementPage = () => {
                   <th className="px-5 py-4 text-label-sm uppercase tracking-wider text-outline text-right">Actions</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-700">
+              <tbody className="divide-y divide-line">
                 {!isLoading && users.map((user) => (
-                  <tr key={String(user.userId)} className="transition-colors hover:bg-slate-800/70">
+                  <tr key={String(user.userId)} className="transition-colors hover:bg-slate-50">
                     <td className="px-5 py-4">
                       <Avatar user={user} />
                     </td>
                     <td className="px-5 py-4 text-body-sm font-bold text-primary">{user.username}</td>
-                    <td className="px-5 py-4 text-body-sm font-medium text-gray-300">{user.fullName}</td>
-                    <td className="px-5 py-4 text-body-sm font-medium text-gray-300">{user.email}</td>
+                    <td className="px-5 py-4 text-body-sm font-medium text-slate-600">{user.fullName}</td>
+                    <td className="px-5 py-4 text-body-sm font-medium text-slate-600">{user.email}</td>
                     <td className="px-5 py-4">
-                      <span className="inline-flex rounded-full bg-slate-700/80 px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-gray-300">
+                      <span className="inline-flex rounded-full bg-slate-100 px-3 py-1 text-[10px] font-bold uppercase text-slate-600">
                         {formatRoleLabel(user.roleType)}
                       </span>
                     </td>
@@ -595,8 +590,7 @@ const UserManagementPage = () => {
             onPageChange={setPage}
             onPageSizeChange={handlePageSizeChange}
           />
-        </div>
-      </div>
+      </DataPanel>
 
       {isFormOpen && (
         <Modal
@@ -627,28 +621,28 @@ const UserManagementPage = () => {
           />
         </Modal>
       )}
-    </div>
+    </PageShell>
   );
 };
 
 const filterInputClassName =
-  'h-12 w-full appearance-none rounded-lg border border-slate-700 bg-slate-900 px-4 py-3 pl-10 text-body-sm text-gray-300 transition-colors focus:border-primary focus:outline-none';
+  'h-10 w-full appearance-none rounded-md border border-line-strong bg-white px-3 pl-10 text-body-sm text-ink transition-colors focus:border-primary focus:outline-none';
 
 const inputClassName =
-  'w-full rounded-md border border-slate-700 bg-slate-900 px-4 py-3 text-body-sm text-gray-300 transition-colors focus:border-primary focus:outline-none';
+  'w-full rounded-md border border-line-strong bg-white px-3 py-2.5 text-body-sm text-ink transition-colors focus:border-primary focus:outline-none';
 
 const MetricCard = ({ icon, label, value }: { icon: ReactNode; label: string; value: string }) => (
-  <div className="rounded-lg border border-slate-700 bg-slate-800/80 p-4">
-    <div className="mb-3 flex items-center justify-between text-outline">
-      <span className="text-label-sm font-bold uppercase tracking-wider">{label}</span>
+  <div className="rounded-lg border border-line bg-white p-4">
+    <div className="mb-3 flex items-center justify-between text-slate-500">
+      <span className="text-xs font-semibold">{label}</span>
       {icon}
     </div>
-    <p className="font-display text-2xl font-extrabold text-primary">{value}</p>
+    <p className="text-2xl font-bold text-ink">{value}</p>
   </div>
 );
 
 const Avatar = ({ user }: { user: AdminUser }) => (
-  <div className="flex h-11 w-11 items-center justify-center overflow-hidden rounded-lg border border-slate-700 bg-slate-800 text-label-md font-extrabold text-primary">
+  <div className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-lg border border-line bg-slate-100 text-label-md font-extrabold text-ink">
     {user.avatarUrl ? (
       <img src={user.avatarUrl} alt={`${user.username} avatar`} className="h-full w-full object-cover" />
     ) : (
@@ -683,7 +677,7 @@ const IconButton = ({
     className={`flex h-9 w-9 items-center justify-center rounded-md border transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
       danger
         ? 'border-error-container/60 text-error hover:border-error hover:bg-error-container/20'
-        : 'border-slate-700 text-gray-300 hover:border-primary hover:text-primary'
+        : 'border-line-strong text-slate-600 hover:border-primary hover:text-primary'
     }`}
     aria-label={label}
     title={label}
@@ -714,11 +708,11 @@ const EmptyTableState = ({
   description: string;
 }) => (
   <div className="px-6 py-16 text-center">
-    <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-slate-800">
+    <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-slate-100">
       {isLoading ? <Users className="h-6 w-6 text-outline" /> : <Search className="h-6 w-6 text-outline" />}
     </div>
     <h3 className="mb-2 text-body-lg font-bold text-primary">{title}</h3>
-    <p className="text-body-sm text-gray-300">{description}</p>
+    <p className="text-body-sm text-slate-500">{description}</p>
   </div>
 );
 
@@ -743,15 +737,15 @@ const PaginationBar = ({
   const endItem = Math.min(totalElements, (page + 1) * size);
 
   return (
-    <div className="flex flex-col gap-4 border-t border-slate-700 px-5 py-4 md:flex-row md:items-center md:justify-between">
-      <div className="flex items-center gap-3 text-body-sm text-gray-300">
+    <div className="flex flex-col gap-4 border-t border-line px-5 py-4 md:flex-row md:items-center md:justify-between">
+      <div className="flex items-center gap-3 text-body-sm text-slate-600">
         <span>
           Showing {startItem}-{endItem} of {totalElements}
         </span>
         <select
           value={size}
           onChange={(event) => onPageSizeChange(Number(event.target.value))}
-          className="rounded-md border border-slate-700 bg-slate-900 px-3 py-2 text-body-sm text-gray-300 focus:border-primary focus:outline-none"
+          className="rounded-md border border-line-strong bg-white px-3 py-2 text-body-sm text-ink focus:border-primary focus:outline-none"
           aria-label="Rows per page"
         >
           {pageSizeOptions.map((option) => (
@@ -765,7 +759,7 @@ const PaginationBar = ({
           type="button"
           onClick={() => onPageChange(Math.max(0, page - 1))}
           disabled={page <= 0}
-          className="rounded-md border border-slate-700 px-4 py-2 text-body-sm font-bold text-gray-300 transition-colors hover:border-primary hover:text-primary disabled:cursor-not-allowed disabled:opacity-50"
+          className="rounded-md border border-line-strong px-4 py-2 text-body-sm font-bold text-slate-600 transition-colors hover:border-primary hover:text-primary disabled:cursor-not-allowed disabled:opacity-50"
         >
           Previous
         </button>
@@ -778,7 +772,7 @@ const PaginationBar = ({
             className={`flex h-9 min-w-9 items-center justify-center rounded-md border px-3 text-body-sm font-bold transition-colors ${
               pageNumber === page
                 ? 'border-primary bg-primary text-on-primary'
-                : 'border-slate-700 text-gray-300 hover:border-primary hover:text-primary'
+                : 'border-line-strong text-slate-600 hover:border-primary hover:text-primary'
             }`}
             aria-label={`Page ${pageNumber + 1}`}
           >
@@ -790,7 +784,7 @@ const PaginationBar = ({
           type="button"
           onClick={() => onPageChange(Math.min(Math.max(totalPages - 1, 0), page + 1))}
           disabled={totalPages === 0 || page >= totalPages - 1}
-          className="rounded-md border border-slate-700 px-4 py-2 text-body-sm font-bold text-gray-300 transition-colors hover:border-primary hover:text-primary disabled:cursor-not-allowed disabled:opacity-50"
+          className="rounded-md border border-line-strong px-4 py-2 text-body-sm font-bold text-slate-600 transition-colors hover:border-primary hover:text-primary disabled:cursor-not-allowed disabled:opacity-50"
         >
           Next
         </button>
@@ -813,8 +807,8 @@ const Modal = ({
   maxWidthClassName?: string;
 }) => (
   <div className="fixed inset-0 z-[60] overflow-y-auto bg-black/60 px-4 py-8">
-    <div className={`mx-auto ${maxWidthClassName} rounded-lg border border-slate-700 bg-slate-800 shadow-xl`}>
-      <div className="flex items-start justify-between gap-6 border-b border-slate-700 p-6">
+    <div className={`mx-auto ${maxWidthClassName} overflow-hidden rounded-lg border border-line bg-white shadow-2xl shadow-slate-950/20`}>
+      <div className="flex items-start justify-between gap-6 border-b border-line px-5 py-4">
         <div>
           <p className="mb-2 text-label-sm font-bold uppercase tracking-widest text-outline">{subtitle}</p>
           <h2 className="text-headline-md font-bold text-primary">{title}</h2>
@@ -822,7 +816,7 @@ const Modal = ({
         <button
           type="button"
           onClick={onClose}
-          className="flex h-10 w-10 items-center justify-center rounded-md border border-slate-700 text-gray-300 transition-colors hover:border-primary hover:text-primary"
+          className="flex h-9 w-9 items-center justify-center rounded-md border border-line-strong text-slate-500 transition-colors hover:border-primary hover:text-primary"
           aria-label="Close modal"
           title="Close modal"
         >
@@ -880,7 +874,7 @@ const UserForm = ({
       </Field>
       <Field label="Role Type">
         {isEditing ? (
-          <div className="flex min-h-12 items-center rounded-md border border-slate-700 bg-slate-900/60 px-4 py-3 text-body-sm font-semibold text-gray-300">
+          <div className="flex min-h-10 items-center rounded-md border border-line-strong bg-slate-50 px-3 py-2.5 text-body-sm font-semibold text-slate-600">
             {roleLabels[formData.roleType]}
           </div>
         ) : (
@@ -935,11 +929,11 @@ const UserForm = ({
       )}
     </div>
 
-    <div className="flex flex-col-reverse gap-3 border-t border-slate-700 pt-4 sm:flex-row sm:justify-end">
+    <div className="flex flex-col-reverse gap-3 border-t border-line pt-4 sm:flex-row sm:justify-end">
       <button
         type="button"
         onClick={onCancel}
-        className="rounded-md border border-slate-700 px-6 py-3 text-body-sm font-bold text-gray-300 transition-colors hover:border-primary hover:text-primary"
+        className="rounded-md border border-line-strong px-6 py-3 text-body-sm font-bold text-slate-600 transition-colors hover:border-primary hover:text-primary"
       >
         Cancel
       </button>
@@ -978,11 +972,11 @@ const ResetPasswordForm = ({
       />
     </Field>
 
-    <div className="flex flex-col-reverse gap-3 border-t border-slate-700 pt-4 sm:flex-row sm:justify-end">
+    <div className="flex flex-col-reverse gap-3 border-t border-line pt-4 sm:flex-row sm:justify-end">
       <button
         type="button"
         onClick={onCancel}
-        className="rounded-md border border-slate-700 px-6 py-3 text-body-sm font-bold text-gray-300 transition-colors hover:border-primary hover:text-primary"
+        className="rounded-md border border-line-strong px-6 py-3 text-body-sm font-bold text-slate-600 transition-colors hover:border-primary hover:text-primary"
       >
         Cancel
       </button>

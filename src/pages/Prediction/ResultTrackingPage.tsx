@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { BarChart3, CheckCircle2, Clock3 } from 'lucide-react';
 import { getApiErrorMessage } from '../../services/apiClient';
 import { betService, type BetItem } from '../../services/betService';
+import { PageHeader, PageShell } from '../../components/ui';
 
 const formatPoints = (value: number) => new Intl.NumberFormat('en-US', {
   maximumFractionDigits: 0,
@@ -84,14 +85,8 @@ const ResultTrackingPage = () => {
   );
 
   return (
-    <div className="bg-surface min-h-screen py-12">
-      <div className="max-w-container mx-auto px-4 md:px-margin-desktop">
-        <div className="flex flex-col gap-8 lg:flex-row lg:items-end lg:justify-between mb-10">
-          <div className="space-y-3">
-            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-secondary">Result Tracking</p>
-            <h1 className="text-headline-lg font-bold text-primary">Track prediction results</h1>
-          </div>
-        </div>
+    <PageShell>
+      <PageHeader eyebrow="Result Tracking" title="Track prediction results" icon={BarChart3} />
 
         {errorMessage && (
           <div className="mb-8 rounded-md border border-error/30 bg-error-container/20 px-4 py-3 text-body-sm font-semibold text-error">
@@ -99,9 +94,9 @@ const ResultTrackingPage = () => {
           </div>
         )}
 
-        <div className="grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
-          <section className="space-y-6">
-            <div className="rounded-3xl border border-outline-variant bg-white p-6 shadow-sm">
+      <div className="grid gap-4 xl:grid-cols-[minmax(0,1.2fr)_minmax(320px,0.8fr)]">
+          <section className="space-y-4">
+            <div className="rounded-lg border border-outline-variant bg-white p-5 shadow-sm">
               <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                   <p className="text-xs font-semibold uppercase tracking-[0.2em] text-secondary">Performance</p>
@@ -128,7 +123,7 @@ const ResultTrackingPage = () => {
               </div>
             </div>
 
-            <div className="rounded-3xl border border-outline-variant bg-white p-6 shadow-sm">
+            <div className="rounded-lg border border-outline-variant bg-white p-5 shadow-sm">
               <div className="mb-6 flex items-center justify-between gap-4">
                 <div>
                   <p className="text-xs font-semibold uppercase tracking-[0.2em] text-secondary">Tracked results</p>
@@ -185,8 +180,8 @@ const ResultTrackingPage = () => {
             </div>
           </section>
 
-          <aside className="space-y-6">
-            <section className="rounded-3xl border border-outline-variant bg-white p-6 shadow-sm">
+          <aside className="space-y-4">
+            <section className="rounded-lg border border-outline-variant bg-white p-5 shadow-sm">
               <div className="mb-6 flex items-center justify-between gap-4">
                 <div>
                   <p className="text-xs font-semibold uppercase tracking-[0.2em] text-secondary">Insights</p>
@@ -212,7 +207,7 @@ const ResultTrackingPage = () => {
               </div>
             </section>
 
-            <section className="rounded-3xl border border-outline-variant bg-white p-6 shadow-sm">
+            <section className="rounded-lg border border-outline-variant bg-white p-5 shadow-sm">
               <div className="mb-5 flex items-center gap-3">
                 <CheckCircle2 className="h-5 w-5 text-secondary" />
                 <h3 className="text-lg font-bold text-primary">Settlement rules</h3>
@@ -225,8 +220,7 @@ const ResultTrackingPage = () => {
             </section>
           </aside>
         </div>
-      </div>
-    </div>
+    </PageShell>
   );
 };
 

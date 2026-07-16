@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { getApiErrorMessage } from '../../services/apiClient';
 import { betService, type BetOptionItem } from '../../services/betService';
+import { DataPanel, MetricGrid, PageHeader, PageShell, Toolbar } from '../../components/ui';
 
 type Notice = {
   tone: 'success' | 'error';
@@ -267,29 +268,23 @@ const AdminBetManagementPage = () => {
   };
 
   return (
-    <div className="min-h-screen bg-surface py-8">
-      <div className="mx-auto max-w-[1440px] px-4 md:px-8">
-        <section className="glass-panel mb-6 rounded-2xl p-6">
-          <div className="flex flex-col gap-6 xl:flex-row xl:items-end xl:justify-between">
-            <div className="min-w-0 flex-1">
-              <p className="text-xs font-bold uppercase tracking-[0.2em] text-secondary">Admin Bet Management</p>
-              <h1 className="font-display mt-2 text-headline-lg font-extrabold text-primary">Bet Management</h1>
-              <p className="mt-2 max-w-2xl text-body-sm text-on-surface-variant">
-                Generate race bet options, review option activity, and adjust admin-controlled odds before spectators place predictions.
-              </p>
-            </div>
+    <PageShell>
+      <PageHeader
+        eyebrow="Admin Bet Management"
+        title="Bet Management"
+        description="Generate race bet options, review option activity, and adjust admin-controlled odds before spectators place predictions."
+        icon={Ticket}
+      />
 
-            <div className="grid w-full gap-3 sm:grid-cols-2 xl:w-[650px] xl:flex-none xl:grid-cols-4">
-              <MetricCard icon={<Ticket className="h-4 w-4" />} label="Options" value={isLoading ? '...' : String(betOptions.length).padStart(2, '0')} />
-              <MetricCard icon={<Trophy className="h-4 w-4" />} label="Races" value={isLoading ? '...' : String(stats.raceCount).padStart(2, '0')} />
-              <MetricCard icon={<Coins className="h-4 w-4" />} label="Bet Points" value={isLoading ? '...' : formatNumber(stats.totalBetPoints)} />
-              <MetricCard icon={<Gauge className="h-4 w-4" />} label="Avg Rate" value={isLoading ? '...' : formatRate(stats.averageRate)} />
-            </div>
-          </div>
-        </section>
+      <MetricGrid columns={4}>
+        <MetricCard icon={<Ticket className="h-4 w-4" />} label="Options" value={isLoading ? '...' : String(betOptions.length).padStart(2, '0')} />
+        <MetricCard icon={<Trophy className="h-4 w-4" />} label="Races" value={isLoading ? '...' : String(stats.raceCount).padStart(2, '0')} />
+        <MetricCard icon={<Coins className="h-4 w-4" />} label="Bet Points" value={isLoading ? '...' : formatNumber(stats.totalBetPoints)} />
+        <MetricCard icon={<Gauge className="h-4 w-4" />} label="Avg Rate" value={isLoading ? '...' : formatRate(stats.averageRate)} />
+      </MetricGrid>
 
-        <section className="mb-6 flex flex-col gap-4 xl:flex-row xl:items-stretch xl:justify-between">
-          <div className="glass-panel flex-1 rounded-xl p-4">
+      <Toolbar className="xl:items-stretch">
+          <div className="min-w-0 flex-1">
             <form onSubmit={handleApplyRaceFilter} className="grid gap-3 md:grid-cols-[minmax(220px,1fr)_140px_120px]">
               <label className="relative">
                 <span className="sr-only">Filter by race ID</span>
@@ -328,25 +323,20 @@ const AdminBetManagementPage = () => {
           <button
             type="button"
             onClick={openGenerateModal}
-            className="gold-gradient inline-flex min-h-[76px] items-center justify-center gap-2 rounded-xl px-6 py-4 text-body-sm font-extrabold text-on-primary transition-all xl:w-[240px]"
+            className="gold-gradient inline-flex h-10 items-center justify-center gap-2 rounded-md px-5 text-body-sm font-extrabold text-on-primary transition-all"
           >
             <WandSparkles className="h-4 w-4" />
             Generate Bets for Race
           </button>
-        </section>
+      </Toolbar>
 
         {notice && <StatusBanner tone={notice.tone} text={notice.text} />}
 
-        <section className="glass-panel overflow-hidden rounded-lg">
-          <div className="flex flex-col gap-4 border-b border-outline-variant p-5 md:flex-row md:items-center md:justify-between">
-            <div>
-              <p className="text-label-sm font-bold uppercase tracking-[0.18em] text-outline">
-                {activeRaceId ? `Race #${activeRaceId}` : 'All bet options'}
-              </p>
-              <h2 className="mt-1 text-title-lg font-bold text-primary">Bet Options</h2>
-            </div>
-
-            <button
+      <DataPanel
+        title="Bet Options"
+        description={activeRaceId ? `Race #${activeRaceId}` : 'All bet options'}
+        icon={Coins}
+        action={<button
               type="button"
               onClick={() => void loadOptions()}
               disabled={isLoading}
@@ -354,8 +344,8 @@ const AdminBetManagementPage = () => {
             >
               <RefreshCw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
               Refresh
-            </button>
-          </div>
+            </button>}
+      >
 
           <div className="overflow-x-auto">
             <table className="w-full min-w-[1040px] text-left">
@@ -435,8 +425,7 @@ const AdminBetManagementPage = () => {
               }
             />
           )}
-        </section>
-      </div>
+      </DataPanel>
 
       {isGenerateModalOpen && (
         <GenerateBetsModal
@@ -464,7 +453,7 @@ const AdminBetManagementPage = () => {
           onSubmit={handleRateSubmit}
         />
       )}
-    </div>
+    </PageShell>
   );
 };
 
@@ -661,7 +650,7 @@ const Modal = ({
   children: ReactNode;
   maxWidthClassName?: string;
 }) => (
-  <div className="fixed inset-0 z-[60] overflow-y-auto bg-black/60 px-4 py-8">
+  <div className="fixed inset-0 z-[60] overflow-y-auto bg-slate-950/55 px-4 py-8 backdrop-blur-[2px]">
     <div className={`mx-auto rounded-lg border border-outline-variant bg-surface-container shadow-xl ${maxWidthClassName}`}>
       <div className="flex items-start justify-between gap-6 border-b border-outline-variant p-6">
         <div>

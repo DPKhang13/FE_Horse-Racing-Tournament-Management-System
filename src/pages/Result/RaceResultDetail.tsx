@@ -7,6 +7,7 @@ import PrizeBreakdown from './components/PrizeBreakdown';
 import RaceResultTable from './components/RaceResultTable';
 import ResultStatusChip from './components/ResultStatusChip';
 import RankBadge from './components/RankBadge';
+import { PageHeader, PageShell } from '../../components/ui';
 
 const formatDate = (dateString: string) => {
   return new Date(dateString).toLocaleDateString('en-US', {
@@ -123,17 +124,22 @@ const RaceResultDetail = () => {
   const publishedLabel = formatPublishedAt(result.publishedAt);
 
   return (
-    <div className="bg-surface min-h-screen py-12">
-      <div className="max-w-container mx-auto px-4 md:px-margin-desktop">
-        <Link
+    <PageShell>
+      <PageHeader
+        eyebrow={`R${result.raceNumber} / ${result.grade}`}
+        title={result.raceName}
+        description={result.tournamentName}
+        icon={Trophy}
+        actions={<Link
           to="/results"
-          className="inline-flex items-center gap-2 text-body-sm font-semibold text-on-surface-variant hover:text-primary transition-colors mb-8"
+          className="inline-flex h-9 items-center gap-2 rounded-md border border-line-strong bg-white px-3 text-xs font-semibold text-slate-600 transition-colors hover:bg-slate-50 hover:text-ink"
         >
           <ArrowLeft className="w-4 h-4" />
           Back to Results
-        </Link>
+        </Link>}
+      />
 
-        <div className="bg-primary-container rounded-lg p-6 md:p-8 text-white mb-8">
+        <div className="rounded-lg border border-white/10 bg-panel p-5 text-white md:p-6">
           <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-6">
             <div>
               <div className="flex flex-wrap items-center gap-3 mb-3">
@@ -142,7 +148,7 @@ const RaceResultDetail = () => {
                 </span>
                 <ResultStatusChip status={result.status} />
               </div>
-              <h1 className="text-headline-lg font-bold mb-3">{result.raceName}</h1>
+              <h2 className="mb-3 text-xl font-bold">{result.raceName}</h2>
               <p className="text-body-md text-on-primary-container mb-4">{result.tournamentName}</p>
               <div className="flex flex-wrap gap-x-6 gap-y-2 text-body-sm text-on-primary-container/90">
                 <span className="inline-flex items-center gap-2">
@@ -215,7 +221,7 @@ const RaceResultDetail = () => {
           </section>
         )}
 
-        <div className="grid gap-8 xl:grid-cols-[1.4fr_0.6fr]">
+        <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,1.4fr)_minmax(280px,0.6fr)]">
           <section className="bg-white border border-outline-variant rounded-lg overflow-hidden">
             <div className="p-6 border-b border-outline-variant">
               <p className="text-label-md text-secondary uppercase tracking-widest mb-1">Full Standings</p>
@@ -229,8 +235,7 @@ const RaceResultDetail = () => {
             totalPrizePool={result.totalPrizePool}
           />
         </div>
-      </div>
-    </div>
+    </PageShell>
   );
 };
 

@@ -5,6 +5,7 @@ import { raceResultService } from '../../services/raceResultService';
 import type { RankingBoard, RankingCategory } from '../../types/raceResult';
 import RankingTable from './components/RankingTable';
 import ResultNav from './components/ResultNav';
+import { PageHeader, PageShell, Toolbar } from '../../components/ui';
 
 const categoryOptions: { value: RankingCategory; label: string }[] = [
   { value: 'horse', label: 'Horses' },
@@ -66,16 +67,8 @@ const RankingPage = () => {
   const topEntry = rankingBoard?.entries[0];
 
   return (
-    <div className="bg-surface min-h-screen py-12">
-      <div className="max-w-container mx-auto px-4 md:px-margin-desktop">
-        <div className="flex flex-col gap-8 mb-10">
-          <div className="flex flex-col md:flex-row md:items-end justify-between gap-6">
-            <div>
-              <p className="text-label-md text-secondary uppercase tracking-widest mb-2">Result Screen</p>
-              <h1 className="text-headline-lg font-bold text-primary mb-2">Rankings</h1>
-            </div>
-            <ResultNav />
-          </div>
+    <PageShell>
+      <PageHeader eyebrow="Result Screen" title="Rankings" icon={BarChart3} actions={<ResultNav />} />
 
           {topEntry && (
             <article className="rounded-lg border border-outline-variant bg-white p-6">
@@ -109,9 +102,8 @@ const RankingPage = () => {
               </div>
             </article>
           )}
-        </div>
 
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
+      <Toolbar className="sm:justify-between">
           <div className="flex flex-wrap gap-2">
             {categoryOptions.map((option) => (
               <button
@@ -137,7 +129,7 @@ const RankingPage = () => {
               </span>
             </div>
           )}
-        </div>
+      </Toolbar>
 
         {isLoading ? (
           <div className="rounded-lg border border-outline-variant bg-white p-12 text-center">
@@ -168,8 +160,7 @@ const RankingPage = () => {
             </p>
           </div>
         )}
-      </div>
-    </div>
+    </PageShell>
   );
 };
 

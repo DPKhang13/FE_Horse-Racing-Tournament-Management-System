@@ -6,6 +6,7 @@ import { jockeyAssignmentService, type JockeyAssignmentItem } from '../../servic
 import { jockeyService, type JockeyItem } from '../../services/jockeyService';
 import { raceRegistrationService, type RaceRegistrationItem } from '../../services/raceRegistrationService';
 import { useToastNotifications } from '../../hooks/useToastNotifications';
+import { DataPanel, MetricGrid, PageHeader, PageShell } from '../../components/ui';
 import type { UserProfile } from '../../types/user';
 
 const normalizeStatus = (value?: string) => value?.trim().toLowerCase() ?? '';
@@ -222,30 +223,15 @@ const JockeyAssignmentsPage = () => {
   };
 
   return (
-    <div className="min-h-screen bg-surface py-8">
-      <div className="mx-auto max-w-[1440px] px-4 md:px-8">
-        <div className="glass-panel mb-6 rounded-2xl p-6">
-          <div className="flex flex-col gap-6 xl:flex-row xl:items-end xl:justify-between">
-            <div>
-              <p className="text-xs font-bold uppercase tracking-[0.2em] text-secondary">Jockey Dashboard</p>
-              <h1 className="font-display mt-2 text-headline-lg font-extrabold text-primary">Invitation workspace</h1>
-              <p className="mt-2 max-w-2xl text-body-sm text-on-surface-variant">
-                {isOwner
+    <PageShell>
+      <PageHeader
+        eyebrow="Jockey Dashboard"
+        title="Invitation workspace"
+        description={isOwner
                   ? 'Invite a jockey after admin approves the race registration.'
                   : 'Review your invitations and respond from one focused queue.'}
-              </p>
-            </div>
-            <div className="grid min-w-full gap-3 sm:grid-cols-4 xl:min-w-[640px]">
-              <MetricCard icon={<UserCheck className="h-4 w-4" />} label="Invitations" value={String(assignments.length).padStart(2, '0')} />
-              <MetricCard icon={<Clock3 className="h-4 w-4" />} label="Pending" value={String(pendingAssignments).padStart(2, '0')} />
-              <MetricCard icon={<CheckCircle2 className="h-4 w-4" />} label="Accepted" value={String(acceptedAssignments).padStart(2, '0')} />
-              <MetricCard icon={<Users className="h-4 w-4" />} label="Confirmed" value={String(confirmedAssignments).padStart(2, '0')} />
-            </div>
-          </div>
-        </div>
-
-        <div className="mb-6 flex justify-end">
-          <button
+        icon={UserCheck}
+        actions={<button
             type="button"
             onClick={() => setIsInvitationsOpen(true)}
             className="inline-flex items-center gap-2 rounded-md border border-outline-variant bg-white px-4 py-2 text-body-sm font-bold text-primary shadow-sm transition-colors hover:border-primary"
@@ -255,20 +241,18 @@ const JockeyAssignmentsPage = () => {
             <span className="rounded-full bg-surface-container px-2 py-0.5 text-[11px] font-extrabold text-on-surface-variant">
               {assignments.length}
             </span>
-          </button>
-        </div>
+          </button>}
+      />
+
+      <MetricGrid columns={4}>
+        <MetricCard icon={<UserCheck className="h-4 w-4" />} label="Invitations" value={String(assignments.length).padStart(2, '0')} />
+        <MetricCard icon={<Clock3 className="h-4 w-4" />} label="Pending" value={String(pendingAssignments).padStart(2, '0')} />
+        <MetricCard icon={<CheckCircle2 className="h-4 w-4" />} label="Accepted" value={String(acceptedAssignments).padStart(2, '0')} />
+        <MetricCard icon={<Users className="h-4 w-4" />} label="Confirmed" value={String(confirmedAssignments).padStart(2, '0')} />
+      </MetricGrid>
 
         {isOwner ? (
-          <section className="glass-panel rounded-xl p-6">
-            <div className="mb-5 flex items-center gap-3">
-              <Send className="h-5 w-5 text-secondary" />
-              <div>
-                <h2 className="font-display text-title-large font-bold text-primary">Approved registrations ready for invitation</h2>
-                <p className="mt-1 text-body-sm text-on-surface-variant">
-                  Select an approved registration without a jockey, then invite an available jockey.
-                </p>
-              </div>
-            </div>
+          <DataPanel title="Approved registrations ready for invitation" description="Select an approved registration without a jockey, then invite an available jockey." icon={Send} bodyClassName="p-5">
 
             {isLoading ? (
               <EmptyState
@@ -318,17 +302,16 @@ const JockeyAssignmentsPage = () => {
                 })}
               </div>
             )}
-          </section>
+          </DataPanel>
         ) : (
-          <section className="glass-panel rounded-xl p-6">
+          <DataPanel title="My invitations" description="Review and respond from the assignment queue." icon={UserCheck} bodyClassName="p-5">
             <EmptyState
               title="Invitation-focused view"
               description="Use the Invitations button to review and respond to jockey invitations."
               icon={<UserCheck className="h-5 w-5" />}
             />
-          </section>
+          </DataPanel>
         )}
-      </div>
 
       {isJockeyPickerOpen && selectedRegistration && (
         <Modal
@@ -461,7 +444,7 @@ const JockeyAssignmentsPage = () => {
           </div>
         </Modal>
       )}
-    </div>
+    </PageShell>
   );
 };
 
@@ -493,7 +476,7 @@ const EmptyState = ({ title, description, icon }: { title: string; description: 
 );
 
 const Modal = ({ title, subtitle, onClose, children }: { title: string; subtitle: string; onClose: () => void; children: ReactNode }) => (
-  <div className="fixed inset-0 z-[70] overflow-y-auto bg-black/55 px-4 py-8">
+  <div className="fixed inset-0 z-[70] overflow-y-auto bg-slate-950/55 px-4 py-8 backdrop-blur-[2px]">
     <div className="mx-auto max-w-5xl rounded-lg border border-outline-variant bg-white shadow-xl">
       <div className="flex items-start justify-between gap-6 border-b border-outline-variant p-6">
         <div>

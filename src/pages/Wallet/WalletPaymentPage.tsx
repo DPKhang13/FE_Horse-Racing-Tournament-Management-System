@@ -4,6 +4,7 @@ import { ArrowUpRight, CreditCard, Loader2, RefreshCw, Wallet } from 'lucide-rea
 import { getApiErrorMessage } from '../../services/apiClient';
 import { paymentService } from '../../services/paymentService';
 import { walletService } from '../../services/walletService';
+import { PageHeader, PageShell } from '../../components/ui';
 
 const amountOptions = [10000, 20000, 50000, 100000];
 
@@ -88,19 +89,12 @@ const WalletPaymentPage = () => {
   };
 
   return (
-    <main className="min-h-screen bg-surface text-on-surface">
-      <section className="mx-auto max-w-[1440px] px-4 py-10 md:px-8">
-        <motion.div
-          className="mb-8 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between"
-          initial="hidden"
-          animate="visible"
-          variants={revealUp}
-        >
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-secondary">Wallet</p>
-            <h1 className="mt-2 font-display text-3xl font-bold text-on-surface md:text-4xl">Racing wallet</h1>
-          </div>
-          <motion.button
+    <PageShell>
+      <PageHeader
+        eyebrow="Wallet"
+        title="Racing wallet"
+        icon={Wallet}
+        actions={<motion.button
             type="button"
             onClick={() => void loadWallet()}
             className="inline-flex items-center justify-center gap-2 rounded-lg border border-outline-variant px-4 py-3 text-sm font-bold text-on-surface-variant transition hover:border-primary hover:text-primary"
@@ -109,8 +103,8 @@ const WalletPaymentPage = () => {
           >
             <RefreshCw className="h-4 w-4" />
             Refresh
-          </motion.button>
-        </motion.div>
+          </motion.button>}
+      />
 
         {errorMessage && (
           <motion.div
@@ -124,13 +118,13 @@ const WalletPaymentPage = () => {
         )}
 
         <motion.div
-          className="grid gap-6 xl:grid-cols-[0.9fr_1.1fr]"
+          className="grid items-start gap-4 xl:grid-cols-[minmax(320px,0.85fr)_minmax(0,1.15fr)]"
           initial="hidden"
           animate="visible"
           variants={revealContainer}
         >
           <motion.section
-            className="rounded-xl border border-outline-variant/70 bg-surface-container-low p-6"
+            className="rounded-lg border border-line bg-white p-5 shadow-sm"
             variants={revealUp}
           >
             <div className="flex items-start justify-between gap-4">
@@ -158,7 +152,7 @@ const WalletPaymentPage = () => {
           </motion.section>
 
           <motion.section
-            className="rounded-xl border border-outline-variant/70 bg-surface-container-low p-6"
+            className="rounded-lg border border-line bg-white p-5 shadow-sm"
             variants={revealUp}
           >
             <div className="mb-6 flex items-center gap-3">
@@ -212,8 +206,7 @@ const WalletPaymentPage = () => {
             </form>
           </motion.section>
         </motion.div>
-      </section>
-    </main>
+    </PageShell>
   );
 };
 

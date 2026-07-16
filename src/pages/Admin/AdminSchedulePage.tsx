@@ -10,6 +10,7 @@ import {
   X,
 } from 'lucide-react';
 import { getApiErrorMessage } from '../../services/apiClient';
+import { DataPanel, MetricGrid, PageHeader, PageShell, Toolbar } from '../../components/ui';
 import {
   adminScheduleRaceApi,
   type AdminScheduleFormData,
@@ -239,30 +240,24 @@ const AdminSchedulePage = () => {
   };
 
   return (
-    <div className="min-h-screen bg-surface py-8">
-      <div className="mx-auto max-w-[1440px] px-4 md:px-8">
-        <section className="glass-panel mb-6 rounded-2xl p-6">
-          <div className="flex flex-col gap-6 xl:flex-row xl:items-end xl:justify-between">
-            <div>
-              <p className="text-xs font-bold uppercase tracking-[0.2em] text-secondary">Admin Schedule</p>
-              <h1 className="font-display mt-2 text-headline-lg font-extrabold text-primary">Schedule</h1>
-              <p className="mt-2 max-w-2xl text-body-sm text-on-surface-variant">
-                Create tournament days first, then manage races under the selected schedule.
-              </p>
-            </div>
+    <PageShell>
+      <PageHeader
+        eyebrow="Admin Schedule"
+        title="Schedule"
+        description="Create tournament days first, then manage races under the selected schedule."
+        icon={CalendarDays}
+      />
 
-            <div className="grid min-w-full gap-3 sm:grid-cols-3 xl:min-w-[520px]">
-              <MetricCard icon={<Trophy className="h-4 w-4" />} label="Tournaments" value={String(tournaments.length).padStart(2, '0')} />
-              <MetricCard icon={<CalendarDays className="h-4 w-4" />} label="Schedules" value={isScheduleLoading ? '...' : String(schedules.length).padStart(2, '0')} />
-              <MetricCard icon={<ClipboardList className="h-4 w-4" />} label="Upcoming" value={isScheduleLoading ? '...' : String(upcomingCount).padStart(2, '0')} />
-            </div>
-          </div>
-        </section>
+      <MetricGrid columns={3}>
+        <MetricCard icon={<Trophy className="h-4 w-4" />} label="Tournaments" value={String(tournaments.length).padStart(2, '0')} />
+        <MetricCard icon={<CalendarDays className="h-4 w-4" />} label="Schedules" value={isScheduleLoading ? '...' : String(schedules.length).padStart(2, '0')} />
+        <MetricCard icon={<ClipboardList className="h-4 w-4" />} label="Upcoming" value={isScheduleLoading ? '...' : String(upcomingCount).padStart(2, '0')} />
+      </MetricGrid>
 
         {notice && <StatusBanner tone={notice.tone} text={notice.text} />}
 
-        <section className="mb-6 flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
-          <div className="glass-panel flex-1 rounded-xl p-4">
+      <Toolbar className="xl:items-center">
+          <div className="min-w-0 flex-1">
             <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(220px,1fr)_minmax(220px,1fr)_180px_140px]">
               <div className="relative">
                 <Trophy className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-outline" />
@@ -321,9 +316,9 @@ const AdminSchedulePage = () => {
             <Plus className="h-4 w-4" />
             Create Schedule
           </button>
-        </section>
+      </Toolbar>
 
-        <section className="glass-panel overflow-hidden rounded-lg">
+      <DataPanel title="Tournament schedules" description="Schedule records for the selected tournament." icon={CalendarDays}>
           <div className="overflow-x-auto">
             <table className="w-full min-w-[920px] text-left">
               <thead className="border-b border-outline-variant bg-surface-container">
@@ -378,7 +373,7 @@ const AdminSchedulePage = () => {
               }
             />
           )}
-        </section>
+      </DataPanel>
 
         {isFormOpen && (
           <Modal
@@ -397,8 +392,7 @@ const AdminSchedulePage = () => {
             />
           </Modal>
         )}
-      </div>
-    </div>
+    </PageShell>
   );
 };
 
@@ -450,9 +444,9 @@ const IconButton = ({ label, onClick, children }: { label: string; onClick: () =
 );
 
 const Modal = ({ title, subtitle, onClose, children }: { title: string; subtitle: string; onClose: () => void; children: ReactNode }) => (
-  <div className="fixed inset-0 z-[60] overflow-y-auto bg-black/60 px-4 py-8">
-    <div className="mx-auto max-w-3xl rounded-lg border border-outline-variant bg-surface-container shadow-xl">
-      <div className="flex items-start justify-between gap-6 border-b border-outline-variant p-6">
+  <div className="fixed inset-0 z-[60] overflow-y-auto bg-slate-950/55 px-4 py-8 backdrop-blur-[2px]">
+    <div className="mx-auto max-w-3xl overflow-hidden rounded-lg border border-line bg-white shadow-2xl shadow-slate-950/20">
+      <div className="flex items-start justify-between gap-6 border-b border-line px-5 py-4">
         <div>
           <p className="mb-2 text-label-sm font-bold uppercase tracking-widest text-outline">{subtitle}</p>
           <h2 className="text-headline-md font-bold text-primary">{title}</h2>

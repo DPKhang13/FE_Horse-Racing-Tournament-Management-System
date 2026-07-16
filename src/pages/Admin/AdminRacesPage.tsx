@@ -18,6 +18,7 @@ import {
   X,
 } from 'lucide-react';
 import { getApiErrorMessage } from '../../services/apiClient';
+import { DataPanel, MetricGrid, PageHeader, PageShell, Toolbar } from '../../components/ui';
 import { adminUserService, type AdminRefereeOption } from '../../services/adminUserService';
 import { pointRuleService } from '../../services/pointRuleService';
 import { tournamentService, type RefereeAssignmentItem } from '../../services/tournamentService';
@@ -757,31 +758,25 @@ const AdminRacesPage = () => {
   };
 
   return (
-    <div className="min-h-screen bg-surface py-8">
-      <div className="mx-auto max-w-[1440px] px-4 md:px-8">
-        <section className="glass-panel mb-6 rounded-2xl p-6">
-          <div className="flex flex-col gap-6 xl:flex-row xl:items-end xl:justify-between">
-            <div>
-              <p className="text-xs font-bold uppercase tracking-[0.2em] text-secondary">Admin Races</p>
-              <h1 className="font-display mt-2 text-headline-lg font-extrabold text-primary">Races</h1>
-              <p className="mt-2 max-w-2xl text-body-sm text-on-surface-variant">
-                Select a tournament and schedule before creating races. Race actions stay scoped to the selected schedule.
-              </p>
-            </div>
+    <PageShell>
+      <PageHeader
+        eyebrow="Admin Races"
+        title="Races"
+        description="Select a tournament and schedule before creating races. Race actions stay scoped to the selected schedule."
+        icon={Flag}
+      />
 
-            <div className="grid min-w-full gap-3 sm:grid-cols-2 xl:min-w-[680px] xl:grid-cols-4">
-              <MetricCard icon={<Flag className="h-4 w-4" />} label="Races" value={isRaceLoading ? '...' : String(scheduleRaces.length).padStart(2, '0')} />
-              <MetricCard icon={<CalendarDays className="h-4 w-4" />} label="Scheduled" value={isRaceLoading ? '...' : String(stats.scheduled).padStart(2, '0')} />
-              <MetricCard icon={<Activity className="h-4 w-4" />} label="Ongoing" value={isRaceLoading ? '...' : String(stats.ongoing).padStart(2, '0')} />
-              <MetricCard icon={<Trophy className="h-4 w-4" />} label="Completed" value={isRaceLoading ? '...' : String(stats.completed).padStart(2, '0')} />
-            </div>
-          </div>
-        </section>
+      <MetricGrid columns={4}>
+        <MetricCard icon={<Flag className="h-4 w-4" />} label="Races" value={isRaceLoading ? '...' : String(scheduleRaces.length).padStart(2, '0')} />
+        <MetricCard icon={<CalendarDays className="h-4 w-4" />} label="Scheduled" value={isRaceLoading ? '...' : String(stats.scheduled).padStart(2, '0')} />
+        <MetricCard icon={<Activity className="h-4 w-4" />} label="Ongoing" value={isRaceLoading ? '...' : String(stats.ongoing).padStart(2, '0')} />
+        <MetricCard icon={<Trophy className="h-4 w-4" />} label="Completed" value={isRaceLoading ? '...' : String(stats.completed).padStart(2, '0')} />
+      </MetricGrid>
 
         {notice && <StatusBanner tone={notice.tone} text={notice.text} />}
 
-        <section className="mb-6 flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
-          <div className="glass-panel flex-1 rounded-xl p-4">
+      <Toolbar>
+          <div className="min-w-0 flex-1">
             <div className="grid grid-cols-1 gap-4 xl:grid-cols-[210px_210px_minmax(220px,1fr)_180px_140px]">
               <div className="relative">
                 <Trophy className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-outline" />
@@ -864,14 +859,14 @@ const AdminRacesPage = () => {
             type="button"
             onClick={openCreateModal}
             disabled={!selectedScheduleId || isScheduleLoading}
-            className="gold-gradient inline-flex items-center justify-center gap-2 rounded-xl px-6 py-4 text-body-sm font-extrabold text-on-primary transition-all disabled:cursor-not-allowed disabled:opacity-60"
+            className="gold-gradient inline-flex h-10 items-center justify-center gap-2 rounded-md px-5 text-body-sm font-extrabold text-on-primary transition-all disabled:cursor-not-allowed disabled:opacity-60"
           >
             <Plus className="h-4 w-4" />
             Create Race
           </button>
-        </section>
+      </Toolbar>
 
-        <section className="glass-panel overflow-hidden rounded-lg">
+      <DataPanel title="Race registry" description="Races in the selected tournament schedule." icon={Flag}>
           <div className="overflow-x-auto">
             <table className="w-full min-w-[1180px] text-left">
               <thead className="border-b border-outline-variant bg-surface-container">
@@ -947,7 +942,7 @@ const AdminRacesPage = () => {
               }
             />
           )}
-        </section>
+      </DataPanel>
 
         {isFormOpen && (
           <Modal
@@ -997,8 +992,7 @@ const AdminRacesPage = () => {
             />
           </Modal>
         )}
-      </div>
-    </div>
+    </PageShell>
   );
 };
 
@@ -1068,9 +1062,9 @@ const IconButton = ({
 );
 
 const Modal = ({ title, subtitle, onClose, children }: { title: string; subtitle: string; onClose: () => void; children: ReactNode }) => (
-  <div className="fixed inset-0 z-[60] overflow-y-auto bg-black/60 px-4 py-8">
-    <div className="mx-auto max-w-5xl rounded-lg border border-outline-variant bg-surface-container shadow-xl">
-      <div className="flex items-start justify-between gap-6 border-b border-outline-variant p-6">
+  <div className="fixed inset-0 z-[60] overflow-y-auto bg-slate-950/55 px-4 py-8 backdrop-blur-[2px]">
+    <div className="mx-auto max-w-5xl overflow-hidden rounded-lg border border-line bg-white shadow-2xl shadow-slate-950/20">
+      <div className="flex items-start justify-between gap-6 border-b border-line px-5 py-4">
         <div>
           <p className="mb-2 text-label-sm font-bold uppercase tracking-widest text-outline">{subtitle}</p>
           <h2 className="text-headline-md font-bold text-primary">{title}</h2>

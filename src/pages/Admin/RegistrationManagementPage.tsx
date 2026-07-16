@@ -13,6 +13,7 @@ import {
   XCircle,
 } from 'lucide-react';
 import { getApiErrorMessage } from '../../services/apiClient';
+import { DataPanel, MetricGrid, PageHeader, PageShell, Toolbar } from '../../components/ui';
 import { registrationService } from '../../services/registrationService';
 import type { RegistrationResponse } from '../../types/registration';
 
@@ -359,28 +360,22 @@ const RegistrationManagementPage = () => {
   };
 
   return (
-    <div className="min-h-screen bg-surface py-8">
-      <div className="mx-auto max-w-[1440px] px-4 md:px-8">
-        <div className="glass-panel mb-6 rounded-2xl p-6">
-          <div className="flex flex-col gap-6 xl:flex-row xl:items-end xl:justify-between">
-            <div className="min-w-0 flex-1">
-              <p className="mb-3 text-label-sm font-bold uppercase tracking-[0.18em] text-secondary">Admin Race Registration</p>
-              <h1 className="font-display mb-2 text-headline-lg font-extrabold text-primary">Race Registration Management</h1>
-              <p className="max-w-2xl text-body-md text-on-surface-variant">
-                Review pending race entries and approve them before they appear in race lists.
-              </p>
-            </div>
+    <PageShell>
+      <PageHeader
+        eyebrow="Admin Race Registration"
+        title="Race Registration Management"
+        description="Review pending race entries and approve them before they appear in race lists."
+        icon={ClipboardCheck}
+      />
 
-            <div className="grid w-full gap-3 sm:grid-cols-2 xl:w-[640px] xl:flex-none xl:grid-cols-4">
-              <MetricCard icon={<ClipboardCheck className="h-4 w-4" />} label="Total" value={isLoading ? '...' : String(stats.total).padStart(2, '0')} />
-              <MetricCard icon={<Clock3 className="h-4 w-4" />} label="Pending" value={isLoading ? '...' : String(stats.pending).padStart(2, '0')} />
-              <MetricCard icon={<CheckCircle2 className="h-4 w-4" />} label="Approved" value={isLoading ? '...' : String(stats.approved).padStart(2, '0')} />
-              <MetricCard icon={<XCircle className="h-4 w-4" />} label="Rejected" value={isLoading ? '...' : String(stats.rejected).padStart(2, '0')} />
-            </div>
-          </div>
-        </div>
+      <MetricGrid columns={4}>
+        <MetricCard icon={<ClipboardCheck className="h-4 w-4" />} label="Total" value={isLoading ? '...' : String(stats.total).padStart(2, '0')} />
+        <MetricCard icon={<Clock3 className="h-4 w-4" />} label="Pending" value={isLoading ? '...' : String(stats.pending).padStart(2, '0')} />
+        <MetricCard icon={<CheckCircle2 className="h-4 w-4" />} label="Approved" value={isLoading ? '...' : String(stats.approved).padStart(2, '0')} />
+        <MetricCard icon={<XCircle className="h-4 w-4" />} label="Rejected" value={isLoading ? '...' : String(stats.rejected).padStart(2, '0')} />
+      </MetricGrid>
 
-        <div className="glass-panel mb-6 rounded-xl p-4">
+      <Toolbar>
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-[minmax(280px,1.4fr)_repeat(5,minmax(150px,1fr))_150px]">
             <div className="relative">
               <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-outline" />
@@ -441,7 +436,7 @@ const RegistrationManagementPage = () => {
               Refresh
             </button>
           </div>
-        </div>
+      </Toolbar>
 
         {notice && <StatusBanner tone={notice.tone} text={notice.text} />}
 
@@ -452,7 +447,6 @@ const RegistrationManagementPage = () => {
           onApprove={(registration) => openActionModal('approve', registration)}
           onReject={(registration) => openActionModal('reject', registration)}
         />
-      </div>
 
       {selectedRegistration && (
         <RegistrationDetailModal
@@ -477,7 +471,7 @@ const RegistrationManagementPage = () => {
           onClose={closeActionModal}
         />
       )}
-    </div>
+    </PageShell>
   );
 };
 
@@ -513,7 +507,7 @@ const RegistrationsTable = ({
   onApprove: (registration: RegistrationResponse) => void;
   onReject: (registration: RegistrationResponse) => void;
 }) => (
-  <div className="glass-panel overflow-hidden rounded-xl">
+  <DataPanel title="Registration queue" description="Review owner confirmations and process race entries." icon={ClipboardCheck}>
     <div className="overflow-x-auto">
       <table className="w-full min-w-[1180px] text-left">
         <thead className="border-b border-outline-variant bg-surface-container">
@@ -617,7 +611,7 @@ const RegistrationsTable = ({
         description={isLoading ? 'Fetching race registration queue from the API.' : 'No registration matches the current search and filters.'}
       />
     )}
-  </div>
+  </DataPanel>
 );
 
 const RegistrationDetailModal = ({
@@ -884,7 +878,7 @@ const Modal = ({
   children: ReactNode;
   maxWidthClassName?: string;
 }) => (
-  <div className="fixed inset-0 z-[60] overflow-y-auto bg-black/60 px-4 py-8">
+  <div className="fixed inset-0 z-[60] overflow-y-auto bg-slate-950/55 px-4 py-8 backdrop-blur-[2px]">
     <div className={`mx-auto ${maxWidthClassName} rounded-lg border border-outline-variant bg-surface-container shadow-xl`}>
       <div className="flex items-start justify-between gap-6 border-b border-outline-variant p-6">
         <div>

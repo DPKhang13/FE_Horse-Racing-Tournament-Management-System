@@ -13,6 +13,7 @@ import {
 } from '../../services/raceOperationsService';
 import { useToastNotifications } from '../../hooks/useToastNotifications';
 import { useAdminRaceResults } from '../../hooks/useAdminRaceResults';
+import { MetricGrid, PageHeader, PageShell } from '../../components/ui';
 
 const createEmptyDraftItem = (): RaceDraftResultItemInput => ({
   assignmentId: 0,
@@ -296,31 +297,22 @@ const RaceControlPage = () => {
   const publishedCount = adminResults.filter((item) => String(item.status ?? '').toLowerCase() === 'published').length;
 
   return (
-    <div className="min-h-screen bg-surface py-8">
-      <div className="mx-auto max-w-[1440px] px-4 md:px-8">
-        <div className="glass-panel mb-6 rounded-2xl p-6">
-          <div className="flex flex-col gap-6 xl:flex-row xl:items-end xl:justify-between">
-            <div>
-              <p className="text-xs font-bold uppercase tracking-[0.2em] text-secondary">
-                {isAdmin ? 'Admin Workflow' : 'Referee Workflow'}
-              </p>
-              <h1 className="font-display mt-2 text-headline-lg font-extrabold text-primary">
-                Referee report and race result control
-              </h1>
-              <p className="mt-2 max-w-3xl text-body-sm text-on-surface-variant">
-                This board now follows the backend workflow: report, draft result, admin confirm, and admin publish.
-              </p>
-            </div>
-            <div className="grid min-w-full gap-3 sm:grid-cols-3 xl:min-w-[520px]">
-              <MetricCard icon={<Flag className="h-4 w-4" />} label="Selected Race" value={normalizedRaceId || '--'} />
-              <MetricCard icon={<ClipboardList className="h-4 w-4" />} label="Reports" value={String(reports.length).padStart(2, '0')} />
-              <MetricCard icon={<CheckCircle2 className="h-4 w-4" />} label="Published" value={String(publishedCount).padStart(2, '0')} />
-            </div>
-          </div>
-        </div>
+    <PageShell>
+      <PageHeader
+        eyebrow={isAdmin ? 'Admin Workflow' : 'Referee Workflow'}
+        title="Referee report and race result control"
+        description="This board now follows the backend workflow: report, draft result, admin confirm, and admin publish."
+        icon={Flag}
+      />
 
-        <section className="mb-6 grid gap-6 xl:grid-cols-[340px_minmax(0,1fr)]">
-          <article className="glass-panel rounded-xl p-6">
+      <MetricGrid columns={3}>
+        <MetricCard icon={<Flag className="h-4 w-4" />} label="Selected Race" value={normalizedRaceId || '--'} />
+        <MetricCard icon={<ClipboardList className="h-4 w-4" />} label="Reports" value={String(reports.length).padStart(2, '0')} />
+        <MetricCard icon={<CheckCircle2 className="h-4 w-4" />} label="Published" value={String(publishedCount).padStart(2, '0')} />
+      </MetricGrid>
+
+      <section className="grid gap-4 xl:grid-cols-[320px_minmax(0,1fr)]">
+          <article className="rounded-lg border border-line bg-white p-5 shadow-sm">
             <div className="mb-4 flex items-center gap-3">
               <Gauge className="h-5 w-5 text-secondary" />
               <h2 className="font-display text-title-large font-bold text-primary">Race selector</h2>
@@ -373,7 +365,7 @@ const RaceControlPage = () => {
             )}
           </article>
 
-          <article className="glass-panel rounded-xl p-6">
+          <article className="rounded-lg border border-line bg-white p-5 shadow-sm">
             <div className="mb-4 flex items-center gap-3">
               <ShieldCheck className="h-5 w-5 text-secondary" />
               <h2 className="font-display text-title-large font-bold text-primary">Current race snapshot</h2>
@@ -392,7 +384,7 @@ const RaceControlPage = () => {
           </article>
         </section>
 
-        <div className="space-y-6">
+      <div className="space-y-4">
           {isReferee && (
             <section className="grid gap-6 xl:grid-cols-2">
               <article className="glass-panel rounded-xl p-6">
@@ -596,9 +588,8 @@ const RaceControlPage = () => {
               </section>
             </>
           )}
-        </div>
       </div>
-    </div>
+    </PageShell>
   );
 };
 

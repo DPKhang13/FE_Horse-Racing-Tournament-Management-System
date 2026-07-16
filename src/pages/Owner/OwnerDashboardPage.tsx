@@ -4,6 +4,7 @@ import { getApiErrorMessage } from '../../services/apiClient';
 import { authService } from '../../services/authService';
 import { HorseService } from '../../services/HorseService';
 import { useToastNotifications } from '../../hooks/useToastNotifications';
+import { MetricGrid, PageHeader, PageShell } from '../../components/ui';
 import { jockeyAssignmentService, type JockeyAssignmentItem } from '../../services/jockeyAssignmentService';
 import { raceRegistrationService, type RaceRegistrationItem } from '../../services/raceRegistrationService';
 import type { Horse } from '../../types/horse';
@@ -95,28 +96,23 @@ const OwnerDashboardPage = () => {
   );
 
   return (
-    <div className="min-h-screen bg-surface py-8">
-      <div className="mx-auto max-w-[1440px] px-4 md:px-8">
-        <section className="glass-panel mb-6 rounded-2xl p-6">
-          <div className="flex flex-col gap-6 xl:flex-row xl:items-end xl:justify-between">
-            <div>
-              <p className="text-xs font-bold uppercase tracking-[0.2em] text-secondary">Horse Owner Dashboard</p>
-              <h1 className="font-display mt-2 text-headline-lg font-extrabold text-primary">Stable overview</h1>
-              <p className="mt-2 max-w-2xl text-body-sm text-on-surface-variant">
-                Follow your horses, race registrations, and jockey invitations from one read-only board.
-              </p>
-            </div>
-            <div className="grid min-w-full gap-3 sm:grid-cols-2 xl:min-w-[620px] xl:grid-cols-4">
-              <MetricCard icon={<Trophy className="h-4 w-4" />} label="Horses" value={String(horses.length).padStart(2, '0')} />
-              <MetricCard icon={<ShieldCheck className="h-4 w-4" />} label="Approved regs" value={String(approvedRegistrationCount).padStart(2, '0')} />
-              <MetricCard icon={<Clock3 className="h-4 w-4" />} label="Pending invites" value={String(pendingInvitationCount).padStart(2, '0')} />
-              <MetricCard icon={<CheckCircle2 className="h-4 w-4" />} label="Confirmed" value={String(confirmedInvitationCount).padStart(2, '0')} />
-            </div>
-          </div>
-        </section>
+    <PageShell>
+      <PageHeader
+        eyebrow="Horse Owner Dashboard"
+        title="Stable overview"
+        description="Follow your horses, race registrations, and jockey invitations from one read-only board."
+        icon={Trophy}
+      />
 
-        <div className="mb-6 grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
-          <section className="glass-panel rounded-xl p-6">
+      <MetricGrid columns={4}>
+        <MetricCard icon={<Trophy className="h-4 w-4" />} label="Horses" value={String(horses.length).padStart(2, '0')} />
+        <MetricCard icon={<ShieldCheck className="h-4 w-4" />} label="Approved regs" value={String(approvedRegistrationCount).padStart(2, '0')} />
+        <MetricCard icon={<Clock3 className="h-4 w-4" />} label="Pending invites" value={String(pendingInvitationCount).padStart(2, '0')} />
+        <MetricCard icon={<CheckCircle2 className="h-4 w-4" />} label="Confirmed" value={String(confirmedInvitationCount).padStart(2, '0')} />
+      </MetricGrid>
+
+      <div className="grid gap-4 xl:grid-cols-[320px_minmax(0,1fr)]">
+          <section className="rounded-lg border border-line bg-white p-5 shadow-sm">
             <div className="mb-5 flex items-center gap-3">
               <Users className="h-5 w-5 text-secondary" />
               <div>
@@ -124,7 +120,7 @@ const OwnerDashboardPage = () => {
                 <p className="mt-1 text-body-sm text-on-surface-variant">Current account information and stable status.</p>
               </div>
             </div>
-            <div className="grid gap-4 md:grid-cols-2">
+            <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-1">
               <InfoCard label="Owner" value={profile?.fullName ?? '-'} />
               <InfoCard label="Stable" value={profile?.ownerProfile?.stableName ?? '-'} />
               <InfoCard label="Email" value={profile?.email ?? '-'} />
@@ -134,7 +130,7 @@ const OwnerDashboardPage = () => {
             </div>
           </section>
 
-          <section className="glass-panel rounded-xl p-6">
+          <section className="rounded-lg border border-line bg-white p-5 shadow-sm">
             <div className="mb-5 flex items-center gap-3">
               <Trophy className="h-5 w-5 text-secondary" />
               <div>
@@ -168,8 +164,8 @@ const OwnerDashboardPage = () => {
           </section>
         </div>
 
-        <div className="grid gap-6 xl:grid-cols-2">
-          <section className="glass-panel rounded-xl p-6">
+      <div className="grid gap-4 xl:grid-cols-2">
+          <section className="rounded-lg border border-line bg-white p-5 shadow-sm">
             <div className="mb-5 flex items-center gap-3">
               <ShieldCheck className="h-5 w-5 text-secondary" />
               <div>
@@ -194,7 +190,7 @@ const OwnerDashboardPage = () => {
             />
           </section>
 
-          <section className="glass-panel rounded-xl p-6">
+          <section className="rounded-lg border border-line bg-white p-5 shadow-sm">
             <div className="mb-5 flex items-center gap-3">
               <Send className="h-5 w-5 text-secondary" />
               <div>
@@ -219,8 +215,7 @@ const OwnerDashboardPage = () => {
             />
           </section>
         </div>
-      </div>
-    </div>
+    </PageShell>
   );
 };
 

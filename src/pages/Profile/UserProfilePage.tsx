@@ -18,6 +18,7 @@ import { Link } from 'react-router-dom';
 import { getAccessToken } from '../../services/apiClient';
 import { authService } from '../../services/authService';
 import type { UserProfile } from '../../types/user';
+import { PageHeader, PageShell } from '../../components/ui';
 
 const guestUser: UserProfile = {
   id: 'guest',
@@ -78,8 +79,13 @@ const UserProfilePage = () => {
   };
 
   return (
-    <div className="min-h-screen bg-surface py-12">
-      <div className="max-w-container mx-auto px-4 md:px-margin-desktop">
+    <PageShell>
+      <PageHeader
+        eyebrow="Account"
+        title="Profile"
+        description="Personal information, wallet, and account activity."
+        icon={User}
+      />
         
         {errorMessage && (
           <div className="mb-8 rounded-md border border-error/30 bg-error-container/20 px-4 py-3 text-body-sm font-semibold text-error">
@@ -93,12 +99,12 @@ const UserProfilePage = () => {
           </div>
         )}
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-[320px_minmax(0,1fr)]">
           
           {/* Left Column: Profile Card */}
-          <div className="lg:col-span-1 space-y-6">
-            <div className="bg-white border border-outline-variant rounded-xl overflow-hidden shadow-sm">
-              <div className="h-32 bg-primary-container relative">
+          <div className="space-y-4">
+            <div className="overflow-hidden rounded-lg border border-line bg-white shadow-sm">
+              <div className="relative h-24 bg-panel">
                 <div className="absolute -bottom-12 left-8">
                   <div className="w-24 h-24 rounded-xl border-4 border-white overflow-hidden bg-surface-container-highest">
                     {user.avatarUrl ? (
@@ -197,10 +203,10 @@ const UserProfilePage = () => {
           </div>
 
           {/* Right Column: Wallet & Details */}
-          <div className="lg:col-span-2 space-y-8">
+          <div className="space-y-4">
             
             {/* Wallet Section */}
-            <div className="bg-white border border-outline-variant rounded-xl p-8 shadow-sm">
+            <div className="rounded-lg border border-line bg-white p-5 shadow-sm sm:p-6">
               <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-8">
                 <div>
                   <div className="flex items-center gap-2 mb-1">
@@ -261,7 +267,7 @@ const UserProfilePage = () => {
             </div>
 
             {/* Recent Activity / Benefits */}
-            <div className="bg-white border border-outline-variant rounded-xl p-8 shadow-sm">
+            <div className="rounded-lg border border-line bg-white p-5 shadow-sm sm:p-6">
               <h2 className="text-title-large font-bold text-primary mb-6">
                 {isLoggedIn ? 'Recent Activity' : 'Why join Horace?'}
               </h2>
@@ -335,8 +341,7 @@ const UserProfilePage = () => {
             </div>
           </div>
         </div>
-      </div>
-    </div>
+    </PageShell>
   );
 };
 

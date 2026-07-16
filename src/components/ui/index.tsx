@@ -7,6 +7,7 @@ import type {
 import {
   AlertCircle,
   CheckCircle2,
+  ChevronRight,
   Loader2,
   Trophy,
   X,
@@ -320,4 +321,177 @@ export const AppLogo = ({
       </span>
     ) : null}
   </span>
+);
+
+export const PageShell = ({
+  children,
+  className,
+}: { children: ReactNode; className?: string }) => (
+  <div className={cn('min-h-full bg-canvas py-5 sm:py-6', className)}>
+    <div className="mx-auto w-full max-w-[1400px] space-y-5 px-4 sm:px-6">{children}</div>
+  </div>
+);
+
+export const PageHeader = ({
+  title,
+  eyebrow,
+  description,
+  icon: Icon,
+  tone = 'emerald',
+  actions,
+  meta,
+  className,
+}: {
+  title: ReactNode;
+  eyebrow?: ReactNode;
+  description?: ReactNode;
+  icon?: LucideIcon;
+  tone?: Tone;
+  actions?: ReactNode;
+  meta?: ReactNode;
+  className?: string;
+}) => (
+  <header className={cn('flex flex-col gap-4 border-b border-line pb-5 lg:flex-row lg:items-end lg:justify-between', className)}>
+    <div className="flex min-w-0 items-start gap-3">
+      {Icon ? (
+        <span className={cn('grid h-11 w-11 shrink-0 place-items-center rounded-lg', toneClasses[tone].icon)}>
+          <Icon className="h-5 w-5" />
+        </span>
+      ) : null}
+      <div className="min-w-0">
+        {eyebrow ? <p className="mb-1 text-[11px] font-bold uppercase text-emerald-700">{eyebrow}</p> : null}
+        <h1 className="text-xl font-bold text-ink sm:text-2xl">{title}</h1>
+        {description ? <p className="mt-1 max-w-3xl text-[13px] leading-5 text-slate-500">{description}</p> : null}
+        {meta ? <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-slate-500">{meta}</div> : null}
+      </div>
+    </div>
+    {actions ? <div className="flex shrink-0 flex-wrap items-center gap-2">{actions}</div> : null}
+  </header>
+);
+
+export const MetricGrid = ({
+  children,
+  columns = 4,
+  className,
+}: { children: ReactNode; columns?: 2 | 3 | 4 | 5; className?: string }) => {
+  const columnClasses = {
+    2: 'sm:grid-cols-2',
+    3: 'sm:grid-cols-2 xl:grid-cols-3',
+    4: 'grid-cols-2 lg:grid-cols-4',
+    5: 'grid-cols-2 lg:grid-cols-3 2xl:grid-cols-5',
+  };
+
+  return <section className={cn('grid gap-3', columnClasses[columns], className)}>{children}</section>;
+};
+
+export const SectionTitle = ({
+  title,
+  description,
+  icon: Icon,
+  action,
+  className,
+}: {
+  title: ReactNode;
+  description?: ReactNode;
+  icon?: LucideIcon;
+  action?: ReactNode;
+  className?: string;
+}) => (
+  <div className={cn('flex min-w-0 items-start justify-between gap-3', className)}>
+    <div className="flex min-w-0 items-start gap-2.5">
+      {Icon ? (
+        <span className="mt-0.5 grid h-8 w-8 shrink-0 place-items-center rounded-md bg-slate-100 text-slate-600">
+          <Icon className="h-4 w-4" />
+        </span>
+      ) : null}
+      <div className="min-w-0">
+        <h2 className="text-sm font-bold text-ink">{title}</h2>
+        {description ? <p className="mt-0.5 text-xs leading-5 text-slate-500">{description}</p> : null}
+      </div>
+    </div>
+    {action ? <div className="shrink-0">{action}</div> : null}
+  </div>
+);
+
+export const Toolbar = ({
+  children,
+  className,
+}: { children: ReactNode; className?: string }) => (
+  <section className={cn('flex flex-col gap-3 rounded-lg border border-line bg-white p-3 shadow-sm sm:flex-row sm:items-center', className)}>
+    {children}
+  </section>
+);
+
+export const DataPanel = ({
+  title,
+  description,
+  icon,
+  action,
+  children,
+  footer,
+  className,
+  bodyClassName,
+}: {
+  title?: ReactNode;
+  description?: ReactNode;
+  icon?: LucideIcon;
+  action?: ReactNode;
+  children: ReactNode;
+  footer?: ReactNode;
+  className?: string;
+  bodyClassName?: string;
+}) => (
+  <section className={cn('overflow-hidden rounded-lg border border-line bg-white shadow-sm', className)}>
+    {title || description || action ? (
+      <div className="border-b border-line px-4 py-3.5 sm:px-5">
+        <SectionTitle title={title} description={description} icon={icon} action={action} />
+      </div>
+    ) : null}
+    <div className={bodyClassName}>{children}</div>
+    {footer ? <div className="border-t border-line bg-slate-50 px-4 py-3 sm:px-5">{footer}</div> : null}
+  </section>
+);
+
+export const ContentGrid = ({
+  children,
+  aside = 'sm',
+  className,
+}: { children: ReactNode; aside?: 'sm' | 'md' | 'lg'; className?: string }) => {
+  const grids = {
+    sm: 'xl:grid-cols-[minmax(0,1fr)_320px]',
+    md: 'xl:grid-cols-[minmax(0,1fr)_380px]',
+    lg: 'xl:grid-cols-[minmax(0,1fr)_440px]',
+  };
+
+  return <div className={cn('grid items-start gap-4', grids[aside], className)}>{children}</div>;
+};
+
+export const FormSection = ({
+  title,
+  description,
+  children,
+  className,
+}: { title?: ReactNode; description?: ReactNode; children: ReactNode; className?: string }) => (
+  <section className={cn('border-b border-line pb-5 last:border-b-0 last:pb-0', className)}>
+    {title ? (
+      <div className="mb-4">
+        <h3 className="text-sm font-bold text-ink">{title}</h3>
+        {description ? <p className="mt-1 text-xs leading-5 text-slate-500">{description}</p> : null}
+      </div>
+    ) : null}
+    {children}
+  </section>
+);
+
+export const Breadcrumb = ({
+  items,
+}: { items: ReactNode[] }) => (
+  <div className="flex min-w-0 items-center gap-1.5 text-xs text-slate-500">
+    {items.map((item, index) => (
+      <span key={index} className="flex min-w-0 items-center gap-1.5">
+        {index > 0 ? <ChevronRight className="h-3.5 w-3.5 shrink-0 text-slate-300" /> : null}
+        <span className="truncate">{item}</span>
+      </span>
+    ))}
+  </div>
 );

@@ -4,6 +4,7 @@ import { Activity, Eye, Filter, Gauge, Pencil, Plus, Search, Trophy, X } from 'l
 import { getApiErrorMessage } from '../../services/apiClient';
 import { authService } from '../../services/authService';
 import { useToastNotifications } from '../../hooks/useToastNotifications';
+import { DataPanel, MetricGrid, PageHeader, PageShell, Toolbar } from '../../components/ui';
 import { HorseService } from '../../services/HorseService';
 import type { Horse, HorseFormData } from '../../types/horse';
 import type { UserProfile } from '../../types/user';
@@ -240,27 +241,15 @@ const HorseManagementPage = () => {
   };
 
   return (
-    <div className="min-h-screen bg-surface py-8">
-      <div className="mx-auto max-w-[1440px] px-4 md:px-8">
-        <motion.div 
-          className="glass-panel mb-6 rounded-2xl p-6"
-          initial="hidden"
-          animate="visible"
-          variants={revealContainer}
-        >
-          <div className="flex flex-col gap-6 xl:flex-row xl:items-end xl:justify-between">
-            <motion.div variants={revealUp}>
-              <p className="mb-3 text-label-sm font-bold uppercase tracking-[0.18em] text-secondary">Horse Owner Dashboard</p>
-              <h1 className="font-display mb-2 text-headline-lg font-extrabold text-primary">Stable command center</h1>
-              <p className="max-w-2xl text-body-md text-on-surface-variant">
-                Manage horse records using fields stored in the database.
-              </p>
-            </motion.div>
+    <PageShell>
+      <PageHeader
+        eyebrow="Horse Owner Dashboard"
+        title="Stable command center"
+        description="Manage horse records using fields stored in the database."
+        icon={Trophy}
+      />
 
-            <motion.div 
-              className="grid min-w-full gap-3 sm:grid-cols-2 xl:min-w-[560px] xl:grid-cols-4"
-              variants={revealContainer}
-            >
+      <MetricGrid columns={4}>
               <motion.div variants={revealUp}>
                 <MetricCard icon={<Activity className="h-4 w-4" />} label="Total" value={String(horses.length).padStart(2, '0')} />
               </motion.div>
@@ -273,18 +262,11 @@ const HorseManagementPage = () => {
               <motion.div variants={revealUp}>
                 <MetricCard icon={<Filter className="h-4 w-4" />} label="Top points" value={String(topRating)} />
               </motion.div>
-            </motion.div>
-          </div>
-        </motion.div>
+      </MetricGrid>
 
-        <motion.div 
-          className="mb-6 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between"
-          initial="hidden"
-          animate="visible"
-          variants={revealContainer}
-        >
+      <Toolbar>
           <motion.div 
-            className="glass-panel flex-1 rounded-xl p-4"
+            className="min-w-0 flex-1"
             variants={revealUp}
           >
             <div className="grid grid-cols-1 gap-4 md:grid-cols-[1fr_240px]">
@@ -317,7 +299,7 @@ const HorseManagementPage = () => {
           <motion.button
             type="button"
             onClick={openCreateModal}
-            className="gold-gradient inline-flex items-center justify-center gap-2 rounded-xl px-6 py-4 text-body-sm font-extrabold text-on-primary transition-all"
+            className="gold-gradient inline-flex h-10 items-center justify-center gap-2 rounded-md px-5 text-body-sm font-extrabold text-on-primary transition-all"
             variants={revealUp}
             whileHover={{ y: -2, scale: 1.01 }}
             whileTap={{ scale: 0.98 }}
@@ -325,14 +307,9 @@ const HorseManagementPage = () => {
             <Plus className="h-4 w-4" />
             Register Horse
           </motion.button>
-        </motion.div>
+      </Toolbar>
 
-        <motion.div 
-          className="glass-panel overflow-hidden rounded-xl"
-          initial="hidden"
-          animate="visible"
-          variants={revealUp}
-        >
+      <DataPanel title="My horses" description="Horse profiles, rankings, ownership, and availability." icon={Trophy}>
           <div className="overflow-x-auto">
             <table className="w-full min-w-[1120px] text-left">
               <thead className="bg-surface-container border-b border-outline-variant">
@@ -408,8 +385,7 @@ const HorseManagementPage = () => {
               </p>
             </motion.div>
           )}
-        </motion.div>
-      </div>
+      </DataPanel>
 
       {isFormOpen && (
         <Modal title={selectedHorse ? 'Update Horse Information' : 'Register Horse'} subtitle={selectedHorse?.id ?? 'New Horse'} onClose={closeFormModal}>
@@ -543,7 +519,7 @@ const HorseManagementPage = () => {
           </motion.div>
         </Modal>
       )}
-    </div>
+    </PageShell>
   );
 };
 
@@ -572,7 +548,7 @@ const IconButton = ({ label, onClick, children }: { label: string; onClick: () =
 );
 
 const Modal = ({ title, subtitle, onClose, children }: { title: string; subtitle: string; onClose: () => void; children: ReactNode }) => (
-  <div className="fixed inset-0 z-[60] bg-black/50 px-4 py-8 overflow-y-auto">
+  <div className="fixed inset-0 z-[60] overflow-y-auto bg-slate-950/55 px-4 py-8 backdrop-blur-[2px]">
     <div className="max-w-4xl mx-auto bg-white rounded-lg border border-outline-variant shadow-xl">
       <div className="flex items-start justify-between gap-6 p-6 border-b border-outline-variant">
         <div>

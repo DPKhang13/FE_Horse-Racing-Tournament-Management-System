@@ -6,6 +6,7 @@ import { HorseService } from '../../services/HorseService';
 import { raceRegistrationService, type RaceRegistrationItem } from '../../services/raceRegistrationService';
 import { scheduleService, type RaceScheduleItem, type TournamentApiItem } from '../../services/scheduleService';
 import { useToastNotifications } from '../../hooks/useToastNotifications';
+import { DataPanel, PageHeader, PageShell } from '../../components/ui';
 import type { Horse } from '../../types/horse';
 import type { UserProfile } from '../../types/user';
 
@@ -237,20 +238,15 @@ const RaceRegistrationPage = () => {
   };
 
   return (
-    <div className="min-h-screen bg-surface py-12">
-      <div className="mx-auto max-w-container px-4 md:px-margin-desktop">
-        <div className="mb-8 flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-secondary">Race Registrations</p>
-            <h1 className="mt-2 text-headline-lg font-bold text-primary">Entry management</h1>
-            <p className="mt-2 max-w-2xl text-body-md text-on-surface-variant">
-              {isOwner
+    <PageShell>
+      <PageHeader
+        eyebrow="Race Registrations"
+        title="Entry management"
+        description={isOwner
                 ? 'Choose a tournament with registration open, then send the horse registration for admin approval.'
                 : 'Review pending race registrations and approve entries before they appear in race lists.'}
-            </p>
-          </div>
-
-          <button
+        icon={ClipboardList}
+        actions={<button
             type="button"
             onClick={() => setIsQueueOpen(true)}
             className="inline-flex items-center gap-2 self-start rounded-md border border-outline-variant bg-white px-4 py-2 text-body-sm font-bold text-primary shadow-sm transition-colors hover:border-primary"
@@ -260,21 +256,11 @@ const RaceRegistrationPage = () => {
             <span className="rounded-full bg-surface-container px-2 py-0.5 text-[11px] font-extrabold text-on-surface-variant">
               {items.length}
             </span>
-          </button>
-        </div>
+          </button>}
+      />
 
         {isOwner ? (
-          <section className="rounded-xl border border-outline-variant bg-white p-6 shadow-sm">
-            <div className="mb-5 flex items-center gap-3">
-              <Trophy className="h-5 w-5 text-secondary" />
-              <div>
-                <h2 className="text-title-large font-bold text-primary">Open registration tournaments</h2>
-                <p className="mt-1 text-body-sm text-on-surface-variant">
-                  Only tournaments in `Registration Open` are shown here.
-                </p>
-              </div>
-            </div>
-
+          <DataPanel title="Open registration tournaments" description="Only tournaments in `Registration Open` are shown here." icon={Trophy} bodyClassName="p-5">
             {isLoading ? (
               <EmptyState
                 title="Loading tournaments"
@@ -324,17 +310,16 @@ const RaceRegistrationPage = () => {
                 })}
               </div>
             )}
-          </section>
+          </DataPanel>
         ) : (
-          <section className="rounded-xl border border-outline-variant bg-white p-6 shadow-sm">
+          <DataPanel title="Registration queue" icon={ClipboardList} bodyClassName="p-5">
             <EmptyState
               title="Queue-focused view"
               description="This role does not register horses directly. Use the queue button to review and process requests."
               icon={<CheckCircle2 className="h-5 w-5" />}
             />
-          </section>
+          </DataPanel>
         )}
-      </div>
 
       {isRacePickerOpen && selectedTournament && (
         <Modal
@@ -545,7 +530,7 @@ const RaceRegistrationPage = () => {
           </div>
         </Modal>
       )}
-    </div>
+    </PageShell>
   );
 };
 
@@ -577,7 +562,7 @@ const Modal = ({
   onClose: () => void;
   children: ReactNode;
 }) => (
-  <div className="fixed inset-0 z-[70] overflow-y-auto bg-black/55 px-4 py-8">
+  <div className="fixed inset-0 z-[70] overflow-y-auto bg-slate-950/55 px-4 py-8 backdrop-blur-[2px]">
     <div className="mx-auto max-w-5xl rounded-lg border border-outline-variant bg-white shadow-xl">
       <div className="flex items-start justify-between gap-6 border-b border-outline-variant p-6">
         <div>

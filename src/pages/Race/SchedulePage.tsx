@@ -5,6 +5,7 @@ import { authService } from '../../services/authService';
 import { useToastNotifications } from '../../hooks/useToastNotifications';
 import { scheduleService, type RaceScheduleItem } from '../../services/scheduleService';
 import type { UserProfile } from '../../types/user';
+import { PageHeader, PageShell } from '../../components/ui';
 
 const formatDate = (value: string) => new Intl.DateTimeFormat('en-US', {
   month: 'short',
@@ -84,14 +85,13 @@ const SchedulePage = () => {
   }, [onlyToday, schedules]);
 
   return (
-    <div className="bg-surface min-h-screen py-12">
-      <div className="max-w-container mx-auto px-4 md:px-margin-desktop">
-        <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 mb-12">
-          <div>
-            <h1 className="text-headline-lg font-bold text-primary mb-2">Race Schedule</h1>
-            <p className="text-body-md text-on-surface-variant">Stay updated with the upcoming elite horse racing events worldwide.</p>
-          </div>
-          <div className="flex items-center gap-4">
+    <PageShell>
+      <PageHeader
+        eyebrow="Racing calendar"
+        title="Race Schedule"
+        description="Stay updated with the upcoming elite horse racing events worldwide."
+        icon={Calendar}
+        actions={<>
             <button className="flex items-center gap-2 bg-white border border-outline-variant px-4 py-2 rounded-md text-body-sm font-medium hover:bg-surface-container transition-colors">
               <Filter className="w-4 h-4" />
               Filter
@@ -103,17 +103,17 @@ const SchedulePage = () => {
             >
               {onlyToday ? 'All Races' : "Today's Races"}
             </button>
-          </div>
-        </div>
+          </>}
+      />
 
         {isLoading ? (
           <div className="rounded-lg border border-outline-variant bg-white p-6 text-body-sm font-semibold text-on-surface-variant">
             Loading race schedule...
           </div>
         ) : (
-          <div className="space-y-6">
+          <div className="space-y-3">
             {visibleSchedules.map((race) => (
-              <div key={race.raceId} className="bg-white border border-outline-variant rounded-lg p-6 hover:border-secondary transition-all group">
+              <div key={race.raceId} className="group rounded-lg border border-outline-variant bg-white p-5 transition-all hover:border-secondary">
                 <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-8">
                   <div className="flex items-center gap-6 shrink-0">
                     <div className="text-center min-w-[80px]">
@@ -177,8 +177,7 @@ const SchedulePage = () => {
             )}
           </div>
         )}
-      </div>
-    </div>
+    </PageShell>
   );
 };
 

@@ -9,7 +9,7 @@ import type { NotificationItem } from '../../services/notificationService';
 import { predictionService } from '../../services/predictionService';
 import type { RaceScheduleItem } from '../../services/scheduleService';
 import type { RaceResultListItem } from '../../types/raceResult';
-import { Badge, MetricCard, type Tone } from '../../components/ui';
+import { Badge, MetricCard, MetricGrid, PageHeader, PageShell, type Tone } from '../../components/ui';
 import { spectatorDashboardMockData } from './mockData';
 
 // Animation variants
@@ -147,23 +147,8 @@ const SpectatorDashboard: React.FC = () => {
   ], [navigate, notifications.length, openPredictionRaceCount, summaryCount, upcomingRaces.length]);
 
   return (
-    <main className="min-h-screen bg-surface text-on-surface">
-      <motion.section 
-        className="border-b border-outline-variant/40 bg-surface-container-low/80 backdrop-blur-xl"
-        initial="hidden"
-        animate="visible"
-        variants={revealContainer}
-      >
-        <div className="mx-auto flex max-w-[1440px] flex-col gap-8 px-4 py-10 md:px-8">
-          <motion.div 
-            className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between"
-            variants={revealUp}
-          >
-            <div className="space-y-3">
-              <p className="text-xs font-bold uppercase tracking-[0.22em] text-secondary">Spectator Experience</p>
-              <h1 className="font-display text-4xl font-extrabold text-primary md:text-5xl">Spectator Dashboard</h1>
-            </div>
-          </motion.div>
+    <PageShell>
+      <PageHeader eyebrow="Spectator Experience" title="Spectator Dashboard" icon={Trophy} />
 
           {errorMessage && (
             <motion.div 
@@ -176,10 +161,7 @@ const SpectatorDashboard: React.FC = () => {
             </motion.div>
           )}
 
-          <motion.div 
-            className="grid gap-4 md:grid-cols-3"
-            variants={revealContainer}
-          >
+      <MetricGrid columns={3}>
             {metrics.map((item, index) => (
               <motion.div
                 key={item.label}
@@ -195,22 +177,20 @@ const SpectatorDashboard: React.FC = () => {
                   icon={item.icon}
                   onClick={item.action}
                   detail={<Badge tone="slate">Today</Badge>}
-                  className="min-h-32"
+                  className="min-h-28"
                 />
               </motion.div>
             ))}
-          </motion.div>
-        </div>
-      </motion.section>
+      </MetricGrid>
 
       <motion.section 
-        className="mx-auto grid max-w-[1440px] gap-8 px-4 py-8 md:px-8 lg:grid-cols-[1.1fr_0.9fr]"
+        className="grid gap-4 lg:grid-cols-[minmax(0,1.15fr)_minmax(320px,0.85fr)]"
         initial="hidden"
         whileInView="visible"
         viewport={{ once: true, amount: 0.18 }}
         variants={revealContainer}
       >
-        <div className="space-y-8">
+        <div className="space-y-4">
           <motion.div variants={revealUp}>
             <DashboardPanel id="race-schedule" eyebrow="Upcoming races" title="Race schedule" icon={<CalendarDays className="h-5 w-5 text-secondary" />}>
               <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
@@ -282,7 +262,7 @@ const SpectatorDashboard: React.FC = () => {
           </motion.div>
         </div>
 
-        <div className="space-y-8">
+        <div className="space-y-4">
           <motion.div variants={revealUp}>
             <DashboardPanel eyebrow="Latest results" title="Recent race results" icon={<Trophy className="h-5 w-5 text-primary" />}>
               <div className="space-y-3">
@@ -342,7 +322,7 @@ const SpectatorDashboard: React.FC = () => {
           </motion.div>
         </div>
       </motion.section>
-    </main>
+    </PageShell>
   );
 };
 
@@ -359,11 +339,11 @@ const DashboardPanel = ({
   icon: React.ReactNode;
   children: React.ReactNode;
 }) => (
-  <article id={id} className="glass-panel scroll-mt-6 rounded-2xl p-6">
+  <article id={id} className="scroll-mt-6 rounded-lg border border-line bg-white p-5 shadow-sm">
     <div className="mb-4 flex items-center justify-between gap-3">
       <div>
         <p className="text-xs font-bold uppercase tracking-[0.2em] text-secondary">{eyebrow}</p>
-        <h2 className="font-display mt-1 text-2xl font-bold text-on-surface">{title}</h2>
+        <h2 className="mt-1 text-base font-bold text-on-surface">{title}</h2>
       </div>
       {icon}
     </div>
