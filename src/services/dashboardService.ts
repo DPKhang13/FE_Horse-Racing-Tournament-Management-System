@@ -111,24 +111,37 @@ const mapUpcomingRace = (raw: RawObject): RaceScheduleItem => ({
   prizePool: raw.prizePool === undefined ? undefined : asNumber(raw.prizePool),
 });
 
-const mapBet = (raw: RawObject): BetItem => ({
-  betId: asNumber(raw.betId ?? raw.id),
-  raceId: raw.raceId === undefined ? undefined : asNumber(raw.raceId),
-  userId: raw.userId === undefined ? undefined : asNumber(raw.userId),
-  horseId: raw.horseId === undefined ? undefined : asNumber(raw.horseId),
-  amount: asNumber(raw.betPoints ?? raw.amount ?? raw.stakeAmount ?? raw.stake),
-  odds: asNumber(raw.betRate ?? raw.currentRate ?? raw.odds),
-  potentialPayout: asNumber(raw.rewardPoints ?? raw.potentialPayout ?? raw.payout),
-  status: asString(raw.status, 'pending'),
-  createdAt: raw.placedAt ? asString(raw.placedAt) : raw.createdAt ? asString(raw.createdAt) : undefined,
-  settledAt: raw.settledAt ? asString(raw.settledAt) : undefined,
-  raceName: asString(raw.raceName ?? raw.name, 'Race'),
-  tournamentName: raw.tournamentName ? asString(raw.tournamentName) : undefined,
-  horseName: asString(raw.horseName ?? raw.selectionName, 'Horse'),
-  jockeyName: raw.jockeyName ? asString(raw.jockeyName) : raw.jockeyFullName ? asString(raw.jockeyFullName) : undefined,
-  finishPosition: raw.finishPosition === undefined ? undefined : asNumber(raw.finishPosition),
-  pointsAwarded: raw.pointsAwarded === undefined ? undefined : asNumber(raw.pointsAwarded),
-});
+const mapBet = (raw: RawObject): BetItem => {
+  const amount = asNumber(raw.betPoints ?? raw.amount ?? raw.stakeAmount ?? raw.stake);
+  const odds = asNumber(raw.betRate ?? raw.currentRate ?? raw.odds);
+  const status = asString(raw.status, 'pending');
+  const rewardPoints = asNumber(raw.rewardPoints);
+  const explicitPayout = raw.potentialPayout ?? raw.payout;
+  const potentialPayout = explicitPayout === undefined
+    ? status.toLowerCase() === 'pending'
+      ? Math.round(amount * odds)
+      : rewardPoints
+    : asNumber(explicitPayout);
+
+  return {
+    betId: asNumber(raw.betId ?? raw.id),
+    raceId: raw.raceId === undefined ? undefined : asNumber(raw.raceId),
+    userId: raw.userId === undefined ? undefined : asNumber(raw.userId),
+    horseId: raw.horseId === undefined ? undefined : asNumber(raw.horseId),
+    amount,
+    odds,
+    potentialPayout,
+    status,
+    createdAt: raw.placedAt ? asString(raw.placedAt) : raw.createdAt ? asString(raw.createdAt) : undefined,
+    settledAt: raw.settledAt ? asString(raw.settledAt) : undefined,
+    raceName: asString(raw.raceName ?? raw.name, 'Race'),
+    tournamentName: raw.tournamentName ? asString(raw.tournamentName) : undefined,
+    horseName: asString(raw.horseName ?? raw.selectionName, 'Horse'),
+    jockeyName: raw.jockeyName ? asString(raw.jockeyName) : raw.jockeyFullName ? asString(raw.jockeyFullName) : undefined,
+    finishPosition: raw.finishPosition === undefined ? undefined : asNumber(raw.finishPosition),
+    pointsAwarded: raw.pointsAwarded === undefined ? undefined : asNumber(raw.pointsAwarded),
+  };
+};
 
 
 const mapResultList = (items: RawObject[]): RaceResultListItem[] => {

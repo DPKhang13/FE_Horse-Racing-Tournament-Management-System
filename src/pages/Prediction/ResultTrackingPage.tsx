@@ -1,13 +1,38 @@
 import { useEffect, useMemo, useState } from 'react';
-import { BarChart3, CheckCircle2, Clock3 } from 'lucide-react';
+import { BarChart3, CheckCircle2, Eye, Loader2, X } from 'lucide-react';
 import { getApiErrorMessage } from '../../services/apiClient';
-import { authService } from '../../services/authService';
 import { betService, type BetItem } from '../../services/betService';
-import type { UserProfile } from '../../types/user';
+
+type StatusFilter = 'all' | 'won' | 'lost';
 
 const formatPoints = (value: number) => new Intl.NumberFormat('en-US', {
   maximumFractionDigits: 0,
 }).format(value);
+
+const formatDate = (value?: string) => {
+  if (!value) {
+    return '-';
+  }
+
+  const isoDateMatch = value.match(/^(\d{4})-(\d{2})-(\d{2})/);
+
+  if (isoDateMatch) {
+    const [, year, month, day] = isoDateMatch;
+    return `${day}/${month}/${year}`;
+  }
+
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+
+  return new Intl.DateTimeFormat('vi-VN', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+  }).format(date);
+};
 
 const statusClassName = (status: string) => {
   const normalizedStatus = status.toLowerCase();
@@ -23,11 +48,36 @@ const statusClassName = (status: string) => {
   return 'bg-primary/15 text-primary';
 };
 
+const detailValue = (value: string | number | undefined) => {
+  if (value === undefined || value === '') {
+    return '-';
+  }
+
+  return value;
+};
+
+const getNetResult = (item: BetItem) => {
+  const status = item.status.toLowerCase();
+
+  if (status === 'won') {
+    return item.potentialPayout - item.amount;
+  }
+
+  if (status === 'lost' || status === 'cancelled') {
+    return -item.amount;
+  }
+
+  return 0;
+};
+
 const ResultTrackingPage = () => {
   const [trackedResults, setTrackedResults] = useState<BetItem[]>([]);
-  const [profile, setProfile] = useState<UserProfile | undefined>(() => authService.getStoredUserProfile());
+  const [selectedBet, setSelectedBet] = useState<BetItem | null>(null);
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
   const [isLoading, setIsLoading] = useState(true);
+  const [isLoadingDetail, setIsLoadingDetail] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
+  const [detailError, setDetailError] = useState('');
 
   useEffect(() => {
     let isMounted = true;
@@ -37,14 +87,10 @@ const ResultTrackingPage = () => {
       setErrorMessage('');
 
       try {
-        const data = await betService.getBets();
-        const currentProfile = profile ?? authService.getStoredUserProfile();
-        const activeProfile = currentProfile ?? await authService.getCurrentUser().catch(() => undefined);
-        const filteredData = activeProfile?.userId ? data.filter((bet) => bet.userId === activeProfile.userId) : data;
+        const data = await betService.getCurrentUserBets();
 
         if (isMounted) {
-          setProfile(activeProfile ?? currentProfile);
-          setTrackedResults(filteredData);
+          setTrackedResults(data);
         }
       } catch (error) {
         if (isMounted) {
@@ -89,6 +135,38 @@ const ResultTrackingPage = () => {
     () => trackedResults.filter((item) => item.status.toLowerCase() !== 'pending'),
     [trackedResults],
   );
+  const filteredSettledResults = useMemo(() => {
+    if (statusFilter === 'all') {
+      return settledResults;
+    }
+
+    if (statusFilter === 'lost') {
+      return settledResults.filter((item) => ['lost', 'cancelled'].includes(item.status.toLowerCase()));
+    }
+
+    return settledResults.filter((item) => item.status.toLowerCase() === statusFilter);
+  }, [settledResults, statusFilter]);
+
+  const handleOpenDetail = async (bet: BetItem) => {
+    setSelectedBet(bet);
+    setDetailError('');
+    setIsLoadingDetail(true);
+
+    try {
+      const detail = await betService.getMyBetDetail(bet.betId);
+      setSelectedBet(detail);
+    } catch (error) {
+      setDetailError(getApiErrorMessage(error, 'Unable to load bet detail.'));
+    } finally {
+      setIsLoadingDetail(false);
+    }
+  };
+
+  const closeDetail = () => {
+    setSelectedBet(null);
+    setDetailError('');
+    setIsLoadingDetail(false);
+  };
 
   return (
     <div className="bg-surface min-h-screen py-12">
@@ -136,58 +214,99 @@ const ResultTrackingPage = () => {
             </div>
 
             <div className="rounded-3xl border border-outline-variant bg-white p-6 shadow-sm">
-              <div className="mb-6 flex items-center justify-between gap-4">
+              <div className="mb-6 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
                 <div>
                   <p className="text-xs font-semibold uppercase tracking-[0.2em] text-secondary">Tracked results</p>
                   <h2 className="mt-2 text-2xl font-bold text-primary">Recent race settlements</h2>
                 </div>
-                <div className="inline-flex items-center gap-2 rounded-full bg-surface-container px-4 py-2 text-sm font-semibold text-on-surface-variant">
-                  <Clock3 className="w-4 h-4" /> Updated now
+                <div className="flex flex-wrap gap-2">
+                  {[
+                    { label: 'All', value: 'all' },
+                    { label: 'Won', value: 'won' },
+                    { label: 'Lost', value: 'lost' },
+                  ].map((filter) => (
+                    <button
+                      key={filter.value}
+                      type="button"
+                      onClick={() => setStatusFilter(filter.value as StatusFilter)}
+                      className={`rounded-lg px-4 py-2 text-xs font-bold uppercase tracking-[0.14em] transition ${
+                        statusFilter === filter.value
+                          ? 'bg-primary text-on-primary'
+                          : 'border border-outline-variant bg-surface-container text-on-surface-variant hover:border-primary hover:text-primary'
+                      }`}
+                    >
+                      {filter.label}
+                    </button>
+                  ))}
                 </div>
               </div>
-              <div className="overflow-x-auto">
-                <table className="w-full text-left">
-                  <thead className="bg-surface-container border-b border-outline-variant">
-                    <tr>
-                      <th className="px-6 py-4 text-label-sm text-outline uppercase tracking-wider">Race</th>
-                      <th className="px-6 py-4 text-label-sm text-outline uppercase tracking-wider">Selection</th>
-                      <th className="px-6 py-4 text-label-sm text-outline uppercase tracking-wider text-right">Odds</th>
-                      <th className="px-6 py-4 text-label-sm text-outline uppercase tracking-wider text-right">Payout</th>
-                      <th className="px-6 py-4 text-label-sm text-outline uppercase tracking-wider text-right">Prediction</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-outline-variant">
-                    {isLoading && (
-                      <tr>
-                        <td colSpan={5} className="px-6 py-8 text-center text-body-sm font-semibold text-on-surface-variant">
-                          Loading prediction results...
-                        </td>
-                      </tr>
-                    )}
+              <div className="space-y-4">
+                {isLoading && (
+                  <div className="rounded-2xl border border-outline-variant bg-surface-container p-6 text-center text-body-sm font-semibold text-on-surface-variant">
+                    Loading prediction results...
+                  </div>
+                )}
 
-                    {!isLoading && settledResults.map((item) => (
-                      <tr key={item.betId} className="hover:bg-surface-container-lowest transition-colors">
-                        <td className="px-6 py-4 text-body-sm font-semibold text-primary">{item.raceName}</td>
-                        <td className="px-6 py-4 text-body-sm text-on-surface-variant">{item.horseName}</td>
-                        <td className="px-6 py-4 text-right text-body-sm font-mono text-on-surface-variant">{item.odds || '-'}</td>
-                        <td className="px-6 py-4 text-right text-body-sm font-semibold text-secondary">{formatPoints(item.potentialPayout)} pts</td>
-                        <td className="px-6 py-4 text-right">
-                          <span className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] ${statusClassName(item.status)}`}>
-                            {item.status}
-                          </span>
-                        </td>
-                      </tr>
-                    ))}
+                {!isLoading && filteredSettledResults.map((item) => {
+                  const netResult = getNetResult(item);
 
-                    {!isLoading && settledResults.length === 0 && (
-                      <tr>
-                        <td colSpan={5} className="px-6 py-8 text-center text-body-sm font-semibold text-on-surface-variant">
-                          No prediction results found.
-                        </td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
+                  return (
+                    <article key={item.betId} className="rounded-2xl border border-outline-variant bg-surface-container-low p-5">
+                      <div className="grid gap-5 lg:grid-cols-[1.2fr_1fr_auto] lg:items-center">
+                        <div>
+                          <div className="flex flex-wrap items-center gap-3">
+                            <h3 className="text-lg font-bold text-primary">{item.raceName}</h3>
+                            <span className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] ${statusClassName(item.status)}`}>
+                              {item.status}
+                            </span>
+                          </div>
+                          <p className="mt-2 text-base font-bold text-on-surface">{item.horseName}</p>
+                          <p className="mt-1 text-sm text-on-surface-variant">{item.jockeyName ?? '-'}</p>
+                          <div className="mt-4 flex flex-wrap gap-x-5 gap-y-2 text-xs font-semibold text-on-surface-variant">
+                            <span>Placed {formatDate(item.createdAt)}</span>
+                            <span>Settled {formatDate(item.settledAt)}</span>
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-2">
+                          <div className="rounded-xl bg-surface-container px-4 py-3">
+                            <p className="text-xs uppercase tracking-[0.14em] text-outline">Stake</p>
+                            <p className="mt-1 text-sm font-bold text-on-surface">{formatPoints(item.amount)} pts</p>
+                          </div>
+                          <div className="rounded-xl bg-surface-container px-4 py-3">
+                            <p className="text-xs uppercase tracking-[0.14em] text-outline">Odds</p>
+                            <p className="mt-1 text-sm font-bold text-on-surface">{item.odds || '-'}</p>
+                          </div>
+                          <div className="rounded-xl bg-surface-container px-4 py-3">
+                            <p className="text-xs uppercase tracking-[0.14em] text-outline">Reward</p>
+                            <p className="mt-1 text-sm font-bold text-secondary">{formatPoints(item.potentialPayout)} pts</p>
+                          </div>
+                          <div className="rounded-xl bg-surface-container px-4 py-3">
+                            <p className="text-xs uppercase tracking-[0.14em] text-outline">Net</p>
+                            <p className={`mt-1 text-sm font-bold ${netResult >= 0 ? 'text-secondary' : 'text-error'}`}>
+                              {netResult >= 0 ? '+' : ''}{formatPoints(netResult)} pts
+                            </p>
+                          </div>
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={() => void handleOpenDetail(item)}
+                          className="inline-flex h-11 items-center justify-center gap-2 rounded-lg border border-primary/20 bg-primary/10 px-4 text-xs font-bold text-primary transition hover:bg-primary/15"
+                        >
+                          <Eye className="h-4 w-4" />
+                          Details
+                        </button>
+                      </div>
+                    </article>
+                  );
+                })}
+
+                {!isLoading && filteredSettledResults.length === 0 && (
+                  <div className="rounded-2xl border border-outline-variant bg-surface-container p-6 text-center text-body-sm font-semibold text-on-surface-variant">
+                    No prediction results found.
+                  </div>
+                )}
               </div>
             </div>
           </section>
@@ -233,6 +352,63 @@ const ResultTrackingPage = () => {
           </aside>
         </div>
       </div>
+
+      {selectedBet && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-scrim/50 px-4 py-6">
+          <section className="max-h-[90vh] w-full max-w-[760px] overflow-y-auto rounded-3xl border border-outline-variant bg-white p-6 shadow-xl">
+            <div className="mb-6 flex items-start justify-between gap-4">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-secondary">Bet detail</p>
+                <h2 className="mt-2 text-2xl font-bold text-primary">{selectedBet.raceName}</h2>
+                <p className="mt-1 text-sm font-semibold text-on-surface-variant">{selectedBet.horseName} - {selectedBet.jockeyName ?? 'Jockey'}</p>
+              </div>
+              <button
+                type="button"
+                onClick={closeDetail}
+                className="rounded-full border border-outline-variant p-2 text-on-surface-variant transition hover:border-primary hover:text-primary"
+                aria-label="Close bet detail"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            {detailError && (
+              <div className="mb-5 rounded-md border border-error/30 bg-error-container/20 px-4 py-3 text-sm font-semibold text-error">
+                {detailError}
+              </div>
+            )}
+
+            {isLoadingDetail ? (
+              <div className="flex items-center justify-center gap-3 rounded-2xl border border-outline-variant bg-surface-container p-8 text-sm font-semibold text-on-surface-variant">
+                <Loader2 className="h-5 w-5 animate-spin" />
+                Loading bet detail...
+              </div>
+            ) : (
+              <div className="grid gap-4 sm:grid-cols-2">
+                {[
+                  { label: 'Ticket ID', value: selectedBet.betId },
+                  { label: 'Status', value: selectedBet.status },
+                  { label: 'Race name', value: selectedBet.raceName },
+                  { label: 'Race number', value: detailValue(selectedBet.raceNumber) },
+                  { label: 'Horse name', value: selectedBet.horseName },
+                  { label: 'Jockey name', value: selectedBet.jockeyName ?? '-' },
+                  { label: 'Stake', value: `${formatPoints(selectedBet.amount)} pts` },
+                  { label: 'Reward points', value: `${formatPoints(selectedBet.potentialPayout)} pts` },
+                  { label: 'Odds', value: selectedBet.odds || '-' },
+                  { label: 'Placed at', value: formatDate(selectedBet.createdAt) },
+                  { label: 'Settled at', value: formatDate(selectedBet.settledAt) },
+                  { label: 'Prediction closes', value: formatDate(selectedBet.predictionClosesAt) },
+                ].map((field) => (
+                  <div key={field.label} className="rounded-2xl border border-outline-variant bg-surface-container p-4">
+                    <p className="text-xs font-semibold uppercase tracking-[0.16em] text-outline">{field.label}</p>
+                    <p className="mt-2 break-words text-sm font-bold text-on-surface">{field.value}</p>
+                  </div>
+                ))}
+              </div>
+            )}
+          </section>
+        </div>
+      )}
     </div>
   );
 };
