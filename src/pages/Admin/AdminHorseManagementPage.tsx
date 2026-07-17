@@ -49,6 +49,7 @@ type HorseOwner = {
 };
 
 const fallbackHorseImage = 'https://picsum.photos/300/300?random=horse-admin';
+const horseStatusOptions = ['active', 'inactive', 'retired'] as const;
 
 const emptyFormData: AdminHorseFormData = {
   ownerId: '',
@@ -190,6 +191,8 @@ const isActiveHorseStatus = (status: string) => {
   return value === 'active' || value.includes('available');
 };
 
+const isInactiveHorseStatus = (status?: string | null) => normalizeStatus(status) === 'inactive';
+
 const validateHorseForm = (data: AdminHorseFormData, isCreateMode: boolean) => {
   const errors: HorseFormErrors = {};
 
@@ -224,6 +227,10 @@ const validateHorseForm = (data: AdminHorseFormData, isCreateMode: boolean) => {
 
     if (Number(data.totalWins) < 0) {
       errors.totalWins = 'Total wins cannot be negative.';
+    }
+
+    if (!horseStatusOptions.includes(data.status as typeof horseStatusOptions[number])) {
+      errors.status = 'Status must be active, inactive, or retired.';
     }
   }
 
@@ -334,9 +341,9 @@ const deleteAdminHorse = async (horseId: number) => {
   });
 };
 
-const updateHorseRequestStatus = async (horseId: number, status: 'active' | 'declined') => {
+const updateHorseRequestStatus = async (horseId: number, status: 'active' | 'inactive') => {
   await apiClient.patch(`/api/horses/admin/${horseId}/status`, {
-    status: status === 'active' ? 'active' : 'inactive',
+    status,
   });
 };
 
@@ -359,6 +366,7 @@ const AdminHorseManagementPage = () => {
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [selectedHorse, setSelectedHorse] = useState<Horse | null>(null);
   const [viewingHorse, setViewingHorse] = useState<Horse | null>(null);
+  const [approvingHorse, setApprovingHorse] = useState<Horse | null>(null);
   const [formData, setFormData] = useState<AdminHorseFormData>(emptyFormData);
   const [formErrors, setFormErrors] = useState<HorseFormErrors>({});
 
@@ -456,14 +464,14 @@ const AdminHorseManagementPage = () => {
     });
   }, [horses, rankFilter, searchTerm, statusFilter]);
 
-  const filteredHorseRequests = useMemo(
-    () => filteredHorses.filter((horse) => isHorseRequestStatus(horse.status)),
+  const filteredInactiveHorses = useMemo(
+    () => filteredHorses.filter((horse) => isInactiveHorseStatus(horse.status)),
     [filteredHorses],
   );
   const totalWins = horses.reduce((total, horse) => total + Number(horse.totalWins || 0), 0);
   const topPoints = horses.reduce((max, horse) => Math.max(max, Number(horse.rankingPoints || 0)), 0);
   const activeHorseCount = horses.filter((horse) => isActiveHorseStatus(horse.status)).length;
-  const pendingHorseCount = horses.filter((horse) => isHorseRequestStatus(horse.status)).length;
+  const inactiveHorseCount = horses.filter((horse) => isInactiveHorseStatus(horse.status)).length;
 
   const refreshAfterMutation = async () => {
     await Promise.all([
@@ -581,14 +589,7 @@ const AdminHorseManagementPage = () => {
     }
   };
 
-  const handleRequestAction = async (horse: Horse, status: 'active' | 'declined') => {
-    const actionLabel = status === 'active' ? 'accept' : 'decline';
-    const confirmed = window.confirm(`${formatStatusLabel(actionLabel)} request for "${horse.name}"?`);
-
-    if (!confirmed) {
-      return;
-    }
-
+  const handleRequestAction = async (horse: Horse, status: 'active' | 'inactive') => {
     const horseId = getHorseKey(horse);
 
     setProcessingHorseId(horseId);
@@ -598,8 +599,9 @@ const AdminHorseManagementPage = () => {
       await updateHorseRequestStatus(horseId, status);
       setNotice({
         tone: 'success',
-        text: status === 'active' ? 'Horse request accepted successfully.' : 'Horse request declined successfully.',
+        text: status === 'active' ? 'Horse activated successfully.' : 'Horse kept inactive successfully.',
       });
+      setApprovingHorse(null);
 
       if (viewingHorse && getHorseKey(viewingHorse) === horseId) {
         setViewingHorse({ ...viewingHorse, status });
@@ -607,7 +609,7 @@ const AdminHorseManagementPage = () => {
 
       await refreshAfterMutation();
     } catch (error) {
-      setNotice({ tone: 'error', text: getApiErrorMessage(error, 'Unable to process horse request.') });
+      setNotice({ tone: 'error', text: getApiErrorMessage(error, 'Unable to process inactive horse.') });
     } finally {
       setProcessingHorseId(null);
     }
@@ -628,7 +630,7 @@ const AdminHorseManagementPage = () => {
 
             <div className="grid w-full gap-3 sm:grid-cols-2 xl:w-[760px] xl:flex-none xl:grid-cols-5">
               <MetricCard icon={<Trophy className="h-4 w-4" />} label="Total" value={isLoading ? '...' : String(horses.length).padStart(2, '0')} />
-              <MetricCard icon={<Clock3 className="h-4 w-4" />} label="Pending" value={isLoading ? '...' : String(pendingHorseCount).padStart(2, '0')} />
+              <MetricCard icon={<Clock3 className="h-4 w-4" />} label="Inactive" value={isLoading ? '...' : String(inactiveHorseCount).padStart(2, '0')} />
               <MetricCard icon={<ShieldCheck className="h-4 w-4" />} label="Active" value={isLoading ? '...' : String(activeHorseCount).padStart(2, '0')} />
               <MetricCard icon={<Award className="h-4 w-4" />} label="Wins" value={isLoading ? '...' : formatNumber(totalWins)} />
               <MetricCard icon={<Gauge className="h-4 w-4" />} label="Top Points" value={isLoading ? '...' : formatNumber(topPoints)} />
@@ -684,7 +686,7 @@ const AdminHorseManagementPage = () => {
               All horses
             </TabButton>
             <TabButton active={activeTab === 'requests'} onClick={() => setActiveTab('requests')}>
-              Requests ({pendingHorseCount})
+              Inactive ({inactiveHorseCount})
             </TabButton>
             <TabButton active={activeTab === 'ranking'} onClick={() => setActiveTab('ranking')}>
               Ranking
@@ -713,12 +715,12 @@ const AdminHorseManagementPage = () => {
           />
         ) : activeTab === 'requests' ? (
           <HorseRequestsTable
-            horses={filteredHorseRequests}
+            horses={filteredInactiveHorses}
             isLoading={isLoading}
             processingHorseId={processingHorseId}
             onView={(horse) => void handleViewHorse(horse)}
-            onAccept={(horse) => void handleRequestAction(horse, 'active')}
-            onDecline={(horse) => void handleRequestAction(horse, 'declined')}
+            onAccept={setApprovingHorse}
+            onDecline={(horse) => void handleRequestAction(horse, 'inactive')}
           />
         ) : (
           <RankingTable rankedHorses={rankedHorses} isLoading={isRankingLoading} />
@@ -738,6 +740,15 @@ const AdminHorseManagementPage = () => {
           onSubmit={handleSubmit}
           onChange={handleFieldChange}
           onReloadOwners={() => void loadHorseOwners()}
+        />
+      )}
+
+      {approvingHorse && (
+        <HorseApprovalModal
+          horse={approvingHorse}
+          isProcessing={processingHorseId === getHorseKey(approvingHorse)}
+          onClose={() => setApprovingHorse(null)}
+          onConfirm={() => void handleRequestAction(approvingHorse, 'active')}
         />
       )}
 
@@ -901,7 +912,7 @@ const HorseRequestsTable = ({
       <table className="w-full min-w-[1080px] text-left">
         <thead className="border-b border-outline-variant bg-surface-container">
           <tr>
-            <th className="px-5 py-4 text-label-sm uppercase tracking-wider text-outline">Request</th>
+            <th className="px-5 py-4 text-label-sm uppercase tracking-wider text-outline">Inactive</th>
             <th className="px-5 py-4 text-label-sm uppercase tracking-wider text-outline">Horse</th>
             <th className="px-5 py-4 text-label-sm uppercase tracking-wider text-outline">Physical</th>
             <th className="px-5 py-4 text-label-sm uppercase tracking-wider text-outline">Rank</th>
@@ -959,10 +970,10 @@ const HorseRequestsTable = ({
                     <IconButton label={`View details for ${horse.name}`} onClick={() => onView(horse)} disabled={isProcessing}>
                       <Eye className="h-4 w-4" />
                     </IconButton>
-                    <IconButton label={`Accept ${horse.name}`} onClick={() => onAccept(horse)} disabled={isProcessing} success>
+                    <IconButton label={`Activate ${horse.name}`} onClick={() => onAccept(horse)} disabled={isProcessing} success>
                       <CheckCircle2 className="h-4 w-4" />
                     </IconButton>
-                    <IconButton label={`Decline ${horse.name}`} onClick={() => onDecline(horse)} disabled={isProcessing} danger>
+                    <IconButton label={`Keep ${horse.name} inactive`} onClick={() => onDecline(horse)} disabled={isProcessing} danger>
                       <XCircle className="h-4 w-4" />
                     </IconButton>
                   </div>
@@ -976,8 +987,8 @@ const HorseRequestsTable = ({
 
     {(isLoading || horses.length === 0) && (
       <EmptyState
-        title={isLoading ? 'Loading horse requests' : 'No horse requests'}
-        description={isLoading ? 'Fetching submitted horse creation requests.' : 'No pending horse creation request matches the current filters.'}
+        title={isLoading ? 'Loading inactive horses' : 'No inactive horses'}
+        description={isLoading ? 'Fetching inactive horse records.' : 'No inactive horse matches the current filters.'}
       />
     )}
   </div>
@@ -1142,9 +1153,15 @@ const HorseFormModal = ({
               </Field>
             </>
           )}
-          <Field label="Status" error={formErrors.status}>
-            <input type="text" value={formData.status} onChange={(event) => onChange('status', event.target.value)} className={inputClassName} />
-          </Field>
+          {selectedHorse && (
+            <Field label="Status" error={formErrors.status}>
+              <select value={formData.status} onChange={(event) => onChange('status', event.target.value)} className={inputClassName}>
+                {horseStatusOptions.map((status) => (
+                  <option key={status} value={status}>{formatStatusLabel(status)}</option>
+                ))}
+              </select>
+            </Field>
+          )}
           <div className="md:col-span-2">
             <Field label="Avatar URL" error={formErrors.avatarUrl}>
               <input type="url" value={formData.avatarUrl} onChange={(event) => onChange('avatarUrl', event.target.value)} className={inputClassName} />
@@ -1170,6 +1187,68 @@ const HorseFormModal = ({
         </div>
       </div>
     </form>
+  </Modal>
+);
+
+const HorseApprovalModal = ({
+  horse,
+  isProcessing,
+  onClose,
+  onConfirm,
+}: {
+  horse: Horse;
+  isProcessing: boolean;
+  onClose: () => void;
+  onConfirm: () => void;
+}) => (
+  <Modal title="Approve inactive horse" subtitle={getDisplayId(horse)} onClose={onClose}>
+    <div className="p-6">
+      <div className="mb-6 grid gap-5 sm:grid-cols-[120px_1fr]">
+        <img
+          src={getHorseImage(horse)}
+          alt={horse.name}
+          onError={(event) => {
+            event.currentTarget.src = fallbackHorseImage;
+          }}
+          className="h-28 w-28 rounded-md border border-outline-variant object-cover"
+        />
+        <div className="space-y-3">
+          <div>
+            <p className="text-label-sm font-bold uppercase tracking-wider text-outline">Horse</p>
+            <p className="mt-1 text-headline-sm font-extrabold text-primary">{horse.name}</p>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-3">
+            <DetailItem icon={<Award className="h-4 w-4" />} label="Breed" value={horse.breed} />
+            <DetailItem icon={<Weight className="h-4 w-4" />} label="Weight" value={`${horse.weightKg} kg`} />
+            <DetailItem icon={<ShieldCheck className="h-4 w-4" />} label="Status" value={horse.status} />
+          </div>
+        </div>
+      </div>
+
+      <div className="rounded-md border border-secondary/30 bg-secondary-container/20 px-4 py-3 text-body-sm font-semibold text-secondary">
+        Approving this horse will change its status from inactive to active.
+      </div>
+
+      <div className="mt-6 flex flex-col-reverse gap-3 border-t border-outline-variant pt-5 sm:flex-row sm:justify-end">
+        <button
+          type="button"
+          onClick={onClose}
+          disabled={isProcessing}
+          className="rounded-md border border-outline-variant px-6 py-3 text-body-sm font-bold text-on-surface-variant transition-colors hover:border-primary hover:text-primary disabled:cursor-not-allowed disabled:opacity-60"
+        >
+          Cancel
+        </button>
+        <button
+          type="button"
+          onClick={onConfirm}
+          disabled={isProcessing}
+          className="inline-flex items-center justify-center gap-2 rounded-md bg-secondary px-6 py-3 text-body-sm font-bold text-on-secondary transition-all hover:bg-opacity-90 disabled:cursor-not-allowed disabled:opacity-70"
+        >
+          <CheckCircle2 className="h-4 w-4" />
+          {isProcessing ? 'Approving...' : 'Approve'}
+        </button>
+      </div>
+    </div>
   </Modal>
 );
 

@@ -12,8 +12,24 @@ const normalizeStatus = (value?: string) => value?.trim().toLowerCase() ?? '';
 
 const isActiveAssignmentStatus = (value?: string) => ['pending', 'accepted', 'confirmed'].includes(normalizeStatus(value));
 
+const isPendingInvitationExpired = (assignment: JockeyAssignmentItem) => {
+  if (normalizeStatus(assignment.status) !== 'pending' || !assignment.responseDeadline) {
+    return false;
+  }
+
+  const deadlineTime = new Date(assignment.responseDeadline).getTime();
+
+  return Number.isFinite(deadlineTime) && deadlineTime <= Date.now();
+};
+
+const getEffectiveAssignmentStatus = (assignment: JockeyAssignmentItem) =>
+  isPendingInvitationExpired(assignment) ? 'expired' : normalizeStatus(assignment.status);
+
 const hasAssignedJockey = (registration: RaceRegistrationItem) =>
   Boolean(registration.jockeyId || registration.jockeyFullName);
+
+const isOwnerConfirmed = (registration: RaceRegistrationItem) =>
+  normalizeStatus(registration.ownerConfirmationStatus) === 'confirmed';
 
 const formatDateTime = (value?: string) => {
   if (!value) {
@@ -82,9 +98,9 @@ const JockeyAssignmentsPage = () => {
     void loadAssignments();
   }, []);
 
-  const pendingAssignments = assignments.filter((item) => normalizeStatus(item.status) === 'pending').length;
-  const acceptedAssignments = assignments.filter((item) => normalizeStatus(item.status) === 'accepted').length;
-  const confirmedAssignments = assignments.filter((item) => normalizeStatus(item.status) === 'confirmed').length;
+  const pendingAssignments = assignments.filter((item) => getEffectiveAssignmentStatus(item) === 'pending').length;
+  const acceptedAssignments = assignments.filter((item) => getEffectiveAssignmentStatus(item) === 'accepted').length;
+  const confirmedAssignments = assignments.filter((item) => getEffectiveAssignmentStatus(item) === 'confirmed').length;
 
   const invitableRegistrations = useMemo(
     () =>
@@ -93,14 +109,14 @@ const JockeyAssignmentsPage = () => {
         const status = normalizeStatus(registration.status);
         const hasActiveInvitation = assignments.some((assignment) =>
           (assignment.regId ?? assignment.registrationId) === registrationId &&
-          isActiveAssignmentStatus(assignment.status),
+          isActiveAssignmentStatus(getEffectiveAssignmentStatus(assignment)),
         );
 
-        if (status !== 'approved') {
+        if (status !== 'pending') {
           return false;
         }
 
-        if (hasAssignedJockey(registration)) {
+        if (hasAssignedJockey(registration) || isOwnerConfirmed(registration)) {
           return false;
         }
 
@@ -119,7 +135,7 @@ const JockeyAssignmentsPage = () => {
       const hasActiveInvitation = assignments.some((assignment) =>
         (assignment.regId ?? assignment.registrationId) === registrationId &&
         assignment.jockeyId === jockey.jockeyId &&
-        isActiveAssignmentStatus(assignment.status),
+        isActiveAssignmentStatus(getEffectiveAssignmentStatus(assignment)),
       );
 
       return !hasActiveInvitation;
@@ -231,7 +247,7 @@ const JockeyAssignmentsPage = () => {
               <h1 className="font-display mt-2 text-headline-lg font-extrabold text-primary">Invitation workspace</h1>
               <p className="mt-2 max-w-2xl text-body-sm text-on-surface-variant">
                 {isOwner
-                  ? 'Invite a jockey after admin approves the race registration.'
+                  ? 'Invite a jockey while the registration is pending, then confirm after the jockey accepts.'
                   : 'Review your invitations and respond from one focused queue.'}
               </p>
             </div>
@@ -263,9 +279,9 @@ const JockeyAssignmentsPage = () => {
             <div className="mb-5 flex items-center gap-3">
               <Send className="h-5 w-5 text-secondary" />
               <div>
-                <h2 className="font-display text-title-large font-bold text-primary">Approved registrations ready for invitation</h2>
+                <h2 className="font-display text-title-large font-bold text-primary">Pending registrations ready for invitation</h2>
                 <p className="mt-1 text-body-sm text-on-surface-variant">
-                  Select an approved registration without a jockey, then invite an available jockey.
+                  Select a pending registration without a jockey, then invite an available jockey.
                 </p>
               </div>
             </div>
@@ -273,13 +289,13 @@ const JockeyAssignmentsPage = () => {
             {isLoading ? (
               <EmptyState
                 title="Loading registrations"
-                description="Fetching approved registrations and available jockeys."
+                description="Fetching pending registrations and available jockeys."
                 icon={<Search className="h-5 w-5" />}
               />
             ) : invitableRegistrations.length === 0 ? (
               <EmptyState
-                title="No approved registration is waiting for a jockey"
-                description="Once admin approves a registration, it will appear here for jockey invitation."
+                title="No pending registration is waiting for a jockey"
+                description="Send a race registration first, or finish the current invitation flow from the Invitations queue."
                 icon={<Send className="h-5 w-5" />}
               />
             ) : (
@@ -412,13 +428,20 @@ const JockeyAssignmentsPage = () => {
                     <tr><td colSpan={5} className="px-4 py-8 text-center text-body-sm text-on-surface-variant">Loading invitations...</td></tr>
                   ) : filteredAssignments.map((item) => {
                     const id = item.assignmentId ?? item.id ?? '';
-                    const status = normalizeStatus(item.status);
+                    const status = getEffectiveAssignmentStatus(item);
                     return (
                       <tr key={id}>
                         <td className="px-4 py-4 text-body-sm font-semibold text-primary">{item.raceName ?? `Race ${item.raceId ?? '-'}`}</td>
                         <td className="px-4 py-4 text-body-sm text-on-surface-variant">{item.horseName ?? `Horse ${item.horseId ?? '-'}`}</td>
                         <td className="px-4 py-4 text-body-sm text-on-surface-variant">{item.jockeyFullName ?? `Jockey ${item.jockeyId ?? '-'}`}</td>
-                        <td className="px-4 py-4 text-body-sm text-on-surface-variant">{item.status ?? '-'}</td>
+                        <td className="px-4 py-4 text-body-sm text-on-surface-variant">
+                          {status || item.status || '-'}
+                          {item.responseDeadline && (
+                            <span className="mt-1 block text-[11px] text-outline">
+                              Deadline {formatDateTime(item.responseDeadline)}
+                            </span>
+                          )}
+                        </td>
                         <td className="px-4 py-4">
                           <div className="flex justify-end gap-2">
                             {isJockey && (

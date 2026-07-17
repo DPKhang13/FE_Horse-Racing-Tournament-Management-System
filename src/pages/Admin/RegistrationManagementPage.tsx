@@ -99,13 +99,31 @@ const isTerminalRegistrationStatus = (status?: string | null) => {
   return ['approved', 'rejected', 'cancelled', 'canceled', 'deleted'].includes(normalized);
 };
 
+const hasAssignedJockey = (registration: RegistrationResponse) =>
+  Boolean(registration.jockeyId || registration.jockeyFullName);
+
+const isOwnerConfirmed = (registration: RegistrationResponse) =>
+  normalizeStatus(registration.ownerConfirmationStatus) === 'confirmed';
+
 const canApproveRegistration = (registration: RegistrationResponse) =>
-  normalizeStatus(registration.status) === 'pending';
+  normalizeStatus(registration.status) === 'pending' &&
+  hasAssignedJockey(registration) &&
+  isOwnerConfirmed(registration);
 
 const getApprovalBlockReason = (registration: RegistrationResponse) => {
-  return canApproveRegistration(registration)
-    ? ''
-    : 'Only pending registrations can be approved.';
+  if (canApproveRegistration(registration)) {
+    return '';
+  }
+
+  if (normalizeStatus(registration.status) !== 'pending') {
+    return 'Only pending registrations can be approved.';
+  }
+
+  if (!hasAssignedJockey(registration)) {
+    return 'Waiting for a jockey to be assigned.';
+  }
+
+  return 'Waiting for owner confirmation after jockey acceptance.';
 };
 
 const getHorseImage = (registration: RegistrationResponse) => registration.horseAvatarUrl || fallbackHorseImage;
@@ -367,7 +385,7 @@ const RegistrationManagementPage = () => {
               <p className="mb-3 text-label-sm font-bold uppercase tracking-[0.18em] text-secondary">Admin Race Registration</p>
               <h1 className="font-display mb-2 text-headline-lg font-extrabold text-primary">Race Registration Management</h1>
               <p className="max-w-2xl text-body-md text-on-surface-variant">
-                Review pending race entries and approve them before they appear in race lists.
+                Review pending race entries after jockey acceptance and owner confirmation.
               </p>
             </div>
 

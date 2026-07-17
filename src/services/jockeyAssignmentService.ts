@@ -10,6 +10,7 @@ export type JockeyAssignmentItem = {
   gateNumber?: number;
   status?: string;
   invitedAt?: string;
+  responseDeadline?: string;
   respondedAt?: string;
   cancelledAt?: string;
   expiredAt?: string;
