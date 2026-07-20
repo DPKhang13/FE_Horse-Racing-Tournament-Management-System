@@ -9,10 +9,13 @@ export interface PredictionOption {
 export interface OpenRacePrediction {
   id: number;
   raceName: string;
+  raceNumber?: number;
   tournamentName: string;
   date: string;
+  scheduledAt?: string;
   track: string;
   closesAt: string;
+  distanceM?: number;
   grade: string;
   surface: string;
   favoriteHorse: string;

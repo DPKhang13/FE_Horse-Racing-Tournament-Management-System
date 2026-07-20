@@ -77,10 +77,13 @@ const mapOpenRace = (raw: RawObject): OpenRacePrediction => {
   return {
     id: asNumber(raw.raceId ?? raw.id),
     raceName: asString(raw.raceName ?? raw.name, 'Race'),
+    raceNumber: asNumber(raw.raceNumber),
     tournamentName: asString(raw.tournamentName, 'Tournament'),
     date: formatDateLabel(raw.scheduledAt),
+    scheduledAt: asString(raw.scheduledAt),
     track: asString(raw.location ?? raw.track, '-'),
     closesAt: asString(raw.predictionClosesAt ?? raw.scheduledAt, new Date().toISOString()),
+    distanceM: asNumber(raw.distanceM ?? raw.distance),
     grade: asString(raw.rankGroup ?? raw.raceNumber, '-'),
     surface: asString(raw.trackType, '-'),
     favoriteHorse: favorite?.horseName ?? options[0]?.horseName ?? '-',
@@ -120,22 +123,6 @@ const readActiveBetCount = (raw: unknown) => {
   return asNumber((summaryCount as RawObject).activeBetCount);
 };
 
-const readOpenPredictionRaces = (raw: unknown) => {
-  if (!raw || typeof raw !== 'object') {
-    return [];
-  }
-
-  const data = raw as RawObject;
-  const openPredictionRaces = data.openPredictionRaces;
-
-  if (!Array.isArray(openPredictionRaces)) {
-    return [];
-  }
-
-  return openPredictionRaces
-    .map((item) => mapOpenRace(item as RawObject));
-};
-
 export const predictionService = {
   async getOpenPredictionRaces(): Promise<OpenRacePrediction[]> {
     const response = await apiClient.get('/api/bets/open-predictions');
@@ -143,26 +130,14 @@ export const predictionService = {
   },
 
   async getPredictionOverview(): Promise<PredictionOverview> {
-    const [openRacesResult, dashboardResult] = await Promise.allSettled([
+    const [openRaces, dashboardResponse] = await Promise.all([
       this.getOpenPredictionRaces(),
       apiClient.get('/api/bets/dashboard'),
     ]);
-
-    const dashboardData = dashboardResult.status === 'fulfilled'
-      ? unwrapApiData<RawObject>(dashboardResult.value)
-      : undefined;
-    const directOpenRaces = openRacesResult.status === 'fulfilled' ? openRacesResult.value : [];
-    const dashboardOpenRaces = readOpenPredictionRaces(dashboardData);
-
-    if (
-      openRacesResult.status === 'rejected' &&
-      dashboardResult.status === 'rejected'
-    ) {
-      throw openRacesResult.reason;
-    }
+    const dashboardData = unwrapApiData<RawObject>(dashboardResponse);
 
     return {
-      openRaces: directOpenRaces.length > 0 ? directOpenRaces : dashboardOpenRaces,
+      openRaces,
       activeBetCount: readActiveBetCount(dashboardData),
       walletBalance: readWalletBalance(dashboardData),
     };

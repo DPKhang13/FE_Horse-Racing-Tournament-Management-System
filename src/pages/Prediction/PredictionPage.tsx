@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState, type FormEvent } from 'react';
-import { Clock3, Ticket, TrendingUp, X } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
+import { Clock3, Loader2, Ticket, TrendingUp, X } from 'lucide-react';
 import { getApiErrorMessage } from '../../services/apiClient';
 import { betService, type BetItem } from '../../services/betService';
 import { dashboardService } from '../../services/dashboardService';
@@ -49,9 +49,26 @@ const payoutLabel = (status: string) => {
   return status.toLowerCase() === 'pending' ? 'potential payout' : 'payout';
 };
 
+const sortBetsByPlacedAt = (bets: BetItem[]) => (
+  [...bets].sort((first, second) => {
+    const firstPlacedAt = first.createdAt ? new Date(first.createdAt).getTime() : 0;
+    const secondPlacedAt = second.createdAt ? new Date(second.createdAt).getTime() : 0;
+
+    if (firstPlacedAt !== secondPlacedAt) {
+      return secondPlacedAt - firstPlacedAt;
+    }
+
+    return second.betId - first.betId;
+  })
+);
+
 const PredictionPage = () => {
+  const betDetailRequestId = useRef(0);
   const [bets, setBets] = useState<BetItem[]>([]);
   const [predictionHistory, setPredictionHistory] = useState<BetItem[]>([]);
+  const [selectedActiveBet, setSelectedActiveBet] = useState<BetItem | null>(null);
+  const [isLoadingBetDetail, setIsLoadingBetDetail] = useState(false);
+  const [betDetailError, setBetDetailError] = useState('');
   const [openRacePredictions, setOpenRacePredictions] = useState<OpenRacePrediction[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -86,7 +103,7 @@ const PredictionPage = () => {
         setSelectedRaceId(nextOpenRaces[0]?.id ?? 0);
         setSelectedHorseId(nextOpenRaces[0]?.options[0]?.horseId ?? 0);
         setWalletBalance(dashboard.wallet?.pointBalance ?? overview.walletBalance ?? 0);
-        setBets(dashboard.activeBets);
+        setBets(sortBetsByPlacedAt(allBets.filter((bet) => bet.status.toLowerCase() === 'pending')));
         setPredictionHistory(allBets);
       } catch (error) {
         if (isMounted) {
@@ -148,6 +165,37 @@ const PredictionPage = () => {
     setStake('100');
     setFormError('');
     setIsPredictionModalOpen(true);
+  };
+
+  const openBetDetail = async (bet: BetItem) => {
+    const requestId = betDetailRequestId.current + 1;
+    betDetailRequestId.current = requestId;
+    setSelectedActiveBet(bet);
+    setIsLoadingBetDetail(true);
+    setBetDetailError('');
+
+    try {
+      const detail = await betService.getMyBetDetail(bet.betId);
+
+      if (betDetailRequestId.current === requestId) {
+        setSelectedActiveBet(detail);
+      }
+    } catch (error) {
+      if (betDetailRequestId.current === requestId) {
+        setBetDetailError(getApiErrorMessage(error, 'Unable to load prediction detail.'));
+      }
+    } finally {
+      if (betDetailRequestId.current === requestId) {
+        setIsLoadingBetDetail(false);
+      }
+    }
+  };
+
+  const closeBetDetail = () => {
+    betDetailRequestId.current += 1;
+    setSelectedActiveBet(null);
+    setIsLoadingBetDetail(false);
+    setBetDetailError('');
   };
 
   const handleCreatePrediction = async (event: FormEvent<HTMLFormElement>) => {
@@ -308,7 +356,13 @@ const PredictionPage = () => {
                 )}
 
                 {!isLoading && bets.map((prediction) => (
-                  <article key={prediction.betId} className="rounded-2xl border border-outline-variant bg-surface-container-low p-4">
+                  <button
+                    key={prediction.betId}
+                    type="button"
+                    onClick={() => void openBetDetail(prediction)}
+                    aria-label={`View prediction detail for ${prediction.raceName} and ${prediction.horseName}`}
+                    className="w-full rounded-2xl border border-outline-variant bg-surface-container-low p-4 text-left transition hover:border-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-surface"
+                  >
                     <div className="flex items-start justify-between gap-4">
                       <div>
                         <h3 className="text-lg font-semibold text-primary">{prediction.raceName}</h3>
@@ -325,7 +379,7 @@ const PredictionPage = () => {
                       <span>{formatPoints(prediction.potentialPayout)} {payoutLabel(prediction.status)}</span>
                     </div>
                     <p className="mt-3 text-sm text-on-surface-variant">Odds {prediction.odds || '-'}</p>
-                  </article>
+                  </button>
                 ))}
 
                 {!isLoading && bets.length === 0 && (
@@ -354,6 +408,15 @@ const PredictionPage = () => {
         </div>
       </div>
 
+      {selectedActiveBet && (
+        <ActivePredictionDetailModal
+          bet={selectedActiveBet}
+          isLoading={isLoadingBetDetail}
+          errorMessage={betDetailError}
+          onClose={closeBetDetail}
+        />
+      )}
+
       {isPredictionModalOpen && selectedRace && selectedOption && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-surface/80 p-4 backdrop-blur-sm"
@@ -368,7 +431,7 @@ const PredictionPage = () => {
             role="dialog"
             aria-modal="true"
             aria-labelledby="new-prediction-title"
-            className="glass-panel flex max-h-[90vh] w-full max-w-xl flex-col overflow-hidden rounded-2xl"
+            className="glass-panel flex max-h-[90vh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl"
           >
             <div className="flex items-start justify-between gap-4 border-b border-outline-variant/60 p-6">
               <div>
@@ -388,16 +451,31 @@ const PredictionPage = () => {
             <form onSubmit={handleCreatePrediction} className="flex min-h-0 flex-1 flex-col">
               <div className="min-h-0 flex-1 space-y-5 overflow-y-auto p-6">
                 <div className="rounded-xl border border-outline-variant bg-surface-container-low p-4">
-                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                  <div>
-                    <p className="text-xs font-bold uppercase tracking-[0.16em] text-on-surface-variant">Race</p>
-                    <p className="mt-2 text-lg font-bold text-primary">{selectedRace.raceName}</p>
-                    <p className="mt-1 text-sm text-on-surface-variant">Closes {formatCloseTime(selectedRace.closesAt)}</p>
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                    <div>
+                      <p className="text-xs font-bold uppercase tracking-[0.16em] text-on-surface-variant">Race</p>
+                      <p className="mt-2 text-lg font-bold text-primary">{selectedRace.raceName}</p>
+                    </div>
+                    <span className={`w-fit rounded-full px-3 py-1 text-xs font-bold uppercase tracking-[0.16em] ${selectedRaceBettingOpen ? 'bg-secondary-container/50 text-on-secondary-container' : 'bg-error-container/30 text-error'}`}>
+                      {bettingStatusLabel(selectedRace)}
+                    </span>
                   </div>
-                  <span className={`w-fit rounded-full px-3 py-1 text-xs font-bold uppercase tracking-[0.16em] ${selectedRaceBettingOpen ? 'bg-secondary-container/50 text-on-secondary-container' : 'bg-error-container/30 text-error'}`}>
-                    {bettingStatusLabel(selectedRace)}
-                  </span>
-                </div>
+
+                  <dl className="mt-4 grid gap-x-5 gap-y-4 border-t border-outline-variant/50 pt-4 sm:grid-cols-2">
+                    {[
+                      { label: 'Tournament', value: selectedRace.tournamentName },
+                      { label: 'Location', value: selectedRace.track },
+                      { label: 'Race schedule', value: selectedRace.scheduledAt ? formatCloseTime(selectedRace.scheduledAt) : '-' },
+                      { label: 'Prediction closes', value: formatCloseTime(selectedRace.closesAt) },
+                      { label: 'Distance', value: selectedRace.distanceM ? `${selectedRace.distanceM}m` : '-' },
+                      { label: 'Track type', value: selectedRace.surface },
+                    ].map((item) => (
+                      <div key={item.label}>
+                        <dt className="text-xs font-bold uppercase tracking-[0.14em] text-on-surface-variant">{item.label}</dt>
+                        <dd className="mt-1 text-sm font-semibold text-on-surface">{item.value || '-'}</dd>
+                      </div>
+                    ))}
+                  </dl>
                 </div>
 
                 <div className="grid gap-3">
@@ -502,5 +580,121 @@ const PredictionPage = () => {
     </div>
   );
 };
+
+const ActivePredictionDetailModal = ({
+  bet,
+  isLoading,
+  errorMessage,
+  onClose,
+}: {
+  bet: BetItem;
+  isLoading: boolean;
+  errorMessage: string;
+  onClose: () => void;
+}) => {
+  useEffect(() => {
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        onClose();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [onClose]);
+
+  return (
+    <div
+      className="fixed inset-0 z-[60] flex items-center justify-center overflow-hidden bg-surface/80 p-4 backdrop-blur-sm"
+      role="presentation"
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget) {
+          onClose();
+        }
+      }}
+    >
+      <section
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="active-prediction-detail-title"
+        className="glass-panel flex max-h-[calc(100dvh-2rem)] w-full max-w-2xl flex-col overflow-hidden rounded-2xl"
+      >
+        <div className="flex shrink-0 items-start justify-between gap-4 border-b border-outline-variant/60 p-6">
+          <div>
+            <p className="text-xs font-bold uppercase tracking-[0.2em] text-secondary">Prediction #{bet.betId}</p>
+            <h2 id="active-prediction-detail-title" className="mt-2 text-2xl font-bold text-primary">{bet.raceName}</h2>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close prediction detail"
+            className="rounded-md border border-outline-variant p-2 text-on-surface-variant transition hover:border-primary hover:text-primary"
+          >
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+
+        <div className="min-h-0 overflow-y-auto p-6">
+          {isLoading ? (
+            <div className="flex items-center justify-center gap-3 rounded-xl border border-outline-variant bg-surface-container-low px-4 py-10 text-sm font-semibold text-on-surface-variant">
+              <Loader2 className="h-5 w-5 animate-spin text-primary" />
+              Loading prediction detail
+            </div>
+          ) : (
+            <div className="space-y-5">
+              {errorMessage && (
+                <p className="rounded-md border border-error/30 bg-error-container/20 px-4 py-3 text-sm font-semibold text-error">
+                  {errorMessage}
+                </p>
+              )}
+
+              <div className="grid gap-3 sm:grid-cols-3">
+                <PredictionDetailItem label="Points placed" value={`${formatPoints(bet.amount)} pts`} emphasized />
+                <PredictionDetailItem label="Bet rate" value={bet.odds > 0 ? `${bet.odds}x` : '-'} />
+                <div className="rounded-xl border border-outline-variant bg-surface-container-low p-4">
+                  <p className="text-xs font-bold uppercase tracking-[0.14em] text-on-surface-variant">Status</p>
+                  <span className={`mt-2 inline-flex rounded-full px-3 py-1 text-xs font-bold uppercase tracking-[0.16em] ${statusClassName(bet.status)}`}>
+                    {bet.status}
+                  </span>
+                </div>
+              </div>
+
+              <div className="grid gap-3 sm:grid-cols-2">
+                <PredictionDetailItem label="Horse" value={bet.horseName} />
+                <PredictionDetailItem label="Jockey" value={bet.jockeyName ?? '-'} />
+                <PredictionDetailItem label="Placed at" value={bet.createdAt ? formatCloseTime(bet.createdAt) : '-'} />
+                <PredictionDetailItem label="Race schedule" value={bet.scheduledAt ? formatCloseTime(bet.scheduledAt) : '-'} />
+                <PredictionDetailItem label="Prediction closes" value={bet.predictionClosesAt ? formatCloseTime(bet.predictionClosesAt) : '-'} />
+                <PredictionDetailItem label="Potential payout" value={`${formatPoints(bet.potentialPayout)} pts`} emphasized />
+              </div>
+            </div>
+          )}
+        </div>
+      </section>
+    </div>
+  );
+};
+
+const PredictionDetailItem = ({
+  label,
+  value,
+  emphasized = false,
+}: {
+  label: string;
+  value: string;
+  emphasized?: boolean;
+}) => (
+  <div className="rounded-xl border border-outline-variant bg-surface-container-low p-4">
+    <p className="text-xs font-bold uppercase tracking-[0.14em] text-on-surface-variant">{label}</p>
+    <p className={`mt-2 text-sm font-bold ${emphasized ? 'text-primary' : 'text-on-surface'}`}>{value}</p>
+  </div>
+);
 
 export default PredictionPage;
