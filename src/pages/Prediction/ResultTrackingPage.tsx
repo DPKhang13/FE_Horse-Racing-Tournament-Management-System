@@ -1,9 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
-import { BarChart3, CheckCircle2, Eye, Loader2, X } from 'lucide-react';
+import { BarChart3, CheckCircle2, ChevronDown, Eye, Loader2, X } from 'lucide-react';
 import { getApiErrorMessage } from '../../services/apiClient';
 import { betService, type BetItem } from '../../services/betService';
 
 type StatusFilter = 'all' | 'won' | 'lost';
+
+const RESULTS_PAGE_SIZE = 5;
 
 const formatPoints = (value: number) => new Intl.NumberFormat('en-US', {
   maximumFractionDigits: 0,
@@ -14,24 +16,22 @@ const formatDate = (value?: string) => {
     return '-';
   }
 
-  const isoDateMatch = value.match(/^(\d{4})-(\d{2})-(\d{2})/);
-
-  if (isoDateMatch) {
-    const [, year, month, day] = isoDateMatch;
-    return `${day}/${month}/${year}`;
-  }
-
   const date = new Date(value);
 
   if (Number.isNaN(date.getTime())) {
     return value;
   }
 
-  return new Intl.DateTimeFormat('vi-VN', {
+  return new Intl.DateTimeFormat('en-US', {
     day: '2-digit',
-    month: '2-digit',
+    month: 'short',
     year: 'numeric',
   }).format(date);
+};
+
+const getDateTime = (value?: string) => {
+  const timestamp = value ? new Date(value).getTime() : 0;
+  return Number.isFinite(timestamp) ? timestamp : 0;
 };
 
 const statusClassName = (status: string) => {
@@ -74,6 +74,7 @@ const ResultTrackingPage = () => {
   const [trackedResults, setTrackedResults] = useState<BetItem[]>([]);
   const [selectedBet, setSelectedBet] = useState<BetItem | null>(null);
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
+  const [visibleResultCount, setVisibleResultCount] = useState(RESULTS_PAGE_SIZE);
   const [isLoading, setIsLoading] = useState(true);
   const [isLoadingDetail, setIsLoadingDetail] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
@@ -131,10 +132,20 @@ const ResultTrackingPage = () => {
   }, [trackedResults]);
 
   const winRatio = stats.settled ? Math.round((stats.won / stats.settled) * 100) : 0;
-  const settledResults = useMemo(
-    () => trackedResults.filter((item) => item.status.toLowerCase() !== 'pending'),
-    [trackedResults],
-  );
+  const settledResults = useMemo(() => (
+    trackedResults
+      .filter((item) => item.status.toLowerCase() !== 'pending')
+      .sort((first, second) => {
+        const firstSettledAt = getDateTime(first.settledAt);
+        const secondSettledAt = getDateTime(second.settledAt);
+
+        if (firstSettledAt !== secondSettledAt) {
+          return secondSettledAt - firstSettledAt;
+        }
+
+        return second.betId - first.betId;
+      })
+  ), [trackedResults]);
   const filteredSettledResults = useMemo(() => {
     if (statusFilter === 'all') {
       return settledResults;
@@ -146,6 +157,8 @@ const ResultTrackingPage = () => {
 
     return settledResults.filter((item) => item.status.toLowerCase() === statusFilter);
   }, [settledResults, statusFilter]);
+  const visibleSettledResults = filteredSettledResults.slice(0, visibleResultCount);
+  const remainingResultCount = filteredSettledResults.length - visibleSettledResults.length;
 
   const handleOpenDetail = async (bet: BetItem) => {
     setSelectedBet(bet);
@@ -228,7 +241,10 @@ const ResultTrackingPage = () => {
                     <button
                       key={filter.value}
                       type="button"
-                      onClick={() => setStatusFilter(filter.value as StatusFilter)}
+                      onClick={() => {
+                        setStatusFilter(filter.value as StatusFilter);
+                        setVisibleResultCount(RESULTS_PAGE_SIZE);
+                      }}
                       className={`rounded-lg px-4 py-2 text-xs font-bold uppercase tracking-[0.14em] transition ${
                         statusFilter === filter.value
                           ? 'bg-primary text-on-primary'
@@ -247,7 +263,7 @@ const ResultTrackingPage = () => {
                   </div>
                 )}
 
-                {!isLoading && filteredSettledResults.map((item) => {
+                {!isLoading && visibleSettledResults.map((item) => {
                   const netResult = getNetResult(item);
 
                   return (
@@ -305,6 +321,19 @@ const ResultTrackingPage = () => {
                 {!isLoading && filteredSettledResults.length === 0 && (
                   <div className="rounded-2xl border border-outline-variant bg-surface-container p-6 text-center text-body-sm font-semibold text-on-surface-variant">
                     No prediction results found.
+                  </div>
+                )}
+
+                {!isLoading && remainingResultCount > 0 && (
+                  <div className="flex justify-center pt-2">
+                    <button
+                      type="button"
+                      onClick={() => setVisibleResultCount((current) => current + RESULTS_PAGE_SIZE)}
+                      className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-outline-variant bg-surface-container px-4 py-2 text-sm font-bold text-on-surface-variant transition hover:border-primary hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-surface"
+                    >
+                      <ChevronDown className="h-4 w-4" />
+                      View more ({remainingResultCount})
+                    </button>
                   </div>
                 )}
               </div>
