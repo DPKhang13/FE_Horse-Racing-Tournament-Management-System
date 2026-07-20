@@ -32,20 +32,20 @@ const RaceResultTable = ({
   });
 
   return (
-    <div className="w-full overflow-hidden">
-      <table className="w-full table-fixed text-left">
+    <div className="w-full overflow-x-auto">
+      <table className="w-full min-w-[800px] table-fixed text-left">
         <thead className="bg-surface-container border-b border-outline-variant">
           <tr>
             <th className="w-[9%] px-3 py-4 text-label-sm text-outline uppercase tracking-wider">Rank</th>
             <th className="w-[8%] px-3 py-4 text-label-sm text-outline uppercase tracking-wider">Gate</th>
-            <th className="w-[24%] px-3 py-4 text-label-sm text-outline uppercase tracking-wider">Horse</th>
-            <th className="w-[22%] px-3 py-4 text-label-sm text-outline uppercase tracking-wider">Jockey</th>
+            <th className="w-[21%] px-3 py-4 text-label-sm text-outline uppercase tracking-wider">Horse</th>
+            <th className="w-[19%] px-3 py-4 text-label-sm text-outline uppercase tracking-wider">Jockey</th>
             <th className="w-[15%] px-3 py-4 text-label-sm text-outline uppercase tracking-wider text-right">Time</th>
             {showPoints && (
               <th className="w-[10%] px-3 py-4 text-label-sm text-outline uppercase tracking-wider text-right">Points</th>
             )}
             {showPrize && (
-              <th className="w-[12%] px-3 py-4 text-label-sm text-outline uppercase tracking-wider text-right">Prize</th>
+              <th className="w-[18%] px-5 py-4 text-right text-label-sm uppercase tracking-wider text-outline">Prize</th>
             )}
           </tr>
         </thead>
@@ -99,8 +99,8 @@ const RaceResultTable = ({
                 </td>
               )}
               {showPrize && (
-                <td className="px-3 py-4 text-right">
-                  <span className="text-body-sm font-bold text-secondary tabular-nums">
+                <td className="px-5 py-4 text-right">
+                  <span className="whitespace-nowrap text-body-sm font-bold text-secondary tabular-nums">
                     {getEntryPrize(entry, prizeDistributions)}
                   </span>
                 </td>
