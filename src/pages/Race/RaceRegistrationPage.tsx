@@ -41,6 +41,27 @@ const tournamentIdOf = (tournament: TournamentApiItem) => tournament.tournamentI
 
 const getTournamentName = (tournament: TournamentApiItem) => tournament.name ?? `Tournament ${tournamentIdOf(tournament)}`;
 
+const isFutureDate = (value?: string) => {
+  if (!value) {
+    return false;
+  }
+
+  const time = new Date(value).getTime();
+
+  return Number.isFinite(time) && time > Date.now();
+};
+
+const isRegistrationOpenTournament = (tournament: TournamentApiItem) => {
+  if (normalizeStatus(tournament.status) !== 'registration_open') {
+    return false;
+  }
+
+  return isFutureDate(tournament.registrationCloseAt ?? tournament.endDate ?? tournament.startDate);
+};
+
+const isRegistrationOpenFutureRace = (race: RaceScheduleItem) =>
+  normalizeStatus(race.status) === 'registration_open' && isFutureDate(race.scheduledAt);
+
 const getQueueStatusClassName = (status?: string) => {
   const normalized = normalizeStatus(status);
 
@@ -55,9 +76,14 @@ const getQueueStatusClassName = (status?: string) => {
   return 'bg-surface-container-high text-on-surface-variant';
 };
 
+const hasAssignedJockey = (item: RaceRegistrationItem) => Boolean(item.jockeyId || item.jockeyFullName);
+
+const isOwnerConfirmed = (item: RaceRegistrationItem) =>
+  normalizeStatus(item.ownerConfirmationStatus) === 'confirmed';
+
 const canApproveRegistration = (item: RaceRegistrationItem) => {
   const status = normalizeStatus(item.status);
-  return status === 'pending';
+  return status === 'pending' && hasAssignedJockey(item) && isOwnerConfirmed(item);
 };
 
 const RaceRegistrationPage = () => {
@@ -76,6 +102,7 @@ const RaceRegistrationPage = () => {
   const [message, setMessage] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
   const [queueSearch, setQueueSearch] = useState('');
+  const [viewingRegistration, setViewingRegistration] = useState<RaceRegistrationItem | null>(null);
 
   const isOwner = profile?.roleType === 'horse_owner';
   const canApprove = profile?.roleType === 'admin';
@@ -121,17 +148,26 @@ const RaceRegistrationPage = () => {
     void loadRegistrations();
   }, []);
 
+  const getAvailableRacesForTournament = (tournamentId: number) =>
+    races
+      .filter((race) => race.tournamentId === tournamentId)
+      .filter(isRegistrationOpenFutureRace)
+      .sort((a, b) => new Date(a.scheduledAt).getTime() - new Date(b.scheduledAt).getTime());
+
   const openRegistrationTournaments = useMemo(
-    () => tournaments.filter((tournament) => normalizeStatus(tournament.status) === 'registration_open'),
-    [tournaments],
+    () =>
+      tournaments.filter((tournament) => {
+        const tournamentId = tournamentIdOf(tournament);
+
+        return isRegistrationOpenTournament(tournament) && getAvailableRacesForTournament(tournamentId).length > 0;
+      }),
+    [races, tournaments],
   );
 
   const selectedTournamentId = selectedTournament ? tournamentIdOf(selectedTournament) : 0;
 
   const tournamentRaces = useMemo(
-    () => races
-      .filter((race) => race.tournamentId === selectedTournamentId)
-      .sort((a, b) => new Date(a.scheduledAt).getTime() - new Date(b.scheduledAt).getTime()),
+    () => getAvailableRacesForTournament(selectedTournamentId),
     [races, selectedTournamentId],
   );
 
@@ -199,7 +235,7 @@ const RaceRegistrationPage = () => {
         horseId: horse.horseId,
       });
 
-      setMessage(`Registration for ${horse.name} was sent to admin for approval.`);
+      setMessage(`Registration for ${horse.name} was created. You can invite a jockey now.`);
       setIsHorsePickerOpen(false);
       setSelectedRace(null);
       await loadRegistrations();
@@ -245,8 +281,8 @@ const RaceRegistrationPage = () => {
             <h1 className="mt-2 text-headline-lg font-bold text-primary">Entry management</h1>
             <p className="mt-2 max-w-2xl text-body-md text-on-surface-variant">
               {isOwner
-                ? 'Choose a tournament with registration open, then send the horse registration for admin approval.'
-                : 'Review pending race registrations and approve entries before they appear in race lists.'}
+                ? 'Choose a tournament with registration open, register a horse, then invite and confirm a jockey before admin approval.'
+                : 'Review registrations that already have a confirmed jockey assignment before approving them.'}
             </p>
           </div>
 
@@ -270,7 +306,7 @@ const RaceRegistrationPage = () => {
               <div>
                 <h2 className="text-title-large font-bold text-primary">Open registration tournaments</h2>
                 <p className="mt-1 text-body-sm text-on-surface-variant">
-                  Only tournaments in `Registration Open` are shown here.
+                  Only future tournaments and races currently open for registration are shown here.
                 </p>
               </div>
             </div>
@@ -284,14 +320,14 @@ const RaceRegistrationPage = () => {
             ) : openRegistrationTournaments.length === 0 ? (
               <EmptyState
                 title="No tournament is open for registration"
-                description="When admin opens registration, available tournaments will appear here."
+                description="When admin opens registration for a future race, available tournaments will appear here."
                 icon={<Trophy className="h-5 w-5" />}
               />
             ) : (
               <div className="grid gap-4 lg:grid-cols-2">
                 {openRegistrationTournaments.map((tournament) => {
                   const tournamentId = tournamentIdOf(tournament);
-                  const raceCount = races.filter((race) => race.tournamentId === tournamentId).length;
+                  const raceCount = getAvailableRacesForTournament(tournamentId).length;
 
                   return (
                     <button
@@ -314,6 +350,10 @@ const RaceRegistrationPage = () => {
                         <InfoPill label="Location" value={tournament.location ?? '-'} />
                         <InfoPill label="Start" value={formatDateTime(tournament.startDate)} />
                         <InfoPill label="Races" value={String(raceCount)} />
+                      </div>
+                      <div className="grid gap-3 sm:grid-cols-2">
+                        <InfoPill label="Registration closes" value={formatDateTime(tournament.registrationCloseAt)} />
+                        <InfoPill label="End" value={formatDateTime(tournament.endDate)} />
                       </div>
 
                       <p className="text-body-sm font-semibold text-on-surface-variant">
@@ -349,7 +389,7 @@ const RaceRegistrationPage = () => {
             {tournamentRaces.length === 0 ? (
               <EmptyState
                 title="No races available"
-                description="This tournament does not have any race ready for registration yet."
+                description="This tournament does not have any future race open for registration."
                 icon={<ClipboardList className="h-5 w-5" />}
               />
             ) : (
@@ -455,7 +495,7 @@ const RaceRegistrationPage = () => {
             </div>
 
             <div className="overflow-x-auto">
-              <table className="w-full min-w-[860px] text-left">
+              <table className="w-full min-w-[920px] text-left">
                 <thead className="border-b border-outline-variant bg-surface-container">
                   <tr>
                     <th className="px-4 py-3 text-label-sm uppercase tracking-wider text-outline">Tournament</th>
@@ -507,6 +547,13 @@ const RaceRegistrationPage = () => {
                         </td>
                         <td className="px-4 py-4">
                           <div className="flex justify-end gap-2">
+                            <button
+                              type="button"
+                              onClick={() => setViewingRegistration(item)}
+                              className="rounded-md border border-outline-variant px-2 py-2 text-label-sm font-bold text-primary transition-colors hover:border-primary"
+                            >
+                              Details
+                            </button>
                             {canApprove && (
                               <>
                                 <button
@@ -514,7 +561,7 @@ const RaceRegistrationPage = () => {
                                   onClick={() => void handleApprove(id)}
                                   disabled={!canApproveRegistrationItem}
                                   className="rounded-md bg-secondary px-3 py-2 text-label-sm font-bold text-white"
-                                  title={canApproveRegistrationItem ? 'Approve registration' : 'Only pending registrations can be approved.'}
+                                  title={canApproveRegistrationItem ? 'Approve registration' : 'Waiting for confirmed jockey assignment.'}
                                 >
                                   Approve
                                 </button>
@@ -541,6 +588,33 @@ const RaceRegistrationPage = () => {
                   )}
                 </tbody>
               </table>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {viewingRegistration && (
+        <Modal
+          title={`Registration #${viewingRegistration.regId ?? viewingRegistration.id ?? '-'}`}
+          subtitle={viewingRegistration.tournamentName ?? '-'}
+          onClose={() => setViewingRegistration(null)}
+        >
+          <div className="p-6">
+            <div className="grid gap-4 md:grid-cols-2">
+              <InfoPill label="Tournament" value={viewingRegistration.tournamentName ?? '-'} />
+              <InfoPill label="Race" value={viewingRegistration.raceName ?? '-'} />
+              <InfoPill label="Race Number" value={String(viewingRegistration.raceNumber ?? '-')} />
+              <InfoPill label="Scheduled At" value={formatDateTime(viewingRegistration.scheduledAt)} />
+              <InfoPill label="Horse" value={viewingRegistration.horseName ?? '-'} />
+              <InfoPill label="Jockey" value={viewingRegistration.jockeyFullName ?? '-'} />
+              <InfoPill label="Owner" value={viewingRegistration.ownerFullName ?? '-'} />
+              <InfoPill label="Stable" value={viewingRegistration.ownerStableName ?? '-'} />
+              <InfoPill label="Status" value={viewingRegistration.status ?? '-'} />
+              <InfoPill label="Owner Confirmation" value={viewingRegistration.ownerConfirmationStatus ?? '-'} />
+              <InfoPill label="Registered At" value={formatDateTime(viewingRegistration.registeredAt)} />
+              {viewingRegistration.approvedAt && (
+                <InfoPill label="Approved At" value={formatDateTime(viewingRegistration.approvedAt)} />
+              )}
             </div>
           </div>
         </Modal>

@@ -378,7 +378,14 @@ const HorseManagementPage = () => {
                     </td>
                     <td className="px-5 py-4">
                       <div className="flex items-center justify-end gap-2">
-                        <IconButton label={`View details for ${horse.name}`} onClick={() => setViewingHorse(horse)}>
+                        <IconButton label={`View details for ${horse.name}`} onClick={async () => {
+                          try {
+                            const detail = await HorseService.getHorseById(horse.horseId);
+                            setViewingHorse(detail);
+                          } catch {
+                            setViewingHorse(horse);
+                          }
+                        }}>
                           <Eye className="w-4 h-4" />
                         </IconButton>
                         <IconButton label={`Edit ${horse.name}`} onClick={() => openEditModal(horse)}>
