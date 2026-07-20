@@ -6,6 +6,7 @@ export type JockeyItem = {
   username?: string;
   email?: string;
   phone?: string;
+  avatarUrl?: string;
   licenseNumber?: string;
   rankingPoints?: number;
   totalWins?: number;

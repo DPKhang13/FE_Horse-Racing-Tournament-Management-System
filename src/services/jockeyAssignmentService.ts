@@ -10,16 +10,22 @@ export type JockeyAssignmentItem = {
   gateNumber?: number;
   status?: string;
   invitedAt?: string;
+  responseDeadline?: string;
   respondedAt?: string;
   cancelledAt?: string;
   expiredAt?: string;
   raceName?: string;
   raceNumber?: number;
+  scheduledAt?: string;
   horseId?: number;
   horseName?: string;
+  horseAvatarUrl?: string;
+  jockeyAvatarUrl?: string;
   ownerFullName?: string;
   ownerStableName?: string;
   jockeyFullName?: string;
+  /** Enriched on FE */
+  tournamentName?: string;
 };
 
 export type JockeyInvitationFormData = {
@@ -84,7 +90,8 @@ export const jockeyAssignmentService = {
     return unwrapApiData<JockeyAssignmentItem>(response);
   },
 
-  async delete(id: number | string): Promise<void> {
-    await apiClient.delete(`/api/jockey-assignments/delete/${id}`);
+  async delete(id: number | string): Promise<JockeyAssignmentItem> {
+    const response = await apiClient.patch(`/api/v1/owner/jockey-assignments/${id}/cancel`);
+    return unwrapApiData<JockeyAssignmentItem>(response);
   },
 };

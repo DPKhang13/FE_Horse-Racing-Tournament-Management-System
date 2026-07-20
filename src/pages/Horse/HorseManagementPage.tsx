@@ -1,9 +1,12 @@
 import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
 import { motion } from 'motion/react';
-import { Activity, Eye, Filter, Gauge, Pencil, Plus, Search, Trash2, Trophy, X } from 'lucide-react';
+import { Activity, Eye, Filter, Gauge, Pencil, Plus, Search, Trophy, X } from 'lucide-react';
 import { getApiErrorMessage } from '../../services/apiClient';
+import { authService } from '../../services/authService';
+import { useToastNotifications } from '../../hooks/useToastNotifications';
 import { HorseService } from '../../services/HorseService';
 import type { Horse, HorseFormData } from '../../types/horse';
+import type { UserProfile } from '../../types/user';
 
 // Animation variants
 const revealContainer = {
@@ -27,11 +30,11 @@ const emptyFormData: HorseFormData = {
   breed: '',
   age: 0,
   weightKg: 0,
-  rankGroup: '',
+  rankGroup: 'D',
   rankingPoints: 0,
   avatarUrl: '',
   totalWins: 0,
-  status: 'active',
+  status: 'inactive',
 };
 
 const statusOptions = ['active', 'inactive'];
@@ -77,8 +80,12 @@ const validateHorseForm = (data: HorseFormData) => {
     errors.weightKg = 'Weight must be greater than 0.';
   }
 
-  if (!data.rankGroup.trim()) {
-    errors.rankGroup = 'Rank group is required.';
+  if (data.avatarUrl.trim()) {
+    try {
+      new URL(data.avatarUrl.trim());
+    } catch {
+      errors.avatarUrl = 'Avatar URL must be valid.';
+    }
   }
 
   return errors;
@@ -97,6 +104,7 @@ const toFormData = (horse: Horse): HorseFormData => ({
 });
 
 const HorseManagementPage = () => {
+  const [profile, setProfile] = useState<UserProfile | undefined>(() => authService.getStoredUserProfile());
   const [horses, setHorses] = useState<Horse[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('All');
@@ -109,12 +117,18 @@ const HorseManagementPage = () => {
   const [isSaving, setIsSaving] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
 
+  useToastNotifications([
+    errorMessage ? { tone: 'error', text: errorMessage } : null,
+  ]);
+
   const loadHorses = async () => {
     setIsLoading(true);
     setErrorMessage('');
 
     try {
-      setHorses(await HorseService.getHorses());
+      const currentProfile = profile ?? await authService.getCurrentUser();
+      setProfile(currentProfile);
+      setHorses(await HorseService.getOwnerHorses(currentProfile));
     } catch (error) {
       setErrorMessage(getApiErrorMessage(error, 'Unable to load horses.'));
     } finally {
@@ -193,11 +207,13 @@ const HorseManagementPage = () => {
     try {
       const payload = {
         ...formData,
-        avatarUrl: formData.avatarUrl || fallbackHorseImage,
+        rankGroup: 'D',
+        status: 'inactive',
+        avatarUrl: formData.avatarUrl.trim() || fallbackHorseImage,
         age: Number(formData.age),
         weightKg: Number(formData.weightKg),
-        rankingPoints: Number(formData.rankingPoints),
-        totalWins: Number(formData.totalWins),
+        rankingPoints: 0,
+        totalWins: 0,
       };
 
       if (selectedHorse) {
@@ -207,7 +223,7 @@ const HorseManagementPage = () => {
         );
       } else {
         const newHorse = await HorseService.createHorse(payload);
-        setHorses((current) => [newHorse, ...current]);
+        setHorses((current) => [{ ...newHorse, status: 'inactive' }, ...current]);
       }
 
       closeFormModal();
@@ -215,28 +231,11 @@ const HorseManagementPage = () => {
       const message = getApiErrorMessage(error, 'Unable to save horse.');
       setErrorMessage(
         message === 'Request failed with status 403.'
-          ? 'You need to sign in with a Horse Owner account to create, update, or delete horses.'
+          ? 'You need to sign in with a Horse Owner account to create or update horses.'
           : message,
       );
     } finally {
       setIsSaving(false);
-    }
-  };
-
-  const handleDelete = async (horse: Horse) => {
-    const confirmed = window.confirm(`Delete "${horse.name}" from the horse list?`);
-
-    if (!confirmed) {
-      return;
-    }
-
-    setErrorMessage('');
-
-    try {
-      await HorseService.deleteHorse(horse.horseId);
-      setHorses((current) => current.filter((item) => item.horseId !== horse.horseId));
-    } catch (error) {
-      setErrorMessage(getApiErrorMessage(error, 'Unable to delete horse.'));
     }
   };
 
@@ -328,17 +327,6 @@ const HorseManagementPage = () => {
           </motion.button>
         </motion.div>
 
-        {errorMessage && (
-          <motion.div 
-            className="mb-6 rounded-md border border-error/30 bg-error-container/20 px-4 py-3 text-body-sm font-semibold text-error"
-            initial="hidden"
-            animate="visible"
-            variants={revealUp}
-          >
-            {errorMessage}
-          </motion.div>
-        )}
-
         <motion.div 
           className="glass-panel overflow-hidden rounded-xl"
           initial="hidden"
@@ -390,14 +378,18 @@ const HorseManagementPage = () => {
                     </td>
                     <td className="px-5 py-4">
                       <div className="flex items-center justify-end gap-2">
-                        <IconButton label={`View details for ${horse.name}`} onClick={() => setViewingHorse(horse)}>
+                        <IconButton label={`View details for ${horse.name}`} onClick={async () => {
+                          try {
+                            const detail = await HorseService.getHorseById(horse.horseId);
+                            setViewingHorse(detail);
+                          } catch {
+                            setViewingHorse(horse);
+                          }
+                        }}>
                           <Eye className="w-4 h-4" />
                         </IconButton>
                         <IconButton label={`Edit ${horse.name}`} onClick={() => openEditModal(horse)}>
                           <Pencil className="w-4 h-4" />
-                        </IconButton>
-                        <IconButton label={`Delete ${horse.name}`} onClick={() => void handleDelete(horse)}>
-                          <Trash2 className="w-4 h-4" />
                         </IconButton>
                       </div>
                     </td>
@@ -430,83 +422,74 @@ const HorseManagementPage = () => {
         <Modal title={selectedHorse ? 'Update Horse Information' : 'Register Horse'} subtitle={selectedHorse?.id ?? 'New Horse'} onClose={closeFormModal}>
           <motion.form 
             onSubmit={handleSubmit} 
-            className="p-6 space-y-8"
+            className="grid gap-6 p-6 lg:grid-cols-[260px_1fr]"
             initial="hidden"
             animate="visible"
             variants={revealContainer}
           >
-            <motion.div className="grid grid-cols-1 md:grid-cols-2 gap-5" variants={revealContainer}>
-              <motion.div variants={revealUp}>
-                <Field label="Horse Name" error={formErrors.name}>
-                  <input type="text" value={formData.name} onChange={(event) => handleFieldChange('name', event.target.value)} className={inputClassName} />
-                </Field>
-              </motion.div>
-              <motion.div variants={revealUp}>
-                <Field label="Breed" error={formErrors.breed}>
-                  <input type="text" value={formData.breed} onChange={(event) => handleFieldChange('breed', event.target.value)} className={inputClassName} />
-                </Field>
-              </motion.div>
-              <motion.div variants={revealUp}>
-                <Field label="Age" error={formErrors.age}>
-                  <input type="number" min="0" value={formData.age || ''} onChange={(event) => handleFieldChange('age', Number(event.target.value))} className={inputClassName} />
-                </Field>
-              </motion.div>
-              <motion.div variants={revealUp}>
-                <Field label="Weight (kg)" error={formErrors.weightKg}>
-                  <input type="number" min="0" step="0.1" value={formData.weightKg || ''} onChange={(event) => handleFieldChange('weightKg', Number(event.target.value))} className={inputClassName} />
-                </Field>
-              </motion.div>
-              <motion.div variants={revealUp}>
-                <Field label="Rank Group" error={formErrors.rankGroup}>
-                  <input type="text" value={formData.rankGroup} onChange={(event) => handleFieldChange('rankGroup', event.target.value)} className={inputClassName} />
-                </Field>
-              </motion.div>
-              <motion.div variants={revealUp}>
-                <Field label="Ranking Points">
-                  <input type="number" min="0" value={formData.rankingPoints} onChange={(event) => handleFieldChange('rankingPoints', Number(event.target.value))} className={inputClassName} />
-                </Field>
-              </motion.div>
-              <motion.div variants={revealUp}>
-                <Field label="Total Wins">
-                  <input type="number" min="0" value={formData.totalWins} onChange={(event) => handleFieldChange('totalWins', Number(event.target.value))} className={inputClassName} />
-                </Field>
-              </motion.div>
-              <motion.div variants={revealUp}>
-                <Field label="Status">
-                  <select value={formData.status} onChange={(event) => handleFieldChange('status', event.target.value)} className={inputClassName}>
-                    {statusOptions.map((status) => <option key={status} value={status}>{status}</option>)}
-                  </select>
-                </Field>
-              </motion.div>
-              <motion.div variants={revealUp}>
-                <Field label="Avatar URL">
-                  <input type="url" value={formData.avatarUrl} onChange={(event) => handleFieldChange('avatarUrl', event.target.value)} className={inputClassName} />
-                </Field>
-              </motion.div>
+            <motion.div className="rounded-lg border border-outline-variant bg-surface-container-low p-4" variants={revealUp}>
+              <img
+                src={formData.avatarUrl.trim() || fallbackHorseImage}
+                alt={formData.name || 'Horse preview'}
+                onError={(event) => {
+                  event.currentTarget.src = fallbackHorseImage;
+                }}
+                className="aspect-square w-full rounded-md border border-outline-variant object-cover"
+              />
             </motion.div>
 
-            <motion.div 
-              className="flex flex-col-reverse sm:flex-row justify-end gap-3 pt-4 border-t border-outline-variant"
-              variants={revealUp}
-            >
-              <motion.button 
-                type="button" 
-                onClick={closeFormModal} 
-                className="px-6 py-3 rounded-md border border-outline-variant text-body-sm font-bold text-on-surface-variant hover:text-primary hover:border-primary transition-colors"
-                whileHover={{ y: -1, scale: 1.01 }}
-                whileTap={{ scale: 0.98 }}
+            <motion.div className="space-y-6" variants={revealContainer}>
+              <motion.div className="grid grid-cols-1 md:grid-cols-2 gap-5" variants={revealContainer}>
+                <motion.div variants={revealUp}>
+                  <Field label="Horse Name" error={formErrors.name}>
+                    <input type="text" value={formData.name} onChange={(event) => handleFieldChange('name', event.target.value)} className={inputClassName} />
+                  </Field>
+                </motion.div>
+                <motion.div variants={revealUp}>
+                  <Field label="Breed" error={formErrors.breed}>
+                    <input type="text" value={formData.breed} onChange={(event) => handleFieldChange('breed', event.target.value)} className={inputClassName} />
+                  </Field>
+                </motion.div>
+                <motion.div variants={revealUp}>
+                  <Field label="Age" error={formErrors.age}>
+                    <input type="number" min="0" value={formData.age || ''} onChange={(event) => handleFieldChange('age', Number(event.target.value))} className={inputClassName} />
+                  </Field>
+                </motion.div>
+                <motion.div variants={revealUp}>
+                  <Field label="Weight (kg)" error={formErrors.weightKg}>
+                    <input type="number" min="0" step="0.1" value={formData.weightKg || ''} onChange={(event) => handleFieldChange('weightKg', Number(event.target.value))} className={inputClassName} />
+                  </Field>
+                </motion.div>
+                <motion.div className="md:col-span-2" variants={revealUp}>
+                  <Field label="Avatar URL">
+                    <input type="url" value={formData.avatarUrl} onChange={(event) => handleFieldChange('avatarUrl', event.target.value)} className={inputClassName} />
+                  </Field>
+                </motion.div>
+              </motion.div>
+
+              <motion.div 
+                className="flex flex-col-reverse sm:flex-row justify-end gap-3 pt-4 border-t border-outline-variant"
+                variants={revealUp}
               >
-                Cancel
-              </motion.button>
-              <motion.button 
-                type="submit" 
-                disabled={isSaving} 
-                className="px-6 py-3 rounded-md bg-secondary text-white text-body-sm font-bold hover:bg-opacity-90 transition-all disabled:opacity-70"
-                whileHover={{ y: -1, scale: 1.01 }}
-                whileTap={{ scale: 0.98 }}
-              >
-                {isSaving ? 'Saving...' : selectedHorse ? 'Save Changes' : 'Add New Horse'}
-              </motion.button>
+                <motion.button 
+                  type="button" 
+                  onClick={closeFormModal} 
+                  className="px-6 py-3 rounded-md border border-outline-variant text-body-sm font-bold text-on-surface-variant hover:text-primary hover:border-primary transition-colors"
+                  whileHover={{ y: -1, scale: 1.01 }}
+                  whileTap={{ scale: 0.98 }}
+                >
+                  Cancel
+                </motion.button>
+                <motion.button 
+                  type="submit" 
+                  disabled={isSaving} 
+                  className="px-6 py-3 rounded-md bg-secondary text-white text-body-sm font-bold hover:bg-opacity-90 transition-all disabled:opacity-70"
+                  whileHover={{ y: -1, scale: 1.01 }}
+                  whileTap={{ scale: 0.98 }}
+                >
+                  {isSaving ? 'Saving...' : selectedHorse ? 'Save Changes' : 'Submit Horse'}
+                </motion.button>
+              </motion.div>
             </motion.div>
           </motion.form>
         </Modal>

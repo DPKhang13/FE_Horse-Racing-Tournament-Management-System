@@ -5,6 +5,7 @@ import { authService } from '../../services/authService';
 import { HorseService } from '../../services/HorseService';
 import { raceRegistrationService, type RaceRegistrationItem } from '../../services/raceRegistrationService';
 import { scheduleService, type RaceScheduleItem, type TournamentApiItem } from '../../services/scheduleService';
+import { useToastNotifications } from '../../hooks/useToastNotifications';
 import type { Horse } from '../../types/horse';
 import type { UserProfile } from '../../types/user';
 
@@ -40,6 +41,27 @@ const tournamentIdOf = (tournament: TournamentApiItem) => tournament.tournamentI
 
 const getTournamentName = (tournament: TournamentApiItem) => tournament.name ?? `Tournament ${tournamentIdOf(tournament)}`;
 
+const isFutureDate = (value?: string) => {
+  if (!value) {
+    return false;
+  }
+
+  const time = new Date(value).getTime();
+
+  return Number.isFinite(time) && time > Date.now();
+};
+
+const isRegistrationOpenTournament = (tournament: TournamentApiItem) => {
+  if (normalizeStatus(tournament.status) !== 'registration_open') {
+    return false;
+  }
+
+  return isFutureDate(tournament.registrationCloseAt ?? tournament.endDate ?? tournament.startDate);
+};
+
+const isRegistrationOpenFutureRace = (race: RaceScheduleItem) =>
+  normalizeStatus(race.status) === 'registration_open' && isFutureDate(race.scheduledAt);
+
 const getQueueStatusClassName = (status?: string) => {
   const normalized = normalizeStatus(status);
 
@@ -52,6 +74,16 @@ const getQueueStatusClassName = (status?: string) => {
   }
 
   return 'bg-surface-container-high text-on-surface-variant';
+};
+
+const hasAssignedJockey = (item: RaceRegistrationItem) => Boolean(item.jockeyId || item.jockeyFullName);
+
+const isOwnerConfirmed = (item: RaceRegistrationItem) =>
+  normalizeStatus(item.ownerConfirmationStatus) === 'confirmed';
+
+const canApproveRegistration = (item: RaceRegistrationItem) => {
+  const status = normalizeStatus(item.status);
+  return status === 'pending' && hasAssignedJockey(item) && isOwnerConfirmed(item);
 };
 
 const RaceRegistrationPage = () => {
@@ -70,9 +102,15 @@ const RaceRegistrationPage = () => {
   const [message, setMessage] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
   const [queueSearch, setQueueSearch] = useState('');
+  const [viewingRegistration, setViewingRegistration] = useState<RaceRegistrationItem | null>(null);
 
   const isOwner = profile?.roleType === 'horse_owner';
   const canApprove = profile?.roleType === 'admin';
+
+  useToastNotifications([
+    message ? { tone: 'success', text: message } : null,
+    errorMessage ? { tone: 'error', text: errorMessage } : null,
+  ]);
 
   const loadRegistrations = async () => {
     setIsLoading(true);
@@ -85,7 +123,7 @@ const RaceRegistrationPage = () => {
       if (currentProfile.roleType === 'horse_owner') {
         const [registrations, horseList, raceList, tournamentList] = await Promise.all([
           raceRegistrationService.getMine(),
-          HorseService.getHorses(),
+          HorseService.getOwnerHorses(currentProfile),
           scheduleService.getRaceSchedule(),
           scheduleService.getTournaments(),
         ]);
@@ -94,6 +132,8 @@ const RaceRegistrationPage = () => {
         setHorses(horseList);
         setRaces(raceList);
         setTournaments(tournamentList);
+      } else if (currentProfile.roleType === 'admin') {
+        setItems(await raceRegistrationService.getPendingApproval());
       } else {
         setItems(await raceRegistrationService.getAll());
       }
@@ -108,17 +148,26 @@ const RaceRegistrationPage = () => {
     void loadRegistrations();
   }, []);
 
+  const getAvailableRacesForTournament = (tournamentId: number) =>
+    races
+      .filter((race) => race.tournamentId === tournamentId)
+      .filter(isRegistrationOpenFutureRace)
+      .sort((a, b) => new Date(a.scheduledAt).getTime() - new Date(b.scheduledAt).getTime());
+
   const openRegistrationTournaments = useMemo(
-    () => tournaments.filter((tournament) => normalizeStatus(tournament.status) === 'registration_open'),
-    [tournaments],
+    () =>
+      tournaments.filter((tournament) => {
+        const tournamentId = tournamentIdOf(tournament);
+
+        return isRegistrationOpenTournament(tournament) && getAvailableRacesForTournament(tournamentId).length > 0;
+      }),
+    [races, tournaments],
   );
 
   const selectedTournamentId = selectedTournament ? tournamentIdOf(selectedTournament) : 0;
 
   const tournamentRaces = useMemo(
-    () => races
-      .filter((race) => race.tournamentId === selectedTournamentId)
-      .sort((a, b) => new Date(a.scheduledAt).getTime() - new Date(b.scheduledAt).getTime()),
+    () => getAvailableRacesForTournament(selectedTournamentId),
     [races, selectedTournamentId],
   );
 
@@ -186,7 +235,7 @@ const RaceRegistrationPage = () => {
         horseId: horse.horseId,
       });
 
-      setMessage(`Registered ${horse.name} for ${selectedRace.raceName}.`);
+      setMessage(`Registration for ${horse.name} was created. You can invite a jockey now.`);
       setIsHorsePickerOpen(false);
       setSelectedRace(null);
       await loadRegistrations();
@@ -223,19 +272,6 @@ const RaceRegistrationPage = () => {
     }
   };
 
-  const handleDelete = async (id: number | string) => {
-    setMessage('');
-    setErrorMessage('');
-
-    try {
-      await raceRegistrationService.delete(id);
-      setMessage('Registration deleted.');
-      await loadRegistrations();
-    } catch (error) {
-      setErrorMessage(getApiErrorMessage(error, 'Could not delete registration.'));
-    }
-  };
-
   return (
     <div className="min-h-screen bg-surface py-12">
       <div className="mx-auto max-w-container px-4 md:px-margin-desktop">
@@ -245,8 +281,8 @@ const RaceRegistrationPage = () => {
             <h1 className="mt-2 text-headline-lg font-bold text-primary">Entry management</h1>
             <p className="mt-2 max-w-2xl text-body-md text-on-surface-variant">
               {isOwner
-                ? 'Choose a tournament with registration open, then pick a race and horse in order.'
-                : 'Review the registration queue and process approvals from one place.'}
+                ? 'Choose a tournament with registration open, register a horse, then invite and confirm a jockey before admin approval.'
+                : 'Review registrations that already have a confirmed jockey assignment before approving them.'}
             </p>
           </div>
 
@@ -263,9 +299,6 @@ const RaceRegistrationPage = () => {
           </button>
         </div>
 
-        {message && <StatusBanner tone="success" text={message} />}
-        {errorMessage && <StatusBanner tone="error" text={errorMessage} />}
-
         {isOwner ? (
           <section className="rounded-xl border border-outline-variant bg-white p-6 shadow-sm">
             <div className="mb-5 flex items-center gap-3">
@@ -273,7 +306,7 @@ const RaceRegistrationPage = () => {
               <div>
                 <h2 className="text-title-large font-bold text-primary">Open registration tournaments</h2>
                 <p className="mt-1 text-body-sm text-on-surface-variant">
-                  Only tournaments in `Registration Open` are shown here.
+                  Only future tournaments and races currently open for registration are shown here.
                 </p>
               </div>
             </div>
@@ -287,14 +320,14 @@ const RaceRegistrationPage = () => {
             ) : openRegistrationTournaments.length === 0 ? (
               <EmptyState
                 title="No tournament is open for registration"
-                description="When admin opens registration, available tournaments will appear here."
+                description="When admin opens registration for a future race, available tournaments will appear here."
                 icon={<Trophy className="h-5 w-5" />}
               />
             ) : (
               <div className="grid gap-4 lg:grid-cols-2">
                 {openRegistrationTournaments.map((tournament) => {
                   const tournamentId = tournamentIdOf(tournament);
-                  const raceCount = races.filter((race) => race.tournamentId === tournamentId).length;
+                  const raceCount = getAvailableRacesForTournament(tournamentId).length;
 
                   return (
                     <button
@@ -317,6 +350,10 @@ const RaceRegistrationPage = () => {
                         <InfoPill label="Location" value={tournament.location ?? '-'} />
                         <InfoPill label="Start" value={formatDateTime(tournament.startDate)} />
                         <InfoPill label="Races" value={String(raceCount)} />
+                      </div>
+                      <div className="grid gap-3 sm:grid-cols-2">
+                        <InfoPill label="Registration closes" value={formatDateTime(tournament.registrationCloseAt)} />
+                        <InfoPill label="End" value={formatDateTime(tournament.endDate)} />
                       </div>
 
                       <p className="text-body-sm font-semibold text-on-surface-variant">
@@ -352,7 +389,7 @@ const RaceRegistrationPage = () => {
             {tournamentRaces.length === 0 ? (
               <EmptyState
                 title="No races available"
-                description="This tournament does not have any race ready for registration yet."
+                description="This tournament does not have any future race open for registration."
                 icon={<ClipboardList className="h-5 w-5" />}
               />
             ) : (
@@ -458,13 +495,14 @@ const RaceRegistrationPage = () => {
             </div>
 
             <div className="overflow-x-auto">
-              <table className="w-full min-w-[860px] text-left">
+              <table className="w-full min-w-[920px] text-left">
                 <thead className="border-b border-outline-variant bg-surface-container">
                   <tr>
                     <th className="px-4 py-3 text-label-sm uppercase tracking-wider text-outline">Tournament</th>
                     <th className="px-4 py-3 text-label-sm uppercase tracking-wider text-outline">Race</th>
                     <th className="px-4 py-3 text-label-sm uppercase tracking-wider text-outline">Horse</th>
                     <th className="px-4 py-3 text-label-sm uppercase tracking-wider text-outline">Owner</th>
+                    <th className="px-4 py-3 text-label-sm uppercase tracking-wider text-outline">Jockey</th>
                     <th className="px-4 py-3 text-label-sm uppercase tracking-wider text-outline">Status</th>
                     <th className="px-4 py-3 text-label-sm uppercase tracking-wider text-outline text-right">Action</th>
                   </tr>
@@ -472,12 +510,13 @@ const RaceRegistrationPage = () => {
                 <tbody className="divide-y divide-outline-variant">
                   {isLoading ? (
                     <tr>
-                      <td colSpan={6} className="px-4 py-8 text-center text-body-sm text-on-surface-variant">
+                      <td colSpan={7} className="px-4 py-8 text-center text-body-sm text-on-surface-variant">
                         Loading registrations...
                       </td>
                     </tr>
                   ) : filteredQueue.map((item) => {
                     const id = item.regId ?? item.id ?? '';
+                    const canApproveRegistrationItem = canApproveRegistration(item);
 
                     return (
                       <tr key={id}>
@@ -493,19 +532,36 @@ const RaceRegistrationPage = () => {
                         <td className="px-4 py-4 text-body-sm text-on-surface-variant">
                           {item.ownerStableName ?? item.ownerFullName ?? '-'}
                         </td>
+                        <td className="px-4 py-4 text-body-sm text-on-surface-variant">
+                          {item.jockeyFullName ?? '-'}
+                        </td>
                         <td className="px-4 py-4">
-                          <span className={`inline-flex rounded-full px-3 py-1 text-[11px] font-bold uppercase tracking-wider ${getQueueStatusClassName(item.status)}`}>
-                            {item.status ?? '-'}
-                          </span>
+                          <div className="grid gap-2">
+                            <span className={`inline-flex rounded-full px-3 py-1 text-[11px] font-bold uppercase tracking-wider ${getQueueStatusClassName(item.status)}`}>
+                              {item.status ?? '-'}
+                            </span>
+                            <span className="text-[11px] font-semibold uppercase tracking-wider text-on-surface-variant">
+                              Owner: {item.ownerConfirmationStatus ?? '-'}
+                            </span>
+                          </div>
                         </td>
                         <td className="px-4 py-4">
                           <div className="flex justify-end gap-2">
+                            <button
+                              type="button"
+                              onClick={() => setViewingRegistration(item)}
+                              className="rounded-md border border-outline-variant px-2 py-2 text-label-sm font-bold text-primary transition-colors hover:border-primary"
+                            >
+                              Details
+                            </button>
                             {canApprove && (
                               <>
                                 <button
                                   type="button"
                                   onClick={() => void handleApprove(id)}
+                                  disabled={!canApproveRegistrationItem}
                                   className="rounded-md bg-secondary px-3 py-2 text-label-sm font-bold text-white"
+                                  title={canApproveRegistrationItem ? 'Approve registration' : 'Waiting for confirmed jockey assignment.'}
                                 >
                                   Approve
                                 </button>
@@ -518,15 +574,6 @@ const RaceRegistrationPage = () => {
                                 </button>
                               </>
                             )}
-                            {isOwner && (
-                              <button
-                                type="button"
-                                onClick={() => void handleDelete(id)}
-                                className="rounded-md border border-outline-variant px-3 py-2 text-label-sm font-bold text-primary"
-                              >
-                                Delete
-                              </button>
-                            )}
                           </div>
                         </td>
                       </tr>
@@ -534,7 +581,7 @@ const RaceRegistrationPage = () => {
                   })}
                   {!isLoading && filteredQueue.length === 0 && (
                     <tr>
-                      <td colSpan={6} className="px-4 py-8 text-center text-body-sm text-on-surface-variant">
+                      <td colSpan={7} className="px-4 py-8 text-center text-body-sm text-on-surface-variant">
                         No registrations found.
                       </td>
                     </tr>
@@ -545,15 +592,36 @@ const RaceRegistrationPage = () => {
           </div>
         </Modal>
       )}
+
+      {viewingRegistration && (
+        <Modal
+          title={`Registration #${viewingRegistration.regId ?? viewingRegistration.id ?? '-'}`}
+          subtitle={viewingRegistration.tournamentName ?? '-'}
+          onClose={() => setViewingRegistration(null)}
+        >
+          <div className="p-6">
+            <div className="grid gap-4 md:grid-cols-2">
+              <InfoPill label="Tournament" value={viewingRegistration.tournamentName ?? '-'} />
+              <InfoPill label="Race" value={viewingRegistration.raceName ?? '-'} />
+              <InfoPill label="Race Number" value={String(viewingRegistration.raceNumber ?? '-')} />
+              <InfoPill label="Scheduled At" value={formatDateTime(viewingRegistration.scheduledAt)} />
+              <InfoPill label="Horse" value={viewingRegistration.horseName ?? '-'} />
+              <InfoPill label="Jockey" value={viewingRegistration.jockeyFullName ?? '-'} />
+              <InfoPill label="Owner" value={viewingRegistration.ownerFullName ?? '-'} />
+              <InfoPill label="Stable" value={viewingRegistration.ownerStableName ?? '-'} />
+              <InfoPill label="Status" value={viewingRegistration.status ?? '-'} />
+              <InfoPill label="Owner Confirmation" value={viewingRegistration.ownerConfirmationStatus ?? '-'} />
+              <InfoPill label="Registered At" value={formatDateTime(viewingRegistration.registeredAt)} />
+              {viewingRegistration.approvedAt && (
+                <InfoPill label="Approved At" value={formatDateTime(viewingRegistration.approvedAt)} />
+              )}
+            </div>
+          </div>
+        </Modal>
+      )}
     </div>
   );
 };
-
-const StatusBanner = ({ tone, text }: { tone: 'success' | 'error'; text: string }) => (
-  <div className={`mb-6 rounded-md border px-4 py-3 text-body-sm font-semibold ${tone === 'success' ? 'border-secondary/30 bg-secondary-container/30 text-secondary' : 'border-error/30 bg-error-container/20 text-error'}`}>
-    {text}
-  </div>
-);
 
 const InfoPill = ({ label, value }: { label: string; value: string }) => (
   <div className="rounded-md border border-outline-variant bg-white px-3 py-3">

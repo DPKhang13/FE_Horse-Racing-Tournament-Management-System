@@ -86,6 +86,17 @@ const toDateTimeLocal = (date: string, time: string) => {
   return `${date}T${time || '09:00'}`;
 };
 
+const toApiInstant = (value?: string) => {
+  const text = value?.trim();
+
+  if (!text) {
+    return undefined;
+  }
+
+  const date = new Date(text);
+  return Number.isNaN(date.getTime()) ? undefined : date.toISOString();
+};
+
 const normalizeRaceStatus = (value: unknown): MatchStatus => {
   const text = asString(value, 'Scheduled').toLowerCase();
 
@@ -147,8 +158,8 @@ const toRacePayload = (tournamentId: number | string, data: RaceFormData) => ({
   raceNumber: Number(data.raceNumber),
   rankGroup: data.rankGroup.trim(),
   lapCount: Number(data.lapCount),
-  scheduledAt: data.scheduledAt,
-  predictionClosesAt: data.predictionClosesAt || undefined,
+  scheduledAt: toApiInstant(data.scheduledAt),
+  predictionClosesAt: toApiInstant(data.predictionClosesAt),
   distanceM: Number(data.distanceM),
   trackType: data.trackType.trim(),
   maxHorses: Number(data.maxHorses),
@@ -169,6 +180,22 @@ const toRoundPayload = (raceId: number | string, data: RaceRoundFormData) => ({
 
 let mockRacesByTournament = new Map<string, RaceCrudItem[]>();
 let mockRoundsByRace = new Map<string, RaceRoundItem[]>();
+
+const resolveScheduleId = async (tournamentId: number | string, scheduleId?: number) => {
+  if (scheduleId) {
+    return scheduleId;
+  }
+
+  const response = await apiClient.get(`/api/v1/admin/tournaments/${tournamentId}/get-schedule-list`);
+  const schedules = unwrapApiList<RawRecord>(response);
+  const resolvedScheduleId = asNumber(schedules[0]?.scheduleId ?? schedules[0]?.id);
+
+  if (!resolvedScheduleId) {
+    throw new Error('No schedule found for this tournament. Create a schedule before adding races.');
+  }
+
+  return resolvedScheduleId;
+};
 
 const raceFromMatch = (match: TournamentMatch, tournamentId: number | string, index: number): RaceCrudItem => ({
   raceId: asNumber(match.matchId.replace(/\D/g, ''), index + 1),
@@ -199,7 +226,7 @@ const ensureMockRaces = async (tournamentId: number | string) => {
 export const raceCrudService = {
   async getRacesByTournament(tournamentId: number | string): Promise<RaceCrudItem[]> {
     try {
-      const response = await apiClient.get(`/api/races/get-by-tournament/${tournamentId}`);
+      const response = await apiClient.get(`/api/tournaments/${tournamentId}/get-race-list`);
       return unwrapApiList<RawRecord>(response).map(mapRace);
     } catch {
       return ensureMockRaces(tournamentId);
@@ -207,89 +234,57 @@ export const raceCrudService = {
   },
 
   async createRace(tournamentId: number | string, data: RaceFormData): Promise<RaceCrudItem> {
-    try {
-      const response = await apiClient.post('/api/races/create', toRacePayload(tournamentId, data));
-      return mapRace(unwrapApiData<RawRecord>(response));
-    } catch {
-      const races = await ensureMockRaces(tournamentId);
-      const race = mapRace({
-        ...toRacePayload(tournamentId, data),
-        raceId: Math.max(0, ...races.map((item) => item.raceId)) + 1,
-      });
-      mockRacesByTournament.set(String(tournamentId), [race, ...races]);
-      return race;
-    }
+    const scheduleId = await resolveScheduleId(tournamentId, data.scheduleId);
+    const response = await apiClient.post(`/api/v1/admin/schedules/${scheduleId}/create-race`, toRacePayload(tournamentId, data));
+    return mapRace(unwrapApiData<RawRecord>(response));
   },
 
   async updateRace(raceId: number | string, tournamentId: number | string, data: RaceFormData): Promise<RaceCrudItem> {
-    try {
-      const response = await apiClient.put(`/api/races/update/${raceId}`, toRacePayload(tournamentId, data));
-      return mapRace(unwrapApiData<RawRecord>(response));
-    } catch {
-      const races = await ensureMockRaces(tournamentId);
-      const updatedRace = mapRace({ ...toRacePayload(tournamentId, data), raceId: Number(raceId) });
-      mockRacesByTournament.set(
-        String(tournamentId),
-        races.map((race) => (String(race.raceId) === String(raceId) ? updatedRace : race)),
-      );
-      return updatedRace;
-    }
+    const response = await apiClient.put(`/api/v1/admin/races/update-race/${raceId}`, toRacePayload(tournamentId, data));
+    return mapRace(unwrapApiData<RawRecord>(response));
   },
 
   async deleteRace(raceId: number | string, tournamentId: number | string): Promise<void> {
     try {
-      await apiClient.delete(`/api/races/delete/${raceId}`);
+      await apiClient.patch(`/api/v1/admin/races/cancel-race/${raceId}`);
     } catch {
       const races = await ensureMockRaces(tournamentId);
-      mockRacesByTournament.set(String(tournamentId), races.filter((race) => String(race.raceId) !== String(raceId)));
+      mockRacesByTournament.set(
+        String(tournamentId),
+        races.map((race) =>
+          String(race.raceId) === String(raceId)
+            ? { ...race, status: 'cancelled' }
+            : race,
+        ),
+      );
     }
   },
 
   async getRoundsByRace(raceId: number | string): Promise<RaceRoundItem[]> {
-    try {
-      const response = await apiClient.get(`/api/race-rounds/get-by-race/${raceId}`);
-      return unwrapApiList<RawRecord>(response).map(mapRound);
-    } catch {
-      return mockRoundsByRace.get(String(raceId)) ?? [];
-    }
+    return mockRoundsByRace.get(String(raceId)) ?? [];
   },
 
   async createRound(raceId: number | string, data: RaceRoundFormData): Promise<RaceRoundItem> {
-    try {
-      const response = await apiClient.post('/api/race-rounds/create', toRoundPayload(raceId, data));
-      return mapRound(unwrapApiData<RawRecord>(response));
-    } catch {
-      const rounds = mockRoundsByRace.get(String(raceId)) ?? [];
-      const round = mapRound({
-        ...toRoundPayload(raceId, data),
-        roundId: Math.max(0, ...rounds.map((item) => item.roundId)) + 1,
-      });
-      mockRoundsByRace.set(String(raceId), [round, ...rounds]);
-      return round;
-    }
+    const rounds = mockRoundsByRace.get(String(raceId)) ?? [];
+    const round = mapRound({
+      ...toRoundPayload(raceId, data),
+      roundId: Math.max(0, ...rounds.map((item) => item.roundId)) + 1,
+    });
+    mockRoundsByRace.set(String(raceId), [round, ...rounds]);
+    return round;
   },
 
   async updateRound(roundId: number | string, raceId: number | string, data: RaceRoundFormData): Promise<RaceRoundItem> {
-    try {
-      const response = await apiClient.put(`/api/race-rounds/update/${roundId}`, toRoundPayload(raceId, data));
-      return mapRound(unwrapApiData<RawRecord>(response));
-    } catch {
-      const rounds = mockRoundsByRace.get(String(raceId)) ?? [];
-      const updatedRound = mapRound({ ...toRoundPayload(raceId, data), roundId: Number(roundId) });
-      mockRoundsByRace.set(
-        String(raceId),
-        rounds.map((round) => (String(round.roundId) === String(roundId) ? updatedRound : round)),
-      );
-      return updatedRound;
-    }
+    const rounds = mockRoundsByRace.get(String(raceId)) ?? [];
+    const updatedRound = mapRound({ ...toRoundPayload(raceId, data), roundId: Number(roundId) });
+    mockRoundsByRace.set(
+      String(raceId),
+      rounds.map((round) => (String(round.roundId) === String(roundId) ? updatedRound : round)),
+    );
+    return updatedRound;
   },
 
   async deleteRound(roundId: number | string, raceId: number | string): Promise<void> {
-    try {
-      await apiClient.delete(`/api/race-rounds/delete/${roundId}`);
-    } catch {
-      const rounds = mockRoundsByRace.get(String(raceId)) ?? [];
-      mockRoundsByRace.set(String(raceId), rounds.filter((round) => String(round.roundId) !== String(roundId)));
-    }
+    throw new Error(`Backend does not provide delete API for lap ${roundId} in race ${raceId}.`);
   },
 };

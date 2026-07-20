@@ -1,10 +1,16 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Globe2, MessageCircle, Share2 } from 'lucide-react';
-import { motion } from 'motion/react';
+import { ChevronLeft, ChevronRight, Globe2, MessageCircle, Share2 } from 'lucide-react';
+import { AnimatePresence, motion } from 'motion/react';
 import { Link } from 'react-router-dom';
-import { getApiErrorMessage } from '../../services/apiClient';
-import { tournamentService } from '../../services/tournamentService';
-import type { Tournament, TournamentParticipant } from '../../types/tournament';
+import { getAccessToken, getApiErrorMessage } from '../../services/apiClient';
+import { authService } from '../../services/authService';
+import {
+  landingPageService,
+  type LandingHorseRanking,
+  type LandingJockeyRanking,
+  type LandingTournament,
+} from '../../services/landingPageService';
+import type { UserProfile } from '../../types/user';
 
 const heroImage =
   'https://lh3.googleusercontent.com/aida-public/AB6AXuAMECLOWNrDaYZayptmiktWx0wBNF3DYXYJFdqOmb7f0lbXELzFaizKIcqgCq655F9mfHQjMB4vV33zITEW68yWnSuVEElxHx5KKUrWfVL4ic11vvHju-2VZM7SItLPqX0z9udU8nLv8BQn-tI0WX8QXMYGBOo7h94yX5vlu8dOnTsd4GyzD93O_OBwAU1AG5ZCrCV8J9UMrVtaOB5KBBuol1OhNNGNy9VI8w9B0GDqcbDMR1kHiIAkYp73T3-E2huQ5Tsu20hvvvjc';
@@ -115,8 +121,18 @@ const revealContainer = {
 
 const viewportReveal = { once: true, amount: 0.18 };
 
-const getTournamentParticipants = (tournament: Tournament | undefined) =>
-  tournament?.participants.length ? tournament.participants : [];
+type TournamentCarouselPosition = 'left' | 'center' | 'right';
+type TournamentCarouselTone = 'side' | 'center';
+type TournamentCarouselCandidate = {
+  position: TournamentCarouselPosition;
+  tournament: LandingTournament | null;
+  tone: TournamentCarouselTone;
+};
+type TournamentCarouselItem = {
+  position: TournamentCarouselPosition;
+  tournament: LandingTournament;
+  tone: TournamentCarouselTone;
+};
 
 const formatLandingDate = (value: string | undefined) => {
   if (!value) {
@@ -132,6 +148,25 @@ const formatLandingDate = (value: string | undefined) => {
     month: 'short',
     day: 'numeric',
     year: 'numeric',
+  }).format(parsed);
+};
+
+const formatLandingDateTime = (value: string | undefined) => {
+  if (!value) {
+    return 'To be announced';
+  }
+
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    return value;
+  }
+
+  return new Intl.DateTimeFormat('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
   }).format(parsed);
 };
 
@@ -155,34 +190,62 @@ const getTournamentStatusClassName = (status: string | undefined) => {
 };
 
 const LandingPage = () => {
-  const [tournaments, setTournaments] = useState<Tournament[]>([]);
-  const [isLoadingTournaments, setIsLoadingTournaments] = useState(true);
-  const [tournamentError, setTournamentError] = useState('');
+  const [profile, setProfile] = useState<UserProfile | undefined>(() => authService.getStoredUserProfile());
+  const [tournaments, setTournaments] = useState<LandingTournament[]>([]);
+  const [horses, setHorses] = useState<LandingHorseRanking[]>([]);
+  const [jockeyRankings, setJockeyRankings] = useState<LandingJockeyRanking[]>([]);
+  const [currentTournamentIndex, setCurrentTournamentIndex] = useState(0);
+  const [carouselDirection, setCarouselDirection] = useState<1 | -1>(1);
+  const [isLoadingLandingData, setIsLoadingLandingData] = useState(true);
+  const [landingError, setLandingError] = useState('');
+  const isAuthenticated = Boolean(getAccessToken());
+
+  useEffect(() => {
+    const syncAuthState = () => {
+      setProfile(authService.getStoredUserProfile());
+    };
+
+    window.addEventListener('auth-changed', syncAuthState);
+    window.addEventListener('storage', syncAuthState);
+
+    if (getAccessToken() && !profile) {
+      void authService.getCurrentUser().then(setProfile).catch(() => setProfile(undefined));
+    }
+
+    return () => {
+      window.removeEventListener('auth-changed', syncAuthState);
+      window.removeEventListener('storage', syncAuthState);
+    };
+  }, [profile]);
 
   useEffect(() => {
     let isMounted = true;
 
-    const loadTournaments = async () => {
+    const loadLandingData = async () => {
       try {
-        const data = await tournamentService.getAllTournaments(false);
+        const data = await landingPageService.getLandingPageData();
 
         if (isMounted) {
-          setTournaments(data);
-          setTournamentError('');
+          setTournaments(data.tournaments);
+          setHorses(data.horses);
+          setJockeyRankings(data.jockeys);
+          setLandingError('');
         }
       } catch (error) {
         if (isMounted) {
           setTournaments([]);
-          setTournamentError(getApiErrorMessage(error, 'Unable to load tournaments.'));
+          setHorses([]);
+          setJockeyRankings([]);
+          setLandingError(getApiErrorMessage(error, 'Unable to load landing data.'));
         }
       } finally {
         if (isMounted) {
-          setIsLoadingTournaments(false);
+          setIsLoadingLandingData(false);
         }
       }
     };
 
-    void loadTournaments();
+    void loadLandingData();
 
     return () => {
       isMounted = false;
@@ -190,27 +253,39 @@ const LandingPage = () => {
   }, []);
 
   const winners = useMemo(() => {
-    const completedTournament = tournaments.find((tournament) => tournament.status === 'Completed') ?? tournaments[0];
-    const participants = getTournamentParticipants(completedTournament).slice(0, 3);
-
-    if (participants.length === 0) {
+    if (horses.length === 0) {
       return fallbackWinners;
     }
 
-    return participants.map((participant: TournamentParticipant, index) => ({
-      rank: index + 1,
-      horse: participant.horseName,
-      jockey: participant.jockeyName,
-      time: completedTournament?.schedule[index]?.endTime ?? '-',
-      payout: index === 0 ? completedTournament?.prize || '-' : '-',
-      image: fallbackWinners[index]?.image ?? fallbackWinners[0].image,
+    return horses.slice(0, 3).map((horse, index) => ({
+      rank: horse.rank || index + 1,
+      horse: horse.name,
+      jockey: horse.ownerFullName ?? 'Stable Owner',
+      time: `${horse.totalWins} wins`,
+      payout: `${horse.rankingPoints} pts`,
+      image: horse.avatarUrl || fallbackWinners[index]?.image || fallbackWinners[0].image,
       avatarClass: fallbackWinners[index]?.avatarClass ?? 'border-outline-variant',
       badgeClass: fallbackWinners[index]?.badgeClass ?? 'bg-on-surface-variant/30 text-on-surface',
       silkClass: fallbackWinners[index]?.silkClass ?? 'border-primary bg-secondary-container',
     }));
-  }, [tournaments]);
+  }, [horses]);
 
-  const jockeys = useMemo(() => fallbackJockeys, []);
+  const topJockeys = useMemo(() => {
+    if (jockeyRankings.length === 0) {
+      return fallbackJockeys;
+    }
+
+    return jockeyRankings.slice(0, 3).map((jockey, index) => ({
+      rank: jockey.rank || index + 1,
+      name: jockey.fullName,
+      wins: jockey.totalWins,
+      losses: Math.max(jockey.totalRaces - jockey.totalWins, 0),
+      winRate: `${Math.round(jockey.winRate)}%`,
+      image: jockey.avatarUrl || fallbackJockeys[index]?.image || fallbackJockeys[0].image,
+      avatarClass: fallbackJockeys[index]?.avatarClass ?? 'border-outline-variant',
+      badgeClass: fallbackJockeys[index]?.badgeClass ?? 'bg-on-surface-variant/30 text-on-surface',
+    }));
+  }, [jockeyRankings]);
 
   const featuredTournament = useMemo(
     () =>
@@ -221,29 +296,94 @@ const LandingPage = () => {
     [tournaments],
   );
 
-  const featuredParticipants = useMemo(
-    () => getTournamentParticipants(featuredTournament).slice(0, 2),
-    [featuredTournament],
-  );
-
   const landingTournamentList = useMemo(() => {
-    const priority = ['Ongoing', 'Registration Open', 'Upcoming', 'Registration Closed', 'Completed'];
-
     return [...tournaments]
-      .sort((left, right) => {
-        const leftRank = priority.indexOf(left.status);
-        const rightRank = priority.indexOf(right.status);
-        const normalizedLeftRank = leftRank === -1 ? priority.length : leftRank;
-        const normalizedRightRank = rightRank === -1 ? priority.length : rightRank;
-
-        if (normalizedLeftRank !== normalizedRightRank) {
-          return normalizedLeftRank - normalizedRightRank;
-        }
-
-        return new Date(left.startDate).getTime() - new Date(right.startDate).getTime();
-      })
+      .sort((left, right) => left.tournamentId - right.tournamentId)
       .slice(0, 4);
   }, [tournaments]);
+
+  useEffect(() => {
+    if (landingTournamentList.length === 0) {
+      setCurrentTournamentIndex(0);
+      return;
+    }
+
+    setCurrentTournamentIndex((current) => current % landingTournamentList.length);
+  }, [landingTournamentList.length]);
+
+  useEffect(() => {
+    if (landingTournamentList.length <= 1) {
+      return;
+    }
+
+    const intervalId = window.setInterval(() => {
+      setCarouselDirection(1);
+      setCurrentTournamentIndex((current) => (current + 1) % landingTournamentList.length);
+    }, 4000);
+
+    return () => {
+      window.clearInterval(intervalId);
+    };
+  }, [landingTournamentList.length]);
+
+  const getTournamentAtOffset = (offset: number) => {
+    if (landingTournamentList.length === 0) {
+      return null;
+    }
+
+    const normalizedIndex =
+      (currentTournamentIndex + offset + landingTournamentList.length) % landingTournamentList.length;
+
+    return landingTournamentList[normalizedIndex];
+  };
+
+  const visibleTournamentCards = useMemo(
+    () => {
+      const candidates: TournamentCarouselCandidate[] = [
+        { position: 'left' as const, tournament: getTournamentAtOffset(-1), tone: 'side' as const },
+        { position: 'center' as const, tournament: getTournamentAtOffset(0), tone: 'center' as const },
+        { position: 'right' as const, tournament: getTournamentAtOffset(1), tone: 'side' as const },
+      ];
+
+      return candidates.filter(
+        (item): item is TournamentCarouselItem => item.tournament !== null,
+      );
+    },
+    [currentTournamentIndex, landingTournamentList],
+  );
+
+  const showPreviousTournament = () => {
+    if (landingTournamentList.length === 0) {
+      return;
+    }
+
+    setCarouselDirection(-1);
+    setCurrentTournamentIndex((current) =>
+      (current - 1 + landingTournamentList.length) % landingTournamentList.length,
+    );
+  };
+
+  const showNextTournament = () => {
+    if (landingTournamentList.length === 0) {
+      return;
+    }
+
+    setCarouselDirection(1);
+    setCurrentTournamentIndex((current) => (current + 1) % landingTournamentList.length);
+  };
+
+  const featuredTournamentDetails = useMemo(() => {
+    if (!featuredTournament) {
+      return [];
+    }
+
+    return [
+      { label: 'Location', value: featuredTournament.location },
+      { label: 'Registration Opens', value: formatLandingDateTime(featuredTournament.registrationOpenAt) },
+      { label: 'Registration Closes', value: formatLandingDateTime(featuredTournament.registrationCloseAt) },
+      { label: 'Organizer', value: featuredTournament.createdByFullName ?? 'HTMS Admin' },
+    ];
+  }, [featuredTournament]);
 
   return (
     <div className="overflow-x-hidden bg-background text-body-md text-on-surface">
@@ -285,14 +425,16 @@ const LandingPage = () => {
           >
             Experience precision data, lightning-fast tournament logistics, and the ultimate betting excitement. Whether you manage a stable or chase the thrill of the win, HTMS is your elite racing command center.
           </motion.p>
-          <motion.div className="flex flex-wrap gap-4" variants={revealUp} transition={{ duration: 0.65 }}>
-            <Link to="/login" state={{ mode: 'signup' }} className="gold-gradient rounded-xl px-8 py-4 font-display text-xl font-bold text-on-primary shadow-lg shadow-primary/20 transition-transform active:scale-95">
-              Join the Race
-            </Link>
-            <Link to="/tournaments" className="rounded-xl border border-outline-variant bg-surface-container-highest px-8 py-4 font-display text-xl font-bold text-on-surface transition-colors hover:bg-surface-bright">
-              Explore Tournaments
-            </Link>
-          </motion.div>
+          {!isAuthenticated && (
+            <motion.div className="flex flex-wrap gap-4" variants={revealUp} transition={{ duration: 0.65 }}>
+              <Link to="/login" state={{ mode: 'signup' }} className="gold-gradient rounded-xl px-8 py-4 font-display text-xl font-bold text-on-primary shadow-lg shadow-primary/20 transition-transform active:scale-95">
+                Join the Race
+              </Link>
+              <Link to="/tournaments" className="rounded-xl border border-outline-variant bg-surface-container-highest px-8 py-4 font-display text-xl font-bold text-on-surface transition-colors hover:bg-surface-bright">
+                Explore Tournaments
+              </Link>
+            </motion.div>
+          )}
         </motion.div>
 
         <div className="absolute bottom-0 right-0 hidden p-12 xl:block">
@@ -305,25 +447,23 @@ const LandingPage = () => {
             <div className="mb-4 flex items-center justify-between">
               <span className="flex items-center text-label-md font-semibold text-secondary">
                 <span className="pulse-live mr-2 h-3 w-3 rounded-full bg-secondary" />
-                {featuredTournament?.status === 'Ongoing' ? 'LIVE TOURNAMENT' : 'FEATURED EVENT'}
+                {featuredTournament?.status === 'Ongoing' ? 'FEATURED TOURNAMENT' : 'TOURNAMENT OVERVIEW'}
               </span>
               <span className="text-data-mono font-medium text-on-surface-variant">
-                {featuredTournament ? `${featuredTournament.currentParticipants}/${featuredTournament.maximumParticipants}` : '--/--'}
+                {featuredTournament ? formatLandingDate(featuredTournament.startDate) : '--'}
               </span>
             </div>
-            {isLoadingTournaments ? (
+            {isLoadingLandingData ? (
               <FloatingCardMessage text="Loading tournament lineup..." />
-            ) : tournamentError ? (
-              <FloatingCardMessage tone="error" text={tournamentError} />
+            ) : landingError ? (
+              <FloatingCardMessage tone="error" text={landingError} />
             ) : !featuredTournament ? (
               <FloatingCardMessage text="No tournament is scheduled yet." />
-            ) : featuredParticipants.length === 0 ? (
-              <FloatingCardMessage text="This tournament does not have registered horses yet." />
             ) : (
               <div className="space-y-3">
-                {featuredParticipants.map((item, index) => (
+                {featuredTournamentDetails.map((item, index) => (
                   <motion.div
-                    key={item.participantId}
+                    key={item.label}
                     className="flex items-center justify-between gap-3"
                     initial={{ opacity: 0, x: 12 }}
                     animate={{ opacity: 1, x: 0 }}
@@ -331,14 +471,19 @@ const LandingPage = () => {
                   >
                     <div className="flex min-w-0 items-center gap-3">
                       <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-bold ${index === 0 ? 'bg-primary-container text-on-primary' : 'bg-on-tertiary-container text-on-tertiary'}`}>
-                        {item.horseName.slice(0, 2).toUpperCase()}
+                        {item.label.slice(0, 2).toUpperCase()}
                       </div>
-                      <span className="truncate font-bold">{item.horseName}</span>
+                      <span className="truncate font-bold">{item.label}</span>
                     </div>
-                    <span className="shrink-0 text-data-mono font-medium text-primary">{item.jockeyName}</span>
+                    <span className="shrink-0 text-right text-data-mono font-medium text-primary">{item.value}</span>
                   </motion.div>
                 ))}
               </div>
+            )}
+            {featuredTournament && !isLoadingLandingData && !landingError && (
+              <p className="mt-4 text-xs font-medium text-on-surface-variant">
+                Quick summary for the highlighted tournament.
+              </p>
             )}
           </motion.div>
         </div>
@@ -363,70 +508,55 @@ const LandingPage = () => {
           </p>
         </motion.div>
 
-        {isLoadingTournaments ? (
+        {isLoadingLandingData ? (
           <div className="mx-auto max-w-5xl">
             <FloatingCardMessage text="Loading tournament lineup..." />
           </div>
-        ) : tournamentError ? (
+        ) : landingError ? (
           <div className="mx-auto max-w-5xl">
-            <FloatingCardMessage tone="error" text={tournamentError} />
+            <FloatingCardMessage tone="error" text={landingError} />
           </div>
         ) : (
           <motion.div
-            className="mx-auto grid max-w-6xl gap-5 lg:grid-cols-2"
+            className="w-full"
             initial="hidden"
             whileInView="visible"
             viewport={{ once: true, amount: 0.28 }}
             variants={revealContainer}
           >
-            {landingTournamentList.map((tournament) => (
-              <motion.article
-                key={tournament.tournamentId}
-                variants={revealUp}
-                className="glass-card flex min-h-[232px] flex-col justify-between rounded-2xl border border-outline-variant/20 p-6"
+            <div className="grid w-full grid-cols-[36px_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_36px] items-stretch gap-3 md:grid-cols-[44px_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_44px] md:gap-4">
+              <button
+                type="button"
+                onClick={showPreviousTournament}
+                className="flex h-9 w-9 items-center justify-center self-center rounded-full border border-outline-variant/40 bg-surface-container-high/70 text-on-surface-variant transition-colors hover:text-primary md:h-11 md:w-11"
+                aria-label="Show previous tournament"
               >
-                <div className="space-y-4">
-                  <div className="flex items-start justify-between gap-4">
-                    <div>
-                      <p className="mb-2 text-label-sm font-bold uppercase tracking-[0.16em] text-outline">
-                        {tournament.id}
-                      </p>
-                      <h3 className="font-display text-title-large font-bold text-on-surface">
-                        {tournament.tournamentName}
-                      </h3>
-                    </div>
-                    <span className={`rounded-full px-3 py-1 text-label-sm font-bold ${getTournamentStatusClassName(tournament.status)}`}>
-                      {tournament.status}
-                    </span>
-                  </div>
+                <ChevronLeft className="h-4 w-4" />
+              </button>
 
-                  <p className="line-clamp-2 text-body-md text-on-surface-variant">
-                    {tournament.description}
-                  </p>
-                </div>
+              <div className="relative col-span-3 h-[252px] min-w-0 md:h-[276px]">
+                <AnimatePresence initial={false} custom={carouselDirection}>
+                  {visibleTournamentCards.map(({ position, tournament, tone }) => (
+                    <TournamentCarouselCard
+                      key={tournament.tournamentId}
+                      tournament={tournament}
+                      tone={tone}
+                      direction={carouselDirection}
+                      position={position}
+                    />
+                  ))}
+                </AnimatePresence>
+              </div>
 
-                <div className="mt-6 grid grid-cols-2 gap-3 text-body-sm text-on-surface-variant">
-                  <div className="rounded-xl bg-surface-container-high/40 px-4 py-3">
-                    <p className="mb-1 text-label-sm font-bold uppercase tracking-[0.12em] text-outline">Location</p>
-                    <p className="font-semibold text-on-surface">{tournament.location}</p>
-                  </div>
-                  <div className="rounded-xl bg-surface-container-high/40 px-4 py-3">
-                    <p className="mb-1 text-label-sm font-bold uppercase tracking-[0.12em] text-outline">Start Date</p>
-                    <p className="font-semibold text-on-surface">{formatLandingDate(tournament.startDate)}</p>
-                  </div>
-                  <div className="rounded-xl bg-surface-container-high/40 px-4 py-3">
-                    <p className="mb-1 text-label-sm font-bold uppercase tracking-[0.12em] text-outline">Field</p>
-                    <p className="font-semibold text-on-surface">
-                      {tournament.currentParticipants}/{tournament.maximumParticipants} horses
-                    </p>
-                  </div>
-                  <div className="rounded-xl bg-surface-container-high/40 px-4 py-3">
-                    <p className="mb-1 text-label-sm font-bold uppercase tracking-[0.12em] text-outline">Prize Pool</p>
-                    <p className="font-semibold text-primary">{tournament.prize}</p>
-                  </div>
-                </div>
-              </motion.article>
-            ))}
+              <button
+                type="button"
+                onClick={showNextTournament}
+                className="flex h-9 w-9 items-center justify-center self-center rounded-full border border-outline-variant/40 bg-surface-container-high/70 text-on-surface-variant transition-colors hover:text-primary md:h-11 md:w-11"
+                aria-label="Show next tournament"
+              >
+                <ChevronRight className="h-4 w-4" />
+              </button>
+            </div>
           </motion.div>
         )}
       </section>
@@ -474,7 +604,7 @@ const LandingPage = () => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-outline-variant/20">
-                {jockeys.map((jockey, index) => (
+                {topJockeys.map((jockey, index) => (
                   <motion.tr
                     key={jockey.rank}
                     className="transition-colors hover:bg-surface-container-highest/20"
@@ -541,7 +671,7 @@ const LandingPage = () => {
             <table className="w-full min-w-[860px] text-left">
               <thead>
                 <tr className="bg-surface-container-high/50">
-                  {['Rank', 'Horse', 'Jockey / Silks', 'Time', 'Payout'].map((heading) => (
+                  {['Rank', 'Horse', 'Owner', 'Time', 'Payout'].map((heading) => (
                     <th key={heading} className="px-8 py-5 text-label-md font-semibold uppercase tracking-widest text-on-surface-variant">
                       {heading}
                     </th>
@@ -586,37 +716,39 @@ const LandingPage = () => {
         </motion.div>
       </section>
 
-      <section className="relative overflow-hidden bg-background px-8 py-24 md:px-32">
-        <motion.div
-          className="glass-card relative overflow-hidden rounded-[32px] border-primary/30 p-12 text-center md:p-24"
-          initial={{ opacity: 0, y: 36, scale: 0.98 }}
-          whileInView={{ opacity: 1, y: 0, scale: 1 }}
-          viewport={viewportReveal}
-          transition={{ type: 'spring', stiffness: 150, damping: 20 }}
-        >
-          <div className="absolute inset-0 opacity-10">
-            <div className="h-full w-full bg-[radial-gradient(#f2ca50_1px,transparent_1px)] bg-[length:40px_40px]" />
-          </div>
-          <div className="relative z-10">
-            <h2 className="font-display mb-8 text-5xl font-extrabold leading-tight">Ready to Elevate Your Race?</h2>
-            <p className="mx-auto mb-12 max-w-2xl text-body-lg text-on-surface-variant">
-              Join the world's most advanced horse racing ecosystem today. Whether you're managing a stable or betting on glory, HTMS gives you the winning edge.
-            </p>
-            <div className="flex flex-col justify-center gap-6 md:flex-row">
-              <motion.div whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.98 }} transition={{ type: 'spring', stiffness: 400, damping: 15 }}>
-                <Link to="/login" state={{ mode: 'signup' }} className="gold-gradient rounded-xl px-10 py-5 font-display text-xl font-bold text-on-primary shadow-2xl transition-transform active:scale-95">
-                  Create Operator Account
-                </Link>
-              </motion.div>
-              <motion.div whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.98 }} transition={{ type: 'spring', stiffness: 400, damping: 15 }}>
-                <Link to="/login" state={{ mode: 'signup' }} className="rounded-xl border border-outline-variant bg-surface-container-highest px-10 py-5 font-display text-xl font-bold text-on-surface transition-colors hover:bg-surface-bright">
-                  Register as Spectator
-                </Link>
-              </motion.div>
+      {!isAuthenticated && (
+        <section className="relative overflow-hidden bg-background px-8 py-24 md:px-32">
+          <motion.div
+            className="glass-card relative overflow-hidden rounded-[32px] border-primary/30 p-12 text-center md:p-24"
+            initial={{ opacity: 0, y: 36, scale: 0.98 }}
+            whileInView={{ opacity: 1, y: 0, scale: 1 }}
+            viewport={viewportReveal}
+            transition={{ type: 'spring', stiffness: 150, damping: 20 }}
+          >
+            <div className="absolute inset-0 opacity-10">
+              <div className="h-full w-full bg-[radial-gradient(#f2ca50_1px,transparent_1px)] bg-[length:40px_40px]" />
             </div>
-          </div>
-        </motion.div>
-      </section>
+            <div className="relative z-10">
+              <h2 className="font-display mb-8 text-5xl font-extrabold leading-tight">Ready to Elevate Your Race?</h2>
+              <p className="mx-auto mb-12 max-w-2xl text-body-lg text-on-surface-variant">
+                Join the world's most advanced horse racing ecosystem today. Whether you're managing a stable or betting on glory, HTMS gives you the winning edge.
+              </p>
+              <div className="flex flex-col justify-center gap-6 md:flex-row">
+                <motion.div whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.98 }} transition={{ type: 'spring', stiffness: 400, damping: 15 }}>
+                  <Link to="/login" state={{ mode: 'signup' }} className="gold-gradient rounded-xl px-10 py-5 font-display text-xl font-bold text-on-primary shadow-2xl transition-transform active:scale-95">
+                    Create Operator Account
+                  </Link>
+                </motion.div>
+                <motion.div whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.98 }} transition={{ type: 'spring', stiffness: 400, damping: 15 }}>
+                  <Link to="/login" state={{ mode: 'signup' }} className="rounded-xl border border-outline-variant bg-surface-container-highest px-10 py-5 font-display text-xl font-bold text-on-surface transition-colors hover:bg-surface-bright">
+                    Register as Spectator
+                  </Link>
+                </motion.div>
+              </div>
+            </div>
+          </motion.div>
+        </section>
+      )}
 
       <footer className="border-t border-outline-variant/30 bg-surface-container-lowest px-8 pb-10 pt-20 md:px-32">
         <motion.div
@@ -675,12 +807,93 @@ const LandingPage = () => {
               Gamble responsibly. If you or someone you know has a gambling problem, call 1-800-GAMBLER.
             </p>
           </div>
-          <p className="text-label-md text-on-surface-variant">© 2024 HTMS GLOBAL SYSTEMS. ALL RIGHTS RESERVED.</p>
+          <p className="text-label-md text-on-surface-variant">(c) 2026 HTMS GLOBAL SYSTEMS. ALL RIGHTS RESERVED.</p>
         </motion.div>
       </footer>
     </div>
   );
 };
+
+const TournamentCarouselCard = ({
+  tournament,
+  tone,
+  direction,
+  position,
+}: {
+  tournament: LandingTournament;
+  tone: 'center' | 'side';
+  direction: 1 | -1;
+  position: 'left' | 'center' | 'right';
+}) => (
+  <motion.article
+    custom={direction}
+    initial={{
+      opacity: 0,
+      x: position === 'right' ? 180 : position === 'left' ? -180 : direction > 0 ? 80 : -80,
+      y: tone === 'center' ? 0 : 8,
+    }}
+    animate={{
+      opacity: tone === 'center' ? 1 : 0.32,
+      x: position === 'left' ? '-100%' : position === 'right' ? '100%' : '0%',
+      y: tone === 'center' ? 0 : 10,
+      scale: tone === 'center' ? 1.04 : 0.98,
+      filter: tone === 'center' ? 'blur(0px)' : 'blur(0.6px)',
+    }}
+    exit={{
+      opacity: 0,
+      x: direction > 0 ? -180 : 180,
+      y: tone === 'center' ? 0 : 8,
+    }}
+    transition={{ duration: 0.55, ease: [0.22, 1, 0.36, 1] }}
+    className={`glass-card flex min-h-[252px] w-full flex-col justify-between rounded-2xl border border-outline-variant/20 p-5 transition-all md:p-6 ${
+      tone === 'center'
+        ? 'border-primary/35 shadow-[0_24px_60px_rgba(0,0,0,0.28)]'
+        : 'pointer-events-none'
+    } absolute left-1/2 top-0 z-10 max-w-[32%] -translate-x-1/2`}
+    style={{
+      zIndex: position === 'center' ? 2 : 1,
+    }}
+  >
+    <div className="space-y-4">
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <p className="mb-2 text-label-sm font-bold uppercase tracking-[0.16em] text-outline">
+            {tournament.id}
+          </p>
+          <h3 className="font-display text-title-large font-bold text-on-surface">
+            {tournament.tournamentName}
+          </h3>
+        </div>
+        <span className={`rounded-full px-3 py-1 text-label-sm font-bold ${getTournamentStatusClassName(tournament.status)}`}>
+          {tournament.status}
+        </span>
+      </div>
+
+      <p className="line-clamp-2 text-body-md text-on-surface-variant">
+        Registration window: {formatLandingDateTime(tournament.registrationOpenAt)} - {formatLandingDateTime(tournament.registrationCloseAt)}
+      </p>
+    </div>
+
+    <div className="mt-6 grid grid-cols-2 gap-3 text-body-sm text-on-surface-variant">
+      <div className="rounded-xl bg-surface-container-high/40 px-4 py-3">
+        <p className="mb-1 text-label-sm font-bold uppercase tracking-[0.12em] text-outline">Location</p>
+        <p className="font-semibold text-on-surface">{tournament.location}</p>
+      </div>
+      <div className="rounded-xl bg-surface-container-high/40 px-4 py-3">
+        <p className="mb-1 text-label-sm font-bold uppercase tracking-[0.12em] text-outline">Start Date</p>
+        <p className="font-semibold text-on-surface">{formatLandingDate(tournament.startDate)}</p>
+      </div>
+      <div className="rounded-xl bg-surface-container-high/40 px-4 py-3">
+        <p className="mb-1 text-label-sm font-bold uppercase tracking-[0.12em] text-outline">End Date</p>
+        <p className="font-semibold text-on-surface">{formatLandingDate(tournament.endDate)}</p>
+      </div>
+      <div className="rounded-xl bg-surface-container-high/40 px-4 py-3">
+        <p className="mb-1 text-label-sm font-bold uppercase tracking-[0.12em] text-outline">Prize Pool</p>
+        <p className="font-semibold text-primary">{tournament.prizePoolLabel}</p>
+      </div>
+    </div>
+  </motion.article>
+);
 
 const FloatingCardMessage = ({ text, tone = 'muted' }: { text: string; tone?: 'muted' | 'error' }) => (
   <div className={`rounded-lg border px-3 py-4 text-body-sm font-semibold ${

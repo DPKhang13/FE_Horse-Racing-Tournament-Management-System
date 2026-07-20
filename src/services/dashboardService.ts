@@ -1,4 +1,5 @@
 import { apiClient, unwrapApiData } from './apiClient';
+import { notificationService } from './notificationService';
 import type { BetItem } from './betService';
 import type { NotificationItem } from './notificationService';
 import type { RaceScheduleItem } from './scheduleService';
@@ -110,35 +111,38 @@ const mapUpcomingRace = (raw: RawObject): RaceScheduleItem => ({
   prizePool: raw.prizePool === undefined ? undefined : asNumber(raw.prizePool),
 });
 
-const mapBet = (raw: RawObject): BetItem => ({
-  betId: asNumber(raw.betId ?? raw.id),
-  raceId: raw.raceId === undefined ? undefined : asNumber(raw.raceId),
-  userId: raw.userId === undefined ? undefined : asNumber(raw.userId),
-  horseId: raw.horseId === undefined ? undefined : asNumber(raw.horseId),
-  amount: asNumber(raw.betPoints ?? raw.amount ?? raw.stakeAmount ?? raw.stake),
-  odds: asNumber(raw.betRate ?? raw.currentRate ?? raw.odds),
-  potentialPayout: asNumber(raw.rewardPoints ?? raw.potentialPayout ?? raw.payout),
-  status: asString(raw.status, 'pending'),
-  createdAt: raw.placedAt ? asString(raw.placedAt) : raw.createdAt ? asString(raw.createdAt) : undefined,
-  settledAt: raw.settledAt ? asString(raw.settledAt) : undefined,
-  raceName: asString(raw.raceName ?? raw.name, 'Race'),
-  tournamentName: raw.tournamentName ? asString(raw.tournamentName) : undefined,
-  horseName: asString(raw.horseName ?? raw.selectionName, 'Horse'),
-  jockeyName: raw.jockeyName ? asString(raw.jockeyName) : raw.jockeyFullName ? asString(raw.jockeyFullName) : undefined,
-  finishPosition: raw.finishPosition === undefined ? undefined : asNumber(raw.finishPosition),
-  pointsAwarded: raw.pointsAwarded === undefined ? undefined : asNumber(raw.pointsAwarded),
-});
+const mapBet = (raw: RawObject): BetItem => {
+  const amount = asNumber(raw.betPoints ?? raw.amount ?? raw.stakeAmount ?? raw.stake);
+  const odds = asNumber(raw.betRate ?? raw.currentRate ?? raw.odds);
+  const status = asString(raw.status, 'pending');
+  const rewardPoints = asNumber(raw.rewardPoints);
+  const explicitPayout = raw.potentialPayout ?? raw.payout;
+  const potentialPayout = explicitPayout === undefined
+    ? status.toLowerCase() === 'pending'
+      ? Math.round(amount * odds)
+      : rewardPoints
+    : asNumber(explicitPayout);
 
-const mapNotification = (raw: RawObject): NotificationItem => ({
-  notificationId: asNumber(raw.notificationId ?? raw.id),
-  userId: raw.userId === undefined ? undefined : asNumber(raw.userId),
-  title: asString(raw.title, 'Notification'),
-  message: asString(raw.message ?? raw.content ?? raw.detail),
-  type: raw.type ? asString(raw.type) : undefined,
-  status: raw.status ? asString(raw.status) : raw.isRead === undefined ? undefined : raw.isRead ? 'read' : 'unread',
-  createdAt: raw.createdAt ? asString(raw.createdAt) : undefined,
-  readAt: raw.readAt ? asString(raw.readAt) : undefined,
-});
+  return {
+    betId: asNumber(raw.betId ?? raw.id),
+    raceId: raw.raceId === undefined ? undefined : asNumber(raw.raceId),
+    userId: raw.userId === undefined ? undefined : asNumber(raw.userId),
+    horseId: raw.horseId === undefined ? undefined : asNumber(raw.horseId),
+    amount,
+    odds,
+    potentialPayout,
+    status,
+    createdAt: raw.placedAt ? asString(raw.placedAt) : raw.createdAt ? asString(raw.createdAt) : undefined,
+    settledAt: raw.settledAt ? asString(raw.settledAt) : undefined,
+    raceName: asString(raw.raceName ?? raw.name, 'Race'),
+    tournamentName: raw.tournamentName ? asString(raw.tournamentName) : undefined,
+    horseName: asString(raw.horseName ?? raw.selectionName, 'Horse'),
+    jockeyName: raw.jockeyName ? asString(raw.jockeyName) : raw.jockeyFullName ? asString(raw.jockeyFullName) : undefined,
+    finishPosition: raw.finishPosition === undefined ? undefined : asNumber(raw.finishPosition),
+    pointsAwarded: raw.pointsAwarded === undefined ? undefined : asNumber(raw.pointsAwarded),
+  };
+};
+
 
 const mapResultList = (items: RawObject[]): RaceResultListItem[] => {
   const groupedResults = new Map<string, RaceResultListItem>();
@@ -214,13 +218,15 @@ export const dashboardService = {
     const response = await apiClient.get('/api/bets/dashboard');
     const data = unwrapApiData<RawObject>(response);
 
+    const notificationResults = await notificationService.getNotifications();
+
     return {
       wallet: mapWallet(data.wallet),
       summaryCount: mapSummaryCount(data.summaryCount),
       upcomingRaces: asArray(data.upcomingRaces).map(mapUpcomingRace),
       activeBets: asArray(data.activeBets).map(mapBet),
       latestResults: mapResultList(asArray(data.latestResults)),
-      notifications: asArray(data.notifications).map(mapNotification),
+      notifications: notificationResults,
     };
   },
 };

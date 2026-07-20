@@ -1,5 +1,6 @@
 import { apiClient, unwrapApiData, unwrapApiList } from './apiClient';
 import type { Horse, HorseFormData } from '../types/horse';
+import type { UserProfile } from '../types/user';
 
 type RawHorse = Partial<Horse> & {
   id?: number;
@@ -51,8 +52,8 @@ const toPayload = (horse: HorseFormData) => ({
   breed: horse.breed.trim(),
   age: Number(horse.age),
   weightKg: Number(horse.weightKg),
-  rankGroup: horse.rankGroup.trim(),
-  avatarUrl: horse.avatarUrl.trim(),
+  rankGroup: 'D',
+  avatarUrl: horse.avatarUrl.trim() || fallbackHorseImage,
 });
 
 const toUpdatePayload = (horse: HorseFormData) => ({
@@ -60,17 +61,32 @@ const toUpdatePayload = (horse: HorseFormData) => ({
   breed: horse.breed.trim(),
   age: Number(horse.age),
   weightKg: Number(horse.weightKg),
-  rankGroup: horse.rankGroup.trim(),
-  rankingPoints: Number(horse.rankingPoints),
-  avatarUrl: horse.avatarUrl.trim(),
-  totalWins: Number(horse.totalWins),
-  status: horse.status,
+  avatarUrl: horse.avatarUrl.trim() || fallbackHorseImage,
 });
+
+const getOwnerScopedHorses = (horseList: Horse[], currentProfile: UserProfile): Horse[] => {
+  const ownerIds = new Set(
+    [currentProfile.ownerProfile?.ownerId, currentProfile.userId]
+      .map((value) => Number(value))
+      .filter((value) => Number.isFinite(value) && value > 0),
+  );
+
+  if (ownerIds.size === 0) {
+    return horseList;
+  }
+
+  return horseList.filter((horse) => horse.ownerId !== undefined && ownerIds.has(Number(horse.ownerId)));
+};
 
 export const HorseService = {
   async getHorses(): Promise<Horse[]> {
     const response = await apiClient.get('/api/horses/get-all');
     return unwrapApiList<RawHorse>(response).map(mapHorse);
+  },
+
+  async getOwnerHorses(currentProfile: UserProfile): Promise<Horse[]> {
+    const horses = await this.getHorses();
+    return getOwnerScopedHorses(horses, currentProfile);
   },
 
   async getHorseById(id: number): Promise<Horse> {
@@ -88,7 +104,7 @@ export const HorseService = {
     return mapHorse(unwrapApiData<RawHorse>(response));
   },
 
-  async deleteHorse(id: number): Promise<void> {
-    await apiClient.delete(`/api/horses/delete/${id}`);
+  async deleteHorse(id: number): Promise<Horse> {
+    throw new Error(`Backend does not provide owner delete/deactivate API for horse ${id}.`);
   },
 };

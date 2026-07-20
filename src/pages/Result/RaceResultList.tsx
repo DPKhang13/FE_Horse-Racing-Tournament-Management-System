@@ -2,7 +2,9 @@ import { useEffect, useMemo, useState } from 'react';
 import { ChevronRight, Filter, Search, Trophy } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { authService } from '../../services/authService';
+import { useToastNotifications } from '../../hooks/useToastNotifications';
 import { HorseService } from '../../services/HorseService';
+import { jockeyAssignmentService } from '../../services/jockeyAssignmentService';
 import { raceResultService } from '../../services/raceResultService';
 import type { Horse } from '../../types/horse';
 import type { RaceResultListItem, RaceResultStatus, RaceResultSummary } from '../../types/raceResult';
@@ -60,6 +62,10 @@ const RaceResultList = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState('');
 
+  useToastNotifications([
+    errorMessage ? { tone: 'error', text: errorMessage } : null,
+  ]);
+
   const isOwner = profile?.roleType === 'horse_owner';
 
   useEffect(() => {
@@ -80,7 +86,7 @@ const RaceResultList = () => {
 
         if (currentProfile.roleType === 'horse_owner') {
           const [horses, summaries] = await Promise.all([
-            HorseService.getHorses(),
+            HorseService.getOwnerHorses(currentProfile),
             raceResultService.getRaceResultSummaries(),
           ]);
 
@@ -93,7 +99,15 @@ const RaceResultList = () => {
           const resultList = await raceResultService.getRaceResultList();
 
           if (isMounted) {
-            setAllResults(resultList);
+            let filteredList = resultList;
+            if (currentProfile.roleType === 'jockey') {
+              const myAssignments = await jockeyAssignmentService.getMine();
+              const jockeyRaceIds = new Set(myAssignments.map((a) => String(a.raceId)).filter(Boolean));
+              if (jockeyRaceIds.size > 0) {
+                filteredList = resultList.filter((r) => jockeyRaceIds.has(String(r.raceId)));
+              }
+            }
+            setAllResults(filteredList);
           }
         }
       } catch (error) {
@@ -179,12 +193,6 @@ const RaceResultList = () => {
               <ResultNav />
             </div>
           </div>
-
-          {errorMessage && (
-            <div className="mb-6 rounded-md border border-error/30 bg-error-container/20 px-4 py-3 text-body-sm font-semibold text-error">
-              {errorMessage}
-            </div>
-          )}
 
           <div className="grid gap-6 xl:grid-cols-[320px_minmax(0,1fr)]">
             <section className="rounded-lg border border-outline-variant bg-white p-5">
@@ -344,12 +352,6 @@ const RaceResultList = () => {
             ))}
           </div>
         </div>
-
-        {errorMessage && (
-          <div className="mb-6 rounded-md border border-error/30 bg-error-container/20 px-4 py-3 text-body-sm font-semibold text-error">
-            {errorMessage}
-          </div>
-        )}
 
         <div className="flex flex-col lg:flex-row lg:items-center gap-4 mb-8">
           <div className="relative flex-1 max-w-md">

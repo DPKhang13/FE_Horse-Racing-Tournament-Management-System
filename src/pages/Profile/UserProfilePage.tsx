@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
 import { 
   User, 
-  Wallet, 
   Mail, 
   Phone, 
   MapPin, 
@@ -196,69 +195,8 @@ const UserProfilePage = () => {
             )}
           </div>
 
-          {/* Right Column: Wallet & Details */}
+          {/* Right Column: Activity & Details */}
           <div className="lg:col-span-2 space-y-8">
-            
-            {/* Wallet Section */}
-            <div className="bg-white border border-outline-variant rounded-xl p-8 shadow-sm">
-              <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-8">
-                <div>
-                  <div className="flex items-center gap-2 mb-1">
-                    <Wallet className="w-5 h-5 text-secondary" />
-                    <h2 className="text-headline-sm font-bold text-primary">Digital Wallet</h2>
-                  </div>
-                  <p className="text-body-sm text-on-surface-variant">Manage your racing funds and transaction history</p>
-                </div>
-                {isLoggedIn && (
-                  <div className="flex gap-3">
-                    <button className="bg-secondary text-on-secondary px-6 py-2 rounded-md text-label-sm font-bold hover:bg-opacity-90 transition-all flex items-center gap-2">
-                      <Plus className="w-4 h-4" />
-                      Deposit
-                    </button>
-                    <button className="border border-outline-variant text-primary px-6 py-2 rounded-md text-label-sm font-bold hover:bg-surface-container transition-all">
-                      Withdraw
-                    </button>
-                  </div>
-                )}
-              </div>
-
-              {isLoggedIn ? (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div className="bg-surface-container-low border border-outline-variant rounded-xl p-6">
-                    <p className="text-label-sm text-outline uppercase tracking-wider font-bold mb-2">Available Balance</p>
-                    <div className="flex items-baseline gap-2">
-                      <span className="text-headline-lg font-bold text-primary">
-                        ${user.wallet?.balance.toLocaleString()}
-                      </span>
-                      <span className="text-body-md text-outline font-medium">{user.wallet?.currency}</span>
-                    </div>
-                  </div>
-                  <div className="bg-surface-container-low border border-outline-variant rounded-xl p-6">
-                    <p className="text-label-sm text-outline uppercase tracking-wider font-bold mb-2">Total Predictions</p>
-                    <div className="flex items-baseline gap-2">
-                      <span className="text-headline-lg font-bold text-primary">128</span>
-                      <span className="text-body-md text-secondary font-bold">+12%</span>
-                    </div>
-                  </div>
-                </div>
-              ) : (
-                <div className="bg-surface-container-low border border-dashed border-outline-variant rounded-xl p-12 flex flex-col items-center text-center">
-                  <div className="w-16 h-16 rounded-full bg-white flex items-center justify-center mb-4 shadow-sm border border-outline-variant">
-                    <Wallet className="w-8 h-8 text-outline" />
-                  </div>
-                  <h3 className="text-title-medium font-bold text-primary mb-2">Wallet Access Restricted</h3>
-                  <p className="text-body-sm text-on-surface-variant max-w-xs mb-6">
-                    Sign in to view your balance, make deposits, and manage your racing transactions.
-                  </p>
-                  <Link 
-                    to="/login" 
-                    className="text-secondary text-body-sm font-bold hover:underline"
-                  >
-                    Login to access wallet
-                  </Link>
-                </div>
-              )}
-            </div>
 
             {/* Recent Activity / Benefits */}
             <div className="bg-white border border-outline-variant rounded-xl p-8 shadow-sm">

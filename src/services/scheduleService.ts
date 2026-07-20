@@ -7,6 +7,8 @@ export type TournamentApiItem = {
   location?: string;
   startDate?: string;
   endDate?: string;
+  registrationOpenAt?: string;
+  registrationCloseAt?: string;
   prizePool?: number;
   status?: string;
 };

@@ -1,12 +1,15 @@
 import { apiClient, unwrapApiData, unwrapApiList } from './apiClient';
 import type { TournamentApiItem } from './scheduleService';
 import type {
+  CreatePrizeRequest,
   MatchStatus,
+  PrizeResponse,
   Tournament,
   TournamentMatch,
   TournamentMutationData,
   TournamentParticipant,
   TournamentStatus,
+  UpdatePrizeRequest,
 } from '../types/tournament';
 
 export type TournamentFormData = {
@@ -18,18 +21,14 @@ export type TournamentFormData = {
   status: string;
 };
 
-export type PrizeItem = {
-  prizeId?: number;
-  finishPosition: number;
-  prizeName: string;
-  amount: number;
-  note?: string;
-  tournamentName?: string;
-};
+export type PrizeItem = PrizeResponse;
 
 export type RefereeAssignmentItem = {
+  id?: number;
+  refAssignId?: number;
   assignmentId?: number;
   raceId?: number;
+  raceName?: string;
   refereeId?: number;
   refereeRole?: string;
   refereeFullName?: string;
@@ -147,7 +146,13 @@ const normalizeTournamentStatus = (value: unknown): TournamentStatus => {
     return 'Registration Closed';
   }
 
-  if (normalizedValue.includes('ongoing') || normalizedValue === 'active') {
+  if (
+    normalizedValue.includes('ongoing')
+    || normalizedValue.includes('progress')
+    || normalizedValue.includes('running')
+    || normalizedValue === 'active'
+    || normalizedValue === 'live'
+  ) {
     return 'Ongoing';
   }
 
@@ -243,6 +248,32 @@ const mapApiMatches = (value: unknown, fallbackDate = '2026-07-01') => {
 
   return value.map((item, index) => mapApiMatch(item, index, fallbackDate));
 };
+
+const mapApiPrize = (item: unknown, index = 0): PrizeResponse => {
+  const raw = item as RawRecord;
+  const id = asNumber(raw.id ?? raw.prizeId, index + 1);
+  const prizeId = asNumber(raw.prizeId ?? raw.id, id);
+
+  return {
+    id,
+    prizeId,
+    tournamentId: asNumber(raw.tournamentId),
+    tournamentName: asString(raw.tournamentName),
+    tournamentStatus: asString(raw.tournamentStatus),
+    prizePool: asNumber(raw.prizePool),
+    finishPosition: asNumber(raw.finishPosition, index + 1),
+    prizeName: asString(raw.prizeName),
+    amount: asNumber(raw.amount),
+    note: asString(raw.note),
+  };
+};
+
+const cleanPrizePayload = (prize: CreatePrizeRequest | UpdatePrizeRequest): UpdatePrizeRequest => ({
+  finishPosition: Number(prize.finishPosition),
+  prizeName: prize.prizeName.trim(),
+  amount: Number(prize.amount),
+  note: prize.note.trim(),
+});
 
 const mapApiTournament = (raw: RawTournament, index: number): Tournament => {
   const tournamentId = asNumber(raw.tournamentId ?? raw.id, index + 1);
@@ -693,21 +724,33 @@ export const tournamentService = {
     }
   },
 
-  async getPrizes(tournamentId: number | string): Promise<PrizeItem[]> {
+  async getPrizes(tournamentId: number | string): Promise<PrizeResponse[]> {
     const response = await apiClient.get(`/api/v1/admin/tournaments/${tournamentId}/get-prizes`);
-    return unwrapApiList<PrizeItem>(response);
+    return unwrapApiList<RawRecord>(response).map((item, index) => mapApiPrize(item, index));
   },
 
-  async createPrizes(tournamentId: number | string, prizes: PrizeItem[]): Promise<PrizeItem[]> {
+  async getPrize(tournamentId: number | string, prizeId: number | string): Promise<PrizeResponse> {
+    const response = await apiClient.get(`/api/v1/admin/tournaments/${tournamentId}/get-prize/${prizeId}`);
+    return mapApiPrize(unwrapApiData<RawRecord>(response));
+  },
+
+  async createPrizes(tournamentId: number | string, prizes: CreatePrizeRequest[]): Promise<PrizeResponse[]> {
     const response = await apiClient.post(`/api/v1/admin/tournaments/${tournamentId}/create-prizes`, {
-      prizes: prizes.map((prize) => ({
-        finishPosition: Number(prize.finishPosition),
-        prizeName: prize.prizeName.trim(),
-        amount: Number(prize.amount),
-        note: prize.note?.trim() || undefined,
-      })),
+      prizes: prizes.map(cleanPrizePayload),
     });
-    return unwrapApiList<PrizeItem>(response);
+    return unwrapApiList<RawRecord>(response).map((item, index) => mapApiPrize(item, index));
+  },
+
+  async updatePrize(
+    tournamentId: number | string,
+    prizeId: number | string,
+    prize: UpdatePrizeRequest,
+  ): Promise<PrizeResponse> {
+    const response = await apiClient.put(
+      `/api/v1/admin/tournaments/${tournamentId}/update-prize/${prizeId}`,
+      cleanPrizePayload(prize),
+    );
+    return mapApiPrize(unwrapApiData<RawRecord>(response));
   },
 
   async getRaceReferees(raceId: number | string): Promise<RefereeAssignmentItem[]> {

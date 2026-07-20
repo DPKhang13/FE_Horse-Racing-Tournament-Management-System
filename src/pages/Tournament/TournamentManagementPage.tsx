@@ -1,12 +1,15 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react';
-import { Ban, CalendarDays, ClipboardList, Eye, Filter, Flag, Layers, ListChecks, Pencil, Plus, Search, Trash2, Trophy, Users, X } from 'lucide-react';
+import { Ban, CalendarDays, ClipboardList, Eye, Filter, Flag, Layers, ListChecks, Pencil, Plus, RefreshCw, Save, Search, Trash2, Trophy, Users, X } from 'lucide-react';
 import { motion } from 'motion/react';
 import { Link } from 'react-router-dom';
 import { getApiErrorMessage } from '../../services/apiClient';
+import { useToastNotifications } from '../../hooks/useToastNotifications';
 import { raceCrudService, type RaceCrudItem, type RaceFormData, type RaceRoundFormData, type RaceRoundItem } from '../../services/raceCrudService';
 import { tournamentService } from '../../services/tournamentService';
 import type {
+  CreatePrizeRequest,
   MatchStatus,
+  PrizeResponse,
   Tournament,
   TournamentMatch,
   TournamentMutationData,
@@ -30,6 +33,13 @@ const revealUp = {
 };
 
 type TournamentFormErrors = Partial<Record<keyof TournamentMutationData, string>>;
+type PrizeFormRow = Omit<CreatePrizeRequest, 'amount'> & {
+  id?: number;
+  prizeId?: number;
+  amount: number | '';
+};
+type PrizeFormErrors = Record<number, Partial<Record<keyof CreatePrizeRequest, string>>>;
+type EditablePrizeField = 'prizeName' | 'amount' | 'note';
 
 const tournamentStatusOptions: TournamentStatus[] = [
   'Upcoming',
@@ -79,6 +89,22 @@ const emptyRoundFormData: RaceRoundFormData = {
   lapTimeSec: 0,
   recordedAt: '',
 };
+
+const prizePositionLabels: Record<number, string> = {
+  1: 'First',
+  2: 'Second',
+  3: 'Third',
+};
+
+const getDefaultPrizeName = (finishPosition: number) => `${prizePositionLabels[finishPosition] ?? `Position ${finishPosition}`} Prize`;
+
+const createDefaultPrizeRows = (): PrizeFormRow[] =>
+  [1, 2, 3].map((finishPosition) => ({
+    finishPosition,
+    prizeName: getDefaultPrizeName(finishPosition),
+    amount: 1,
+    note: '',
+  }));
 
 const formatDate = (value: string) => {
   if (!value) {
@@ -244,6 +270,69 @@ const toFormData = (tournament: Tournament): TournamentMutationData => ({
   rulesNotes: tournament.rulesNotes,
 });
 
+const toPrizeFormRow = (prize: PrizeResponse): PrizeFormRow => ({
+  id: prize.id,
+  prizeId: prize.prizeId,
+  finishPosition: prize.finishPosition,
+  prizeName: prize.prizeName || getDefaultPrizeName(prize.finishPosition),
+  amount: Number.isFinite(Number(prize.amount)) ? Number(prize.amount) : 0,
+  note: prize.note ?? '',
+});
+
+const mergePrizeRows = (prizes: PrizeResponse[]) => {
+  const defaultRows = createDefaultPrizeRows();
+
+  return defaultRows.map((defaultRow) => {
+    const existingPrize = prizes.find((prize) => Number(prize.finishPosition) === defaultRow.finishPosition);
+    return existingPrize ? toPrizeFormRow(existingPrize) : defaultRow;
+  });
+};
+
+const getPrizeIdentifier = (prize: Pick<PrizeFormRow, 'id' | 'prizeId'>) => prize.prizeId ?? prize.id;
+
+const toPrizeRequest = (prize: PrizeFormRow): CreatePrizeRequest => ({
+  finishPosition: Number(prize.finishPosition),
+  prizeName: prize.prizeName.trim(),
+  amount: Number(prize.amount),
+  note: prize.note.trim(),
+});
+
+const hasPrizeChanged = (current: PrizeFormRow, original: PrizeFormRow) => {
+  const currentPayload = toPrizeRequest(current);
+  const originalPayload = toPrizeRequest(original);
+
+  return currentPayload.finishPosition !== originalPayload.finishPosition
+    || currentPayload.prizeName !== originalPayload.prizeName
+    || currentPayload.amount !== originalPayload.amount
+    || currentPayload.note !== originalPayload.note;
+};
+
+const validatePrizeRows = (rows: PrizeFormRow[]) => {
+  const errors: PrizeFormErrors = {};
+
+  rows.forEach((row, index) => {
+    const rowErrors: Partial<Record<keyof CreatePrizeRequest, string>> = {};
+
+    if (!row.prizeName.trim()) {
+      rowErrors.prizeName = 'Prize name is required.';
+    }
+
+    if (row.amount === '' || Number(row.amount) <= 0) {
+      rowErrors.amount = 'Amount must be greater than 0.';
+    }
+
+    if (![1, 2, 3].includes(Number(row.finishPosition))) {
+      rowErrors.finishPosition = 'Finish position must be 1, 2, or 3.';
+    }
+
+    if (Object.keys(rowErrors).length > 0) {
+      errors[index] = rowErrors;
+    }
+  });
+
+  return errors;
+};
+
 const isTournamentWorkflowStatus = (status: TournamentStatus) =>
   status === 'Registration Open'
   || status === 'Registration Closed'
@@ -292,6 +381,8 @@ const TournamentManagementPage = () => {
   const [viewingTournament, setViewingTournament] = useState<Tournament | null>(null);
   const [formData, setFormData] = useState<TournamentMutationData>(emptyFormData);
   const [formErrors, setFormErrors] = useState<TournamentFormErrors>({});
+  const [createPrizeRows, setCreatePrizeRows] = useState<PrizeFormRow[]>(createDefaultPrizeRows);
+  const [createPrizeErrors, setCreatePrizeErrors] = useState<PrizeFormErrors>({});
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [message, setMessage] = useState('');
@@ -301,6 +392,11 @@ const TournamentManagementPage = () => {
   const [lastCreatedTournament, setLastCreatedTournament] = useState<Tournament | null>(null);
   const [raceModalTournament, setRaceModalTournament] = useState<Tournament | null>(null);
   const [isRaceModalOpen, setIsRaceModalOpen] = useState(false);
+
+  useToastNotifications([
+    message ? { tone: 'success', text: message } : null,
+    errorMessage ? { tone: 'error', text: errorMessage } : null,
+  ]);
 
   useEffect(() => {
     let isMounted = true;
@@ -366,6 +462,8 @@ const TournamentManagementPage = () => {
     setSelectedTournament(null);
     setFormData(emptyFormData);
     setFormErrors({});
+    setCreatePrizeRows(createDefaultPrizeRows());
+    setCreatePrizeErrors({});
     setMessage('');
     setShowTournamentSuccess(false);
     setLastCreatedTournament(null);
@@ -376,6 +474,8 @@ const TournamentManagementPage = () => {
     setSelectedTournament(tournament);
     setFormData(toFormData(tournament));
     setFormErrors({});
+    setCreatePrizeRows(createDefaultPrizeRows());
+    setCreatePrizeErrors({});
     setMessage('');
     setShowTournamentSuccess(false);
     setLastCreatedTournament(null);
@@ -386,6 +486,8 @@ const TournamentManagementPage = () => {
     setIsFormOpen(false);
     setSelectedTournament(null);
     setFormErrors({});
+    setCreatePrizeRows(createDefaultPrizeRows());
+    setCreatePrizeErrors({});
     setShowTournamentSuccess(false);
     setLastCreatedTournament(null);
   };
@@ -402,12 +504,43 @@ const TournamentManagementPage = () => {
     }
   };
 
+  const handleCreatePrizeChange = (index: number, field: EditablePrizeField, value: string | number) => {
+    setCreatePrizeRows((current) =>
+      current.map((row, rowIndex) =>
+        rowIndex === index
+          ? { ...row, [field]: value }
+          : row,
+      ),
+    );
+
+    setCreatePrizeErrors((current) => {
+      if (!current[index]?.[field]) {
+        return current;
+      }
+
+      const nextErrors = { ...current };
+      const rowErrors = { ...nextErrors[index] };
+      delete rowErrors[field];
+
+      if (Object.keys(rowErrors).length === 0) {
+        delete nextErrors[index];
+      } else {
+        nextErrors[index] = rowErrors;
+      }
+
+      return nextErrors;
+    });
+  };
+
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
     const errors = validateTournamentForm(formData);
-    if (Object.keys(errors).length > 0) {
-      setFormErrors(errors);
+    const prizeErrors = selectedTournament ? {} : validatePrizeRows(createPrizeRows);
+    setFormErrors(errors);
+    setCreatePrizeErrors(prizeErrors);
+
+    if (Object.keys(errors).length > 0 || Object.keys(prizeErrors).length > 0) {
       return;
     }
 
@@ -447,9 +580,12 @@ const TournamentManagementPage = () => {
         setMessage(shouldUseWorkflow ? `Tournament moved to ${formData.status}.` : 'Tournament updated.');
       } else {
         const newTournament = await tournamentService.createTournament(formData);
+        await tournamentService.createPrizes(newTournament.tournamentId, createPrizeRows.map(toPrizeRequest));
         setTournaments((current) => [newTournament, ...current]);
         setGlobalTournamentCount((current) => (current === null ? current : current + 1));
         setLastCreatedTournament(newTournament);
+        setCreatePrizeRows(createDefaultPrizeRows());
+        setCreatePrizeErrors({});
         setShowTournamentSuccess(true);
         setMessage('');
         return;
@@ -599,9 +735,6 @@ const TournamentManagementPage = () => {
           </motion.button>
         </motion.div>
 
-        {message && <StatusBanner tone="success" text={message} />}
-        {errorMessage && <StatusBanner tone="error" text={errorMessage} />}
-
         <motion.div 
           className="glass-panel overflow-hidden rounded-xl"
           initial="hidden"
@@ -690,11 +823,14 @@ const TournamentManagementPage = () => {
           <TournamentForm
             formData={formData}
             formErrors={formErrors}
+            createPrizeRows={createPrizeRows}
+            createPrizeErrors={createPrizeErrors}
             isSaving={isSaving}
             isEditing={Boolean(selectedTournament)}
             editableStatuses={editableTournamentStatuses}
             selectedTournament={selectedTournament}
             onChange={handleFieldChange}
+            onCreatePrizeChange={handleCreatePrizeChange}
             onSubmit={handleSubmit}
             onCancel={closeFormModal}
             showTournamentSuccess={showTournamentSuccess}
@@ -758,11 +894,14 @@ const textareaClassName =
 const TournamentForm = ({
   formData,
   formErrors,
+  createPrizeRows,
+  createPrizeErrors,
   isSaving,
   isEditing,
   editableStatuses,
   selectedTournament,
   onChange,
+  onCreatePrizeChange,
   onSubmit,
   onCancel,
   showTournamentSuccess,
@@ -773,11 +912,14 @@ const TournamentForm = ({
 }: {
   formData: TournamentMutationData;
   formErrors: TournamentFormErrors;
+  createPrizeRows: PrizeFormRow[];
+  createPrizeErrors: PrizeFormErrors;
   isSaving: boolean;
   isEditing: boolean;
   editableStatuses: TournamentStatus[];
   selectedTournament: Tournament | null;
   onChange: <K extends keyof TournamentMutationData>(field: K, value: TournamentMutationData[K]) => void;
+  onCreatePrizeChange: (index: number, field: EditablePrizeField, value: string | number) => void;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
   onCancel: () => void;
   showTournamentSuccess?: boolean;
@@ -898,6 +1040,16 @@ const TournamentForm = ({
           )}
         </div>
 
+        {!isEditing && (
+          <motion.div className="space-y-4 border-t border-outline-variant pt-6" variants={revealUp}>
+            <div>
+              <p className="text-label-sm font-bold uppercase tracking-[0.18em] text-secondary">Prize Setup</p>
+              <h3 className="mt-1 font-display text-title-large font-extrabold text-primary">Create prizes with tournament</h3>
+            </div>
+            <PrizeRowsEditor rows={createPrizeRows} formErrors={createPrizeErrors} onChange={onCreatePrizeChange} />
+          </motion.div>
+        )}
+
         <motion.div 
           className="flex flex-col-reverse gap-3 border-t border-outline-variant pt-4 sm:flex-row sm:justify-between sm:items-center"
           variants={revealUp}
@@ -935,7 +1087,263 @@ const TournamentForm = ({
           </div>
         </motion.div>
       </form>
+
+      {isEditing && selectedTournament && (
+        <motion.div variants={revealUp}>
+          <TournamentPrizeForm tournament={selectedTournament} />
+        </motion.div>
+      )}
     </motion.div>
+  );
+};
+
+const PrizeRowsEditor = ({
+  rows,
+  formErrors,
+  onChange,
+}: {
+  rows: PrizeFormRow[];
+  formErrors: PrizeFormErrors;
+  onChange: (index: number, field: EditablePrizeField, value: string | number) => void;
+}) => (
+  <div className="overflow-x-auto rounded-md border border-outline-variant">
+    <table className="w-full min-w-[860px] text-left">
+      <thead className="border-b border-outline-variant bg-surface-container">
+        <tr>
+          <th className="w-[150px] px-4 py-3 text-label-sm uppercase tracking-wider text-outline">Position</th>
+          <th className="px-4 py-3 text-label-sm uppercase tracking-wider text-outline">Prize Name</th>
+          <th className="w-[180px] px-4 py-3 text-label-sm uppercase tracking-wider text-outline">Amount</th>
+          <th className="px-4 py-3 text-label-sm uppercase tracking-wider text-outline">Note</th>
+        </tr>
+      </thead>
+      <tbody className="divide-y divide-outline-variant bg-surface-container-lowest">
+        {rows.map((row, index) => (
+          <tr key={row.finishPosition}>
+            <td className="px-4 py-3 align-top">
+              <div className="flex items-center gap-3">
+                <span className="flex h-9 w-9 items-center justify-center rounded-full border border-outline-variant bg-surface-container-low text-body-sm font-extrabold text-primary">
+                  {row.finishPosition}
+                </span>
+                <span className="text-body-sm font-bold text-on-surface-variant">
+                  {prizePositionLabels[row.finishPosition] ?? `#${row.finishPosition}`}
+                </span>
+              </div>
+            </td>
+            <td className="px-4 py-3 align-top">
+              <input
+                type="text"
+                value={row.prizeName}
+                onChange={(event) => onChange(index, 'prizeName', event.target.value)}
+                className={inputClassName}
+              />
+              {formErrors[index]?.prizeName && <span className="mt-1 block text-label-md text-error">{formErrors[index]?.prizeName}</span>}
+            </td>
+            <td className="px-4 py-3 align-top">
+              <input
+                type="number"
+                min="0"
+                value={row.amount}
+                onChange={(event) => onChange(index, 'amount', event.target.value === '' ? '' : Number(event.target.value))}
+                className={inputClassName}
+              />
+              {formErrors[index]?.amount && <span className="mt-1 block text-label-md text-error">{formErrors[index]?.amount}</span>}
+            </td>
+            <td className="px-4 py-3 align-top">
+              <input
+                type="text"
+                value={row.note}
+                onChange={(event) => onChange(index, 'note', event.target.value)}
+                className={inputClassName}
+              />
+            </td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  </div>
+);
+
+const TournamentPrizeForm = ({
+  tournament,
+  showHeader = true,
+}: {
+  tournament: Tournament;
+  showHeader?: boolean;
+}) => {
+  const [rows, setRows] = useState<PrizeFormRow[]>(createDefaultPrizeRows);
+  const [originalRows, setOriginalRows] = useState<PrizeFormRow[]>([]);
+  const [formErrors, setFormErrors] = useState<PrizeFormErrors>({});
+  const [isLoadingPrizes, setIsLoadingPrizes] = useState(true);
+  const [isSavingPrizes, setIsSavingPrizes] = useState(false);
+  const [notice, setNotice] = useState<{ tone: 'success' | 'error'; text: string } | null>(null);
+
+  useToastNotifications([
+    notice ? { tone: notice.tone, text: notice.text } : null,
+  ]);
+
+  const loadPrizes = useCallback(async () => {
+    setIsLoadingPrizes(true);
+    setNotice(null);
+
+    try {
+      const prizes = await tournamentService.getPrizes(tournament.tournamentId);
+      const nextRows = mergePrizeRows(prizes);
+
+      setRows(nextRows);
+      setOriginalRows(prizes.length > 0 ? nextRows : []);
+      setFormErrors({});
+    } catch (error) {
+      setRows(createDefaultPrizeRows());
+      setOriginalRows([]);
+      setNotice({ tone: 'error', text: getApiErrorMessage(error, 'Unable to load prizes.') });
+    } finally {
+      setIsLoadingPrizes(false);
+    }
+  }, [tournament.tournamentId]);
+
+  useEffect(() => {
+    const timeoutId = window.setTimeout(() => {
+      void loadPrizes();
+    }, 0);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [loadPrizes]);
+
+  const hasExistingPrizes = originalRows.some((row) => Boolean(getPrizeIdentifier(row)));
+
+  const handleRowChange = (index: number, field: EditablePrizeField, value: string | number) => {
+    setRows((current) =>
+      current.map((row, rowIndex) =>
+        rowIndex === index
+          ? { ...row, [field]: value }
+          : row,
+      ),
+    );
+
+    setFormErrors((current) => {
+      if (!current[index]?.[field]) {
+        return current;
+      }
+
+      const nextErrors = { ...current };
+      const rowErrors = { ...nextErrors[index] };
+      delete rowErrors[field];
+
+      if (Object.keys(rowErrors).length === 0) {
+        delete nextErrors[index];
+      } else {
+        nextErrors[index] = rowErrors;
+      }
+
+      return nextErrors;
+    });
+  };
+
+  const handlePrizeSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+
+    const nextErrors = validatePrizeRows(rows);
+    setFormErrors(nextErrors);
+
+    if (Object.keys(nextErrors).length > 0) {
+      return;
+    }
+
+    setIsSavingPrizes(true);
+    setNotice(null);
+
+    try {
+      if (!hasExistingPrizes) {
+        await tournamentService.createPrizes(tournament.tournamentId, rows.map(toPrizeRequest));
+        setNotice({ tone: 'success', text: 'Prizes created successfully.' });
+        await loadPrizes();
+        return;
+      }
+
+      const changedRows = rows.filter((row) => {
+        const prizeId = getPrizeIdentifier(row);
+        const originalRow = originalRows.find((item) =>
+          getPrizeIdentifier(item) === prizeId || item.finishPosition === row.finishPosition,
+        );
+
+        return Boolean(prizeId && originalRow && hasPrizeChanged(row, originalRow));
+      });
+      const missingRows = rows.filter((row) => !getPrizeIdentifier(row));
+
+      if (changedRows.length === 0 && missingRows.length === 0) {
+        setNotice({ tone: 'success', text: 'No prize changes to save.' });
+        return;
+      }
+
+      await Promise.all([
+        ...changedRows.map((row) =>
+          tournamentService.updatePrize(tournament.tournamentId, getPrizeIdentifier(row) ?? row.finishPosition, toPrizeRequest(row)),
+        ),
+        ...(missingRows.length > 0
+          ? [tournamentService.createPrizes(tournament.tournamentId, missingRows.map(toPrizeRequest))]
+          : []),
+      ]);
+
+      setNotice({ tone: 'success', text: 'Prizes updated successfully.' });
+      await loadPrizes();
+    } catch (error) {
+      setNotice({ tone: 'error', text: getApiErrorMessage(error, 'Unable to save prizes.') });
+    } finally {
+      setIsSavingPrizes(false);
+    }
+  };
+
+  return (
+    <form onSubmit={handlePrizeSubmit} className="space-y-4">
+      {showHeader && (
+        <div className="flex flex-col gap-3 border-t border-outline-variant pt-6 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <p className="text-label-sm font-bold uppercase tracking-[0.18em] text-secondary">Prize Management</p>
+            <h3 className="mt-1 font-display text-title-large font-extrabold text-primary">{tournament.tournamentName}</h3>
+          </div>
+          <button
+            type="button"
+            onClick={() => void loadPrizes()}
+            disabled={isLoadingPrizes || isSavingPrizes}
+            className="inline-flex items-center justify-center gap-2 rounded-md border border-outline-variant px-4 py-3 text-body-sm font-bold text-on-surface-variant transition-colors hover:border-primary hover:text-primary disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            <RefreshCw className={`h-4 w-4 ${isLoadingPrizes ? 'animate-spin' : ''}`} />
+            Refresh
+          </button>
+        </div>
+      )}
+
+      {!showHeader && (
+        <div className="flex justify-end">
+          <button
+            type="button"
+            onClick={() => void loadPrizes()}
+            disabled={isLoadingPrizes || isSavingPrizes}
+            className="inline-flex items-center justify-center gap-2 rounded-md border border-outline-variant px-3 py-2 text-label-sm font-bold text-on-surface-variant transition-colors hover:border-primary hover:text-primary disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            <RefreshCw className={`h-4 w-4 ${isLoadingPrizes ? 'animate-spin' : ''}`} />
+            Refresh
+          </button>
+        </div>
+      )}
+
+      {isLoadingPrizes ? (
+        <InlineEmptyState text="Loading prizes..." />
+      ) : (
+        <PrizeRowsEditor rows={rows} formErrors={formErrors} onChange={handleRowChange} />
+      )}
+
+      <div className="flex justify-end border-t border-outline-variant pt-4">
+        <button
+          type="submit"
+          disabled={isLoadingPrizes || isSavingPrizes}
+          className="inline-flex items-center justify-center gap-2 rounded-md bg-secondary px-6 py-3 text-body-sm font-bold text-on-secondary transition-all hover:bg-opacity-90 disabled:cursor-not-allowed disabled:opacity-70"
+        >
+          <Save className="h-4 w-4" />
+          {isSavingPrizes ? 'Saving...' : hasExistingPrizes ? 'Save Prize Changes' : 'Create Prizes'}
+        </button>
+      </div>
+    </form>
   );
 };
 
@@ -953,6 +1361,11 @@ const RaceCrudPanel = ({ tournament }: { tournament: Tournament }) => {
   const [errorMessage, setErrorMessage] = useState('');
   const [showRaceSuccess, setShowRaceSuccess] = useState(false);
   const [lastCreatedRace, setLastCreatedRace] = useState<RaceCrudItem | null>(null);
+
+  useToastNotifications([
+    message ? { tone: 'success', text: message } : null,
+    errorMessage ? { tone: 'error', text: errorMessage } : null,
+  ]);
 
   const loadRaces = useCallback(async () => {
     setIsLoadingRaces(true);
@@ -1055,7 +1468,7 @@ const RaceCrudPanel = ({ tournament }: { tournament: Tournament }) => {
   };
 
   const deleteRace = async (race: RaceCrudItem) => {
-    const confirmed = window.confirm(`Delete race "${race.name}"?`);
+    const confirmed = window.confirm(`Cancel race "${race.name}"?`);
 
     if (!confirmed) {
       return;
@@ -1066,13 +1479,13 @@ const RaceCrudPanel = ({ tournament }: { tournament: Tournament }) => {
 
     try {
       await raceCrudService.deleteRace(race.raceId, tournament.tournamentId);
-      setMessage('Race deleted.');
+      setMessage('Race cancelled.');
       if (selectedRace?.raceId === race.raceId) {
         setSelectedRace(null);
       }
       await loadRaces();
     } catch (error) {
-      setErrorMessage(getApiErrorMessage(error, 'Unable to delete race.'));
+      setErrorMessage(getApiErrorMessage(error, 'Unable to cancel race.'));
     }
   };
 
@@ -1120,29 +1533,6 @@ const RaceCrudPanel = ({ tournament }: { tournament: Tournament }) => {
     }
   };
 
-  const deleteRound = async (round: RaceRoundItem) => {
-    if (!selectedRace) {
-      return;
-    }
-
-    const confirmed = window.confirm(`Delete lap ${round.roundNumber}?`);
-
-    if (!confirmed) {
-      return;
-    }
-
-    setMessage('');
-    setErrorMessage('');
-
-    try {
-      await raceCrudService.deleteRound(round.roundId, selectedRace.raceId);
-      setMessage('Lap deleted.');
-      await loadRounds(selectedRace);
-    } catch (error) {
-      setErrorMessage(getApiErrorMessage(error, 'Unable to delete lap.'));
-    }
-  };
-
   return (
     <motion.section 
       className="space-y-8"
@@ -1173,30 +1563,6 @@ const RaceCrudPanel = ({ tournament }: { tournament: Tournament }) => {
           Create New Race
         </motion.button>
       </motion.div>
-
-      {/* Status Messages */}
-      {message && (
-        <motion.div 
-          className="glass-panel rounded-2xl border border-secondary/30 bg-secondary/10 px-6 py-4 flex items-center gap-3"
-          variants={revealUp}
-        >
-          <div className="h-10 w-10 rounded-full bg-secondary/20 flex items-center justify-center">
-            <div className="h-5 w-5 text-secondary">✓</div>
-          </div>
-          <p className="text-body-md font-semibold text-secondary">{message}</p>
-        </motion.div>
-      )}
-      {errorMessage && (
-        <motion.div 
-          className="glass-panel rounded-2xl border border-error/30 bg-error/10 px-6 py-4 flex items-center gap-3"
-          variants={revealUp}
-        >
-          <div className="h-10 w-10 rounded-full bg-error/20 flex items-center justify-center">
-            <div className="h-5 w-5 text-error">✕</div>
-          </div>
-          <p className="text-body-md font-semibold text-error">{errorMessage}</p>
-        </motion.div>
-      )}
 
       {/* Race Management Section */}
       <motion.div 
@@ -1271,7 +1637,7 @@ const RaceCrudPanel = ({ tournament }: { tournament: Tournament }) => {
                       <IconButton label={`Update ${race.name}`} onClick={(e) => { e.stopPropagation(); editRace(race); }}>
                         <Pencil className="h-4 w-4" />
                       </IconButton>
-                      <IconButton label={`Delete ${race.name}`} onClick={(e) => { e.stopPropagation(); void deleteRace(race); }} danger>
+                      <IconButton label={`Cancel ${race.name}`} onClick={(e) => { e.stopPropagation(); void deleteRace(race); }} danger>
                         <Trash2 className="h-4 w-4" />
                       </IconButton>
                     </div>
@@ -1418,9 +1784,6 @@ const RaceCrudPanel = ({ tournament }: { tournament: Tournament }) => {
                       <div className="flex gap-2">
                         <IconButton label={`Update lap ${round.roundNumber}`} onClick={() => editRound(round)}>
                           <Pencil className="h-4 w-4" />
-                        </IconButton>
-                        <IconButton label={`Delete lap ${round.roundNumber}`} onClick={() => void deleteRound(round)} danger>
-                          <Trash2 className="h-4 w-4" />
                         </IconButton>
                       </div>
                     </motion.div>
@@ -1721,6 +2084,13 @@ const TournamentDetailModal = ({
       </div>
 
       <DetailSection
+        title="Prize Management"
+        icon={<Trophy className="h-5 w-5 text-secondary" />}
+      >
+        <TournamentPrizeForm tournament={tournament} showHeader={false} />
+      </DetailSection>
+
+      <DetailSection
         title="Participants List"
         icon={<Users className="h-5 w-5 text-secondary" />}
       >
@@ -1824,12 +2194,6 @@ const MetricCard = ({ icon, label, value }: { icon: ReactNode; label: string; va
       <span className="text-primary">{icon}</span>
     </div>
     <p className="font-display truncate text-2xl font-extrabold text-on-surface">{value}</p>
-  </div>
-);
-
-const StatusBanner = ({ tone, text }: { tone: 'success' | 'error'; text: string }) => (
-  <div className={`mb-6 rounded-md border px-4 py-3 text-body-sm font-semibold ${tone === 'success' ? 'border-secondary/30 bg-secondary-container/30 text-secondary' : 'border-error/30 bg-error-container/20 text-error'}`}>
-    {text}
   </div>
 );
 
@@ -1970,3 +2334,4 @@ const InlineEmptyState = ({ text }: { text: string }) => (
 );
 
 export default TournamentManagementPage;
+
