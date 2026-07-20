@@ -1,5 +1,4 @@
 import { apiClient, unwrapApiData, unwrapApiList } from './apiClient';
-import { authService } from './authService';
 
 export type BetStatus = 'pending' | 'won' | 'lost' | 'cancelled' | string;
 
@@ -12,9 +11,13 @@ export type BetItem = {
   userId?: number;
   horseId?: number;
   jockeyId?: number;
+  betType?: boolean;
   amount: number;
   odds: number;
   currentRate?: number;
+  rewardPoints?: number;
+  totalBetPoints?: number;
+  totalBetCount?: number;
   potentialPayout: number;
   status: BetStatus;
   createdAt?: string;
@@ -94,9 +97,13 @@ const mapBet = (raw: RawBet): BetItem => {
     userId: raw.userId === undefined ? undefined : asNumber(raw.userId),
     horseId: raw.horseId === undefined ? undefined : asNumber(raw.horseId),
     jockeyId: raw.jockeyId === undefined ? undefined : asNumber(raw.jockeyId),
+    betType: raw.betType === undefined ? undefined : Boolean(raw.betType),
     amount,
     odds,
     currentRate: raw.currentRate === undefined ? undefined : asNumber(raw.currentRate),
+    rewardPoints: raw.rewardPoints === undefined ? undefined : rewardPoints,
+    totalBetPoints: raw.totalBetPoints === undefined ? undefined : asNumber(raw.totalBetPoints),
+    totalBetCount: raw.totalBetCount === undefined ? undefined : asNumber(raw.totalBetCount),
     potentialPayout,
     status,
     createdAt: raw.placedAt ? asString(raw.placedAt) : raw.createdAt ? asString(raw.createdAt) : undefined,
@@ -138,17 +145,12 @@ export const betService = {
   },
 
   async getCurrentUserBets(): Promise<BetItem[]> {
-    const [bets, currentUser] = await Promise.all([
-      this.getBets(),
-      authService.getCurrentUser().catch(() => authService.getStoredUserProfile()),
-    ]);
-    const currentUserId = Number(currentUser?.userId ?? currentUser?.id);
+    return this.getMyBets();
+  },
 
-    if (!Number.isFinite(currentUserId)) {
-      return [];
-    }
-
-    return bets.filter((bet) => bet.userId === currentUserId);
+  async getMyBets(): Promise<BetItem[]> {
+    const response = await apiClient.get('/api/bets/my');
+    return unwrapApiList<RawBet>(response).map(mapBet);
   },
 
   async getDashboardBets(): Promise<BetItem[]> {
@@ -167,7 +169,7 @@ export const betService = {
   },
 
   async getMyBetDetail(id: number | string): Promise<BetItem> {
-    const response = await apiClient.get(`/api/bets/detail/${encodeURIComponent(String(id))}`);
+    const response = await apiClient.get(`/api/bets/my/${encodeURIComponent(String(id))}`);
     return mapBet(unwrapApiData<RawBet>(response));
   },
 

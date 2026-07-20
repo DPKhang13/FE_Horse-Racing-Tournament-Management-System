@@ -1,4 +1,4 @@
-import { apiClient, unwrapApiData, unwrapApiList } from './apiClient';
+import { apiClient, unwrapApiList } from './apiClient';
 import type {
   RaceResultEntry,
   RaceResultFilters,
@@ -13,8 +13,6 @@ import type {
 
 type RawObject = Record<string, unknown>;
 
-const prizesByTournamentId = new Map<string, Promise<RawObject[]>>();
-const raceDetailsByRaceId = new Map<string, Promise<RawObject | undefined>>();
 const publicResultsByRaceId = new Map<string, Promise<RawObject[]>>();
 
 const asString = (value: unknown, fallback = '') => {
@@ -125,7 +123,7 @@ const mapEntry = (raw: RawObject): RaceResultEntry => ({
     raw.finishPosition === null || raw.finishPosition === undefined
       ? null
       : asNumber(raw.finishPosition),
-  finishTime: formatFinishTime(raw.finishTimeSec),
+  finishTime: formatFinishTime(raw.finishTimeSec ?? raw.finishTime),
   pointsAwarded: asNumber(raw.pointsAwarded),
   isDisqualified: Boolean(raw.isDisqualified),
   disqualificationReason: raw.disqualifyReason ? asString(raw.disqualifyReason) : undefined,
@@ -163,7 +161,7 @@ const mapSummary = (raw: RawObject): RaceResultSummary => {
     track: asString(raw.location ?? raw.track, '-'),
     location: asString(raw.location ?? raw.track, '-'),
     date: asString(raw.scheduledAt ?? raw.raceDate ?? raw.recordedAt ?? raw.publishedAt, ''),
-    distance: raw.distanceM ? `${raw.distanceM}m` : '-',
+    distance: raw.distanceM || raw.distance ? `${raw.distanceM ?? raw.distance}m` : '-',
     trackType: normalizeTrackType(raw.trackType),
     grade: asString(raw.rankGroup, '-'),
     status: normalizeStatus(raw.status),
@@ -256,7 +254,7 @@ const getPublicResultsByRaceId = (raceId: string) => {
   }
 
   const request = apiClient
-    .get(`/api/v1/races/${raceId}/results/public/get`)
+    .get(`/api/race-results/race/${raceId}/get-all`)
     .then((response) => unwrapApiList<RawObject>(response))
     .catch(() => []);
 
@@ -264,112 +262,16 @@ const getPublicResultsByRaceId = (raceId: string) => {
   return request;
 };
 
-const getPrizesByTournamentId = (tournamentId: string) => {
-  const cachedPrizes = prizesByTournamentId.get(tournamentId);
-
-  if (cachedPrizes) {
-    return cachedPrizes;
-  }
-
-  const request = apiClient
-    .get(`/api/v1/admin/tournaments/${tournamentId}/get-prizes`)
-    .then((response) => unwrapApiList<RawObject>(response))
-    .catch(() => []);
-
-  prizesByTournamentId.set(tournamentId, request);
-  return request;
-};
-
-const getRaceByRaceId = (raceId: string) => {
-  const cachedRace = raceDetailsByRaceId.get(raceId);
-
-  if (cachedRace) {
-    return cachedRace;
-  }
-
-  const request = apiClient
-    .get(`/api/v1/admin/races/get-race/${raceId}`)
-    .then((response) => unwrapApiData<RawObject>(response))
-    .catch(() => undefined);
-
-  raceDetailsByRaceId.set(raceId, request);
-  return request;
-};
-
-const resolveTournamentId = async (result: RawObject) => {
-  const directTournamentId = asString(result.tournamentId);
-
-  if (directTournamentId) {
-    return directTournamentId;
-  }
-
-  const raceId = asString(result.raceId);
-
-  if (!raceId) {
-    return '';
-  }
-
-  const race = await getRaceByRaceId(raceId);
-  return race ? asString(race.tournamentId) : '';
-};
-
-const getPrizePool = (prizes: RawObject[]) => {
-  const explicitPool = prizes
-    .map((prize) => Number(prize.prizePool))
-    .find((value) => Number.isFinite(value) && value > 0);
-
-  if (explicitPool !== undefined) {
-    return explicitPool;
-  }
-
-  const totalAmount = prizes.reduce((total, prize) => {
-    const amount = Number(prize.amount);
-    return Number.isFinite(amount) ? total + amount : total;
-  }, 0);
-
-  return totalAmount > 0 ? totalAmount : undefined;
-};
-
-const mapPrizeDistributions = (prizes: RawObject[]) =>
-  prizes
-    .map((prize) => ({
-      position: asNumber(prize.finishPosition),
-      amount: formatCurrency(prize.amount),
-      label: asString(prize.prizeName, `${prize.finishPosition}`),
-    }))
-    .filter((prize) => prize.position > 0)
-    .sort((a, b) => a.position - b.position);
-
-const findMatchingPrize = (result: RawObject, prizes: RawObject[]) => {
-  const finishPosition = asNumber(result.finishPosition);
-
-  return prizes.find((prize) => asNumber(prize.finishPosition) === finishPosition);
-};
-
 const buildPublishedSummary = async (raceId: string, results: RawObject[]): Promise<RaceResultSummary | null> => {
   if (results.length === 0) {
     return null;
   }
 
-  const tournamentId = await resolveTournamentId(results[0]);
-  const prizes = tournamentId ? await getPrizesByTournamentId(tournamentId) : [];
-  const enrichedEntries = results.map((result) => {
-    const matchingPrize = findMatchingPrize(result, prizes);
-
-    return {
-      ...result,
-      prizeAmount: result.prizeAmount ?? matchingPrize?.amount,
-    };
-  });
-
   return mapSummary({
     ...results[0],
     id: raceId,
     raceId,
-    tournamentId: results[0].tournamentId ?? tournamentId,
-    entries: enrichedEntries,
-    prizeDistributions: mapPrizeDistributions(prizes),
-    prizePool: results[0].prizePool ?? getPrizePool(prizes),
+    entries: results,
   });
 };
 
