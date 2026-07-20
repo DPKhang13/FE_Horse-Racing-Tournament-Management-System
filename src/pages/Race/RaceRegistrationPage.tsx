@@ -102,6 +102,7 @@ const RaceRegistrationPage = () => {
   const [message, setMessage] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
   const [queueSearch, setQueueSearch] = useState('');
+  const [viewingRegistration, setViewingRegistration] = useState<RaceRegistrationItem | null>(null);
 
   const isOwner = profile?.roleType === 'horse_owner';
   const canApprove = profile?.roleType === 'admin';
@@ -494,7 +495,7 @@ const RaceRegistrationPage = () => {
             </div>
 
             <div className="overflow-x-auto">
-              <table className="w-full min-w-[860px] text-left">
+              <table className="w-full min-w-[920px] text-left">
                 <thead className="border-b border-outline-variant bg-surface-container">
                   <tr>
                     <th className="px-4 py-3 text-label-sm uppercase tracking-wider text-outline">Tournament</th>
@@ -546,6 +547,13 @@ const RaceRegistrationPage = () => {
                         </td>
                         <td className="px-4 py-4">
                           <div className="flex justify-end gap-2">
+                            <button
+                              type="button"
+                              onClick={() => setViewingRegistration(item)}
+                              className="rounded-md border border-outline-variant px-2 py-2 text-label-sm font-bold text-primary transition-colors hover:border-primary"
+                            >
+                              Details
+                            </button>
                             {canApprove && (
                               <>
                                 <button
@@ -580,6 +588,33 @@ const RaceRegistrationPage = () => {
                   )}
                 </tbody>
               </table>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {viewingRegistration && (
+        <Modal
+          title={`Registration #${viewingRegistration.regId ?? viewingRegistration.id ?? '-'}`}
+          subtitle={viewingRegistration.tournamentName ?? '-'}
+          onClose={() => setViewingRegistration(null)}
+        >
+          <div className="p-6">
+            <div className="grid gap-4 md:grid-cols-2">
+              <InfoPill label="Tournament" value={viewingRegistration.tournamentName ?? '-'} />
+              <InfoPill label="Race" value={viewingRegistration.raceName ?? '-'} />
+              <InfoPill label="Race Number" value={String(viewingRegistration.raceNumber ?? '-')} />
+              <InfoPill label="Scheduled At" value={formatDateTime(viewingRegistration.scheduledAt)} />
+              <InfoPill label="Horse" value={viewingRegistration.horseName ?? '-'} />
+              <InfoPill label="Jockey" value={viewingRegistration.jockeyFullName ?? '-'} />
+              <InfoPill label="Owner" value={viewingRegistration.ownerFullName ?? '-'} />
+              <InfoPill label="Stable" value={viewingRegistration.ownerStableName ?? '-'} />
+              <InfoPill label="Status" value={viewingRegistration.status ?? '-'} />
+              <InfoPill label="Owner Confirmation" value={viewingRegistration.ownerConfirmationStatus ?? '-'} />
+              <InfoPill label="Registered At" value={formatDateTime(viewingRegistration.registeredAt)} />
+              {viewingRegistration.approvedAt && (
+                <InfoPill label="Approved At" value={formatDateTime(viewingRegistration.approvedAt)} />
+              )}
             </div>
           </div>
         </Modal>

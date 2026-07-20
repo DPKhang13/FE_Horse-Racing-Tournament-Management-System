@@ -16,11 +16,16 @@ export type JockeyAssignmentItem = {
   expiredAt?: string;
   raceName?: string;
   raceNumber?: number;
+  scheduledAt?: string;
   horseId?: number;
   horseName?: string;
+  horseAvatarUrl?: string;
+  jockeyAvatarUrl?: string;
   ownerFullName?: string;
   ownerStableName?: string;
   jockeyFullName?: string;
+  /** Enriched on FE */
+  tournamentName?: string;
 };
 
 export type JockeyInvitationFormData = {

@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom';
 import { authService } from '../../services/authService';
 import { useToastNotifications } from '../../hooks/useToastNotifications';
 import { HorseService } from '../../services/HorseService';
+import { jockeyAssignmentService } from '../../services/jockeyAssignmentService';
 import { raceResultService } from '../../services/raceResultService';
 import type { Horse } from '../../types/horse';
 import type { RaceResultListItem, RaceResultStatus, RaceResultSummary } from '../../types/raceResult';
@@ -98,7 +99,15 @@ const RaceResultList = () => {
           const resultList = await raceResultService.getRaceResultList();
 
           if (isMounted) {
-            setAllResults(resultList);
+            let filteredList = resultList;
+            if (currentProfile.roleType === 'jockey') {
+              const myAssignments = await jockeyAssignmentService.getMine();
+              const jockeyRaceIds = new Set(myAssignments.map((a) => String(a.raceId)).filter(Boolean));
+              if (jockeyRaceIds.size > 0) {
+                filteredList = resultList.filter((r) => jockeyRaceIds.has(String(r.raceId)));
+              }
+            }
+            setAllResults(filteredList);
           }
         }
       } catch (error) {

@@ -5,6 +5,7 @@ import { authService } from '../../services/authService';
 import { jockeyAssignmentService, type JockeyAssignmentItem } from '../../services/jockeyAssignmentService';
 import { jockeyService, type JockeyItem } from '../../services/jockeyService';
 import { raceRegistrationService, type RaceRegistrationItem } from '../../services/raceRegistrationService';
+import { scheduleService } from '../../services/scheduleService';
 import { useToastNotifications } from '../../hooks/useToastNotifications';
 import type { UserProfile } from '../../types/user';
 
@@ -58,6 +59,7 @@ const JockeyAssignmentsPage = () => {
   const [message, setMessage] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
   const [invitationSearch, setInvitationSearch] = useState('');
+  const [viewingAssignment, setViewingAssignment] = useState<JockeyAssignmentItem | null>(null);
 
   const isOwner = profile?.roleType === 'horse_owner';
   const isJockey = profile?.roleType === 'jockey';
@@ -74,6 +76,13 @@ const JockeyAssignmentsPage = () => {
     try {
       const currentProfile = profile ?? await authService.getCurrentUser();
       setProfile(currentProfile);
+      const allRaces = await scheduleService.getRaceSchedule();
+      const raceMap = new Map<number, string>();
+      for (const r of allRaces) {
+        if (r.tournamentName && r.raceId) {
+          raceMap.set(r.raceId, r.tournamentName);
+        }
+      }
 
       if (currentProfile.roleType === 'horse_owner') {
         const [sent, availableJockeys, registrationList] = await Promise.all([
@@ -81,11 +90,12 @@ const JockeyAssignmentsPage = () => {
           jockeyService.getJockeys('available'),
           raceRegistrationService.getMine(),
         ]);
-        setAssignments(sent);
+        setAssignments(sent.map((a) => ({ ...a, tournamentName: a.raceId ? raceMap.get(a.raceId) ?? a.tournamentName : a.tournamentName })));
         setJockeys(availableJockeys);
         setRegistrations(registrationList);
       } else {
-        setAssignments(await jockeyAssignmentService.getMine());
+        const mine = await jockeyAssignmentService.getMine();
+        setAssignments(mine.map((a) => ({ ...a, tournamentName: a.raceId ? raceMap.get(a.raceId) ?? a.tournamentName : a.tournamentName })));
       }
     } catch (error) {
       setErrorMessage(getApiErrorMessage(error, 'Unable to load jockey assignments.'));
@@ -363,19 +373,34 @@ const JockeyAssignmentsPage = () => {
               <InfoPill label="Scheduled" value={formatDateTime(selectedRegistration.scheduledAt)} />
             </div>
 
-            {availableJockeys.length === 0 ? (
-              <EmptyState
-                title="No available jockey"
-                description="All available jockeys already have an active invitation for this registration or none are currently available."
-                icon={<Users className="h-5 w-5" />}
-              />
-            ) : (
-              <div className="grid gap-4 md:grid-cols-2">
-                {availableJockeys.map((jockey) => (
+            {(() => {
+              const jockeyIdsAlreadyInvited = new Set(
+                assignments
+                  .filter((a) => isActiveAssignmentStatus(getEffectiveAssignmentStatus(a)))
+                  .map((a) => a.jockeyId)
+                  .filter(Boolean),
+              );
+              const trulyAvailable = availableJockeys.filter((j) => !jockeyIdsAlreadyInvited.has(j.jockeyId));
+              return trulyAvailable.length === 0 ? (
+                <EmptyState
+                  title="No available jockey"
+                  description="All jockeys either already have active invitations or are currently unavailable."
+                  icon={<Users className="h-5 w-5" />}
+                />
+              ) : (
+                <div className="grid gap-4 md:grid-cols-2">
+                  {trulyAvailable.map((jockey) => (
                   <div key={jockey.jockeyId} className="rounded-lg border border-outline-variant bg-white p-4">
-                    <h3 className="text-body-lg font-bold text-primary">
-                      {jockey.fullName ?? jockey.username ?? `Jockey ${jockey.jockeyId ?? '-'}`}
-                    </h3>
+                    <div className="flex items-center gap-3">
+                      <img
+                        src={jockey.avatarUrl || 'https://picsum.photos/48/48?random=jockey'}
+                        alt={jockey.fullName ?? 'Jockey'}
+                        className="h-12 w-12 rounded-full border border-outline-variant object-cover"
+                      />
+                      <h3 className="text-body-lg font-bold text-primary">
+                        {jockey.fullName ?? jockey.username ?? `Jockey ${jockey.jockeyId ?? '-'}`}
+                      </h3>
+                    </div>
                     <div className="mt-3 grid gap-3 sm:grid-cols-2">
                       <InfoPill label="Points" value={String(jockey.rankingPoints ?? 0)} />
                       <InfoPill label="Wins" value={String(jockey.totalWins ?? 0)} />
@@ -393,7 +418,8 @@ const JockeyAssignmentsPage = () => {
                   </div>
                 ))}
               </div>
-            )}
+            );
+          })()}
           </div>
         </Modal>
       )}
@@ -413,27 +439,44 @@ const JockeyAssignmentsPage = () => {
             </div>
 
             <div className="overflow-x-auto">
-              <table className="w-full min-w-[920px] text-left">
+              <table className="w-full min-w-[1120px] text-left">
                 <thead className="border-b border-outline-variant bg-surface-container">
                   <tr>
+                    <th className="px-4 py-3 text-label-sm uppercase tracking-wider text-outline">Tournament</th>
                     <th className="px-4 py-3 text-label-sm uppercase tracking-wider text-outline">Race</th>
                     <th className="px-4 py-3 text-label-sm uppercase tracking-wider text-outline">Horse</th>
                     <th className="px-4 py-3 text-label-sm uppercase tracking-wider text-outline">Jockey</th>
                     <th className="px-4 py-3 text-label-sm uppercase tracking-wider text-outline">Status</th>
+                    <th className="px-4 py-3 text-label-sm uppercase tracking-wider text-outline">Info</th>
                     <th className="px-4 py-3 text-label-sm uppercase tracking-wider text-outline text-right">Action</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-outline-variant">
                   {isLoading ? (
-                    <tr><td colSpan={5} className="px-4 py-8 text-center text-body-sm text-on-surface-variant">Loading invitations...</td></tr>
+                    <tr><td colSpan={7} className="px-4 py-8 text-center text-body-sm text-on-surface-variant">Loading invitations...</td></tr>
                   ) : filteredAssignments.map((item) => {
                     const id = item.assignmentId ?? item.id ?? '';
                     const status = getEffectiveAssignmentStatus(item);
                     return (
                       <tr key={id}>
-                        <td className="px-4 py-4 text-body-sm font-semibold text-primary">{item.raceName ?? `Race ${item.raceId ?? '-'}`}</td>
-                        <td className="px-4 py-4 text-body-sm text-on-surface-variant">{item.horseName ?? `Horse ${item.horseId ?? '-'}`}</td>
-                        <td className="px-4 py-4 text-body-sm text-on-surface-variant">{item.jockeyFullName ?? `Jockey ${item.jockeyId ?? '-'}`}</td>
+                        <td className="px-4 py-4 text-body-sm font-semibold text-primary">{item.tournamentName ?? '-'}</td>
+                        <td className="px-4 py-4 text-body-sm text-on-surface-variant">{item.raceName ?? `Race ${item.raceId ?? '-'}`}</td>
+                        <td className="px-4 py-4">
+                          <div className="flex items-center gap-2">
+                            {item.horseAvatarUrl && (
+                              <img src={item.horseAvatarUrl} alt="" className="h-8 w-8 rounded border border-outline-variant object-cover" />
+                            )}
+                            <span className="text-body-sm text-on-surface-variant">{item.horseName ?? `Horse ${item.horseId ?? '-'}`}</span>
+                          </div>
+                        </td>
+                        <td className="px-4 py-4">
+                          <div className="flex items-center gap-2">
+                            {item.jockeyAvatarUrl && (
+                              <img src={item.jockeyAvatarUrl} alt="" className="h-8 w-8 rounded-full border border-outline-variant object-cover" />
+                            )}
+                            <span className="text-body-sm text-on-surface-variant">{item.jockeyFullName ?? `Jockey ${item.jockeyId ?? '-'}`}</span>
+                          </div>
+                        </td>
                         <td className="px-4 py-4 text-body-sm text-on-surface-variant">
                           {status || item.status || '-'}
                           {item.responseDeadline && (
@@ -441,6 +484,15 @@ const JockeyAssignmentsPage = () => {
                               Deadline {formatDateTime(item.responseDeadline)}
                             </span>
                           )}
+                        </td>
+                        <td className="px-4 py-4">
+                          <button
+                            type="button"
+                            onClick={() => setViewingAssignment(item)}
+                            className="rounded-md border border-outline-variant px-3 py-2 text-label-sm font-bold text-primary transition-colors hover:border-primary"
+                          >
+                            Details
+                          </button>
                         </td>
                         <td className="px-4 py-4">
                           <div className="flex justify-end gap-2">
@@ -476,10 +528,62 @@ const JockeyAssignmentsPage = () => {
                     );
                   })}
                   {!isLoading && filteredAssignments.length === 0 && (
-                    <tr><td colSpan={5} className="px-4 py-8 text-center text-body-sm text-on-surface-variant">No invitations found.</td></tr>
+                    <tr><td colSpan={7} className="px-4 py-8 text-center text-body-sm text-on-surface-variant">No invitations found.</td></tr>
                   )}
                 </tbody>
               </table>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {viewingAssignment && (
+        <Modal
+          title={viewingAssignment.raceName ?? `Race ${viewingAssignment.raceId ?? '-'}`}
+          subtitle={viewingAssignment.tournamentName ?? '-'}
+          onClose={() => setViewingAssignment(null)}
+        >
+          <div className="p-6">
+            <div className="grid gap-4 md:grid-cols-2 mb-4">
+              <InfoPill label="Tournament" value={viewingAssignment.tournamentName ?? '-'} />
+              <InfoPill label="Race" value={viewingAssignment.raceName ?? '-'} />
+            </div>
+            <div className="grid gap-4 md:grid-cols-2">
+              <div className="flex items-center gap-3 rounded-lg border border-outline-variant bg-surface-container-low p-4">
+                {viewingAssignment.horseAvatarUrl && (
+                  <img src={viewingAssignment.horseAvatarUrl} alt="" className="h-16 w-16 rounded border border-outline-variant object-cover" />
+                )}
+                <div>
+                  <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-outline">Horse</p>
+                  <p className="text-body-lg font-bold text-primary">{viewingAssignment.horseName ?? '-'}</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-3 rounded-lg border border-outline-variant bg-surface-container-low p-4">
+                {viewingAssignment.jockeyAvatarUrl && (
+                  <img src={viewingAssignment.jockeyAvatarUrl} alt="" className="h-16 w-16 rounded-full border border-outline-variant object-cover" />
+                )}
+                <div>
+                  <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-outline">Jockey</p>
+                  <p className="text-body-lg font-bold text-primary">{viewingAssignment.jockeyFullName ?? '-'}</p>
+                </div>
+              </div>
+              <InfoPill label="Owner" value={viewingAssignment.ownerFullName ?? '-'} />
+              <InfoPill label="Stable" value={viewingAssignment.ownerStableName ?? '-'} />
+              <InfoPill label="Status" value={getEffectiveAssignmentStatus(viewingAssignment) || viewingAssignment.status || '-'} />
+              <InfoPill label="Gate Number" value={viewingAssignment.gateNumber != null ? String(viewingAssignment.gateNumber) : '-'} />
+              <InfoPill label="Race Number" value={String(viewingAssignment.raceNumber ?? '-')} />
+              <InfoPill label="Scheduled At" value={formatDateTime(viewingAssignment.scheduledAt)} />
+              <InfoPill label="Invited At" value={formatDateTime(viewingAssignment.invitedAt)} />
+              <InfoPill label="Respond By" value={formatDateTime(viewingAssignment.responseDeadline)} />
+              {viewingAssignment.respondedAt && (
+                <InfoPill label="Responded At" value={formatDateTime(viewingAssignment.respondedAt)} />
+              )}
+              {viewingAssignment.cancelledAt && (
+                <InfoPill label="Cancelled At" value={formatDateTime(viewingAssignment.cancelledAt)} />
+              )}
+              {viewingAssignment.expiredAt && (
+                <InfoPill label="Expired At" value={formatDateTime(viewingAssignment.expiredAt)} />
+              )}
             </div>
           </div>
         </Modal>
