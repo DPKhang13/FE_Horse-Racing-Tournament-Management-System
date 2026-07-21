@@ -18,11 +18,21 @@ const toneIcon: Record<ToastTone, typeof CheckCircle2> = {
   info: Info,
 };
 
+const getToastDuration = ({ tone, text }: ToastPayload) => {
+  const wordCount = text.trim().split(/\s+/).filter(Boolean).length;
+  const readingUnits = Math.max(wordCount, Math.ceil(text.length / 6));
+  const estimatedReadingTime = Math.ceil(readingUnits / 3) * 1000 + 2500;
+  const minimumDuration = tone === 'error' ? 8000 : 5000;
+
+  return Math.min(16000, Math.max(minimumDuration, estimatedReadingTime));
+};
+
 const ToastViewport = () => {
   const [toasts, setToasts] = useState<ToastItem[]>([]);
 
   useEffect(() => {
     let nextId = 1;
+    const timeoutIds = new Set<number>();
 
     const unsubscribe = subscribeToToast((detail) => {
       if (!detail.text.trim()) {
@@ -32,18 +42,25 @@ const ToastViewport = () => {
       const toastId = nextId++;
       setToasts((current) => [...current, { id: toastId, ...detail }]);
 
-      window.setTimeout(() => {
+      const timeoutId = window.setTimeout(() => {
         setToasts((current) => current.filter((item) => item.id !== toastId));
-      }, detail.tone === 'error' ? 5200 : 3800);
+        timeoutIds.delete(timeoutId);
+      }, getToastDuration(detail));
+      timeoutIds.add(timeoutId);
     });
 
     return () => {
       unsubscribe();
+      timeoutIds.forEach((timeoutId) => window.clearTimeout(timeoutId));
     };
   }, []);
 
   return (
-    <div className="pointer-events-none fixed right-4 top-4 z-[200] flex w-[min(420px,calc(100vw-2rem))] flex-col gap-3">
+    <div
+      className="pointer-events-auto fixed right-4 top-4 z-[200] flex max-h-[calc(100vh-2rem)] w-[min(420px,calc(100vw-2rem))] flex-col gap-3 overflow-y-auto overscroll-contain pr-1"
+      role="region"
+      aria-label="Notifications"
+    >
       {toasts.map((toast) => {
         const Icon = toneIcon[toast.tone];
 
@@ -51,11 +68,14 @@ const ToastViewport = () => {
           <div
             key={toast.id}
             className={`pointer-events-auto flex items-start gap-3 rounded-xl border px-4 py-3 backdrop-blur-xl transition-all duration-300 ${toneStyles[toast.tone]}`}
+            role={toast.tone === 'error' ? 'alert' : 'status'}
+            aria-live={toast.tone === 'error' ? 'assertive' : 'polite'}
+            aria-atomic="true"
           >
             <div className="mt-0.5 shrink-0 text-primary">
               <Icon className={`h-5 w-5 ${toast.tone === 'error' ? 'text-error' : toast.tone === 'success' ? 'text-secondary' : 'text-primary'}`} />
             </div>
-            <p className="min-w-0 flex-1 text-sm font-semibold leading-6">{toast.text}</p>
+            <p className="min-w-0 flex-1 whitespace-pre-wrap break-words text-sm font-semibold leading-6 [overflow-wrap:anywhere]">{toast.text}</p>
             <button
               type="button"
               onClick={() => setToasts((current) => current.filter((item) => item.id !== toast.id))}

@@ -19,8 +19,9 @@ import {
   X,
   XCircle,
 } from 'lucide-react';
-import { apiClient, getApiErrorMessage, unwrapApiList } from '../../services/apiClient';
+import { apiClient, getApiErrorMessage, getApiResponseMessage, unwrapApiList } from '../../services/apiClient';
 import { HorseService } from '../../services/HorseService';
+import { useToastNotifications } from '../../hooks/useToastNotifications';
 import type { Horse, HorseFormData } from '../../types/horse';
 
 type ActiveTab = 'horses' | 'requests' | 'ranking';
@@ -309,7 +310,7 @@ const getHorseOwners = async () => {
 };
 
 const createAdminHorse = async (data: AdminHorseFormData) => {
-  await apiClient.post(`/api/horses/admin/owners/${Number(data.ownerId)}/create`, {
+  const response = await apiClient.post(`/api/horses/admin/owners/${Number(data.ownerId)}/create`, {
     name: data.name.trim(),
     breed: data.breed.trim(),
     age: Number(data.age),
@@ -317,28 +318,31 @@ const createAdminHorse = async (data: AdminHorseFormData) => {
     rankGroup: 'D',
     avatarUrl: data.avatarUrl.trim() || fallbackHorseImage,
   });
+
+  return getApiResponseMessage(response, 'Horse created successfully.');
 };
 
 const updateAdminHorse = async (horseId: number, data: AdminHorseFormData) => {
-  await apiClient.put(`/api/horses/update/${horseId}`, {
+  const responses = [await apiClient.put(`/api/horses/update/${horseId}`, {
     name: data.name.trim(),
     breed: data.breed.trim(),
     age: Number(data.age),
     weightKg: Number(data.weightKg),
     avatarUrl: data.avatarUrl.trim() || fallbackHorseImage,
-  });
+  })];
 
   if (data.status && ['active', 'inactive', 'retired'].includes(data.status)) {
-    await apiClient.patch(`/api/horses/admin/${horseId}/status`, {
+    responses.push(await apiClient.patch(`/api/horses/admin/${horseId}/status`, {
       status: data.status,
-    });
+    }));
   }
+
+  return getApiResponseMessage(responses, 'Horse updated successfully.');
 };
 
 const deleteAdminHorse = async (horseId: number) => {
-  await apiClient.patch(`/api/horses/admin/${horseId}/status`, {
-    status: 'inactive',
-  });
+  const response = await apiClient.delete(`/api/horses/delete/${horseId}`);
+  return getApiResponseMessage(response, 'Horse deleted successfully.');
 };
 
 const updateHorseRequestStatus = async (horseId: number, status: 'active' | 'inactive') => {
@@ -360,6 +364,7 @@ const AdminHorseManagementPage = () => {
   const [isOwnersLoading, setIsOwnersLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isDetailLoading, setIsDetailLoading] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
   const [processingHorseId, setProcessingHorseId] = useState<number | null>(null);
   const [notice, setNotice] = useState<Notice | null>(null);
   const [ownerLoadError, setOwnerLoadError] = useState('');
@@ -367,15 +372,22 @@ const AdminHorseManagementPage = () => {
   const [selectedHorse, setSelectedHorse] = useState<Horse | null>(null);
   const [viewingHorse, setViewingHorse] = useState<Horse | null>(null);
   const [approvingHorse, setApprovingHorse] = useState<Horse | null>(null);
+  const [deletingHorse, setDeletingHorse] = useState<Horse | null>(null);
   const [formData, setFormData] = useState<AdminHorseFormData>(emptyFormData);
   const [formErrors, setFormErrors] = useState<HorseFormErrors>({});
 
-  const loadHorses = async (showLoading = true) => {
+  useToastNotifications([
+    notice ? { tone: notice.tone, text: notice.text } : null,
+  ]);
+
+  const loadHorses = async (showLoading = true, clearNotice = showLoading) => {
     if (showLoading) {
       setIsLoading(true);
     }
 
-    setNotice(null);
+    if (clearNotice) {
+      setNotice(null);
+    }
 
     try {
       const data = await HorseService.getHorses();
@@ -541,11 +553,11 @@ const AdminHorseManagementPage = () => {
       };
 
       if (selectedHorse) {
-        await updateAdminHorse(getHorseKey(selectedHorse), payload);
-        setNotice({ tone: 'success', text: 'Horse updated successfully.' });
+        const message = await updateAdminHorse(getHorseKey(selectedHorse), payload);
+        setNotice({ tone: 'success', text: message });
       } else {
-        await createAdminHorse(formData);
-        setNotice({ tone: 'success', text: 'Horse created successfully.' });
+        const message = await createAdminHorse(formData);
+        setNotice({ tone: 'success', text: message });
       }
 
       closeFormModal();
@@ -571,21 +583,24 @@ const AdminHorseManagementPage = () => {
     }
   };
 
-  const handleDelete = async (horse: Horse) => {
-    const confirmed = window.confirm(`Delete "${horse.name}" from the horse list?`);
-
-    if (!confirmed) {
+  const handleDelete = async () => {
+    if (!deletingHorse || isDeleting) {
       return;
     }
 
+    const horseId = getHorseKey(deletingHorse);
     setNotice(null);
+    setIsDeleting(true);
 
     try {
-      await deleteAdminHorse(getHorseKey(horse));
-      setNotice({ tone: 'success', text: 'Horse marked as deleted.' });
+      const message = await deleteAdminHorse(horseId);
+      setNotice({ tone: 'success', text: message });
+      setDeletingHorse(null);
       await refreshAfterMutation();
     } catch (error) {
       setNotice({ tone: 'error', text: getApiErrorMessage(error, 'Unable to delete horse.') });
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -711,7 +726,7 @@ const AdminHorseManagementPage = () => {
             isLoading={isLoading}
             onView={(horse) => void handleViewHorse(horse)}
             onEdit={openEditModal}
-            onDelete={(horse) => void handleDelete(horse)}
+            onDelete={setDeletingHorse}
           />
         ) : activeTab === 'requests' ? (
           <HorseRequestsTable
@@ -749,6 +764,15 @@ const AdminHorseManagementPage = () => {
           isProcessing={processingHorseId === getHorseKey(approvingHorse)}
           onClose={() => setApprovingHorse(null)}
           onConfirm={() => void handleRequestAction(approvingHorse, 'active')}
+        />
+      )}
+
+      {deletingHorse && (
+        <HorseDeleteConfirmationModal
+          horse={deletingHorse}
+          isDeleting={isDeleting}
+          onClose={() => setDeletingHorse(null)}
+          onConfirm={() => void handleDelete()}
         />
       )}
 
@@ -1252,6 +1276,63 @@ const HorseApprovalModal = ({
   </Modal>
 );
 
+const HorseDeleteConfirmationModal = ({
+  horse,
+  isDeleting,
+  onClose,
+  onConfirm,
+}: {
+  horse: Horse;
+  isDeleting: boolean;
+  onClose: () => void;
+  onConfirm: () => void;
+}) => (
+  <Modal
+    title="Delete horse"
+    subtitle="Admin confirmation required"
+    onClose={onClose}
+    isCloseDisabled={isDeleting}
+    compact
+  >
+    <div className="p-6">
+      <div className="flex items-start gap-4 rounded-md border border-error/35 bg-error-container/20 p-4">
+        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-error/15 text-error">
+          <Trash2 className="h-5 w-5" />
+        </div>
+        <div className="min-w-0">
+          <p className="break-words text-body-md font-bold text-primary">
+            Delete {horse.name}?
+          </p>
+          <p className="mt-2 break-words text-body-sm leading-6 text-on-surface-variant">
+            This permanently removes {getDisplayId(horse)} from horse management. This action cannot be undone.
+          </p>
+        </div>
+      </div>
+
+      <div className="mt-6 flex flex-col-reverse gap-3 border-t border-outline-variant pt-5 sm:flex-row sm:justify-end">
+        <button
+          type="button"
+          onClick={onClose}
+          disabled={isDeleting}
+          autoFocus
+          className="rounded-md border border-outline-variant px-6 py-3 text-body-sm font-bold text-on-surface-variant transition-colors hover:border-primary hover:text-primary disabled:cursor-not-allowed disabled:opacity-60"
+        >
+          Cancel
+        </button>
+        <button
+          type="button"
+          onClick={onConfirm}
+          disabled={isDeleting}
+          className="inline-flex items-center justify-center gap-2 rounded-md bg-error px-6 py-3 text-body-sm font-bold text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
+        >
+          <Trash2 className="h-4 w-4" />
+          {isDeleting ? 'Deleting...' : 'Delete horse'}
+        </button>
+      </div>
+    </div>
+  </Modal>
+);
+
 const HorseDetailModal = ({ horse, isLoading, onClose }: { horse: Horse; isLoading: boolean; onClose: () => void }) => (
   <Modal title={horse.name} subtitle={getDisplayId(horse)} onClose={onClose}>
     <div className="p-6">
@@ -1299,7 +1380,10 @@ const StatusBadge = ({ status }: { status: string }) => (
 );
 
 const StatusBanner = ({ tone, text }: Notice) => (
-  <div className={`mb-6 rounded-md border px-4 py-3 text-body-sm font-semibold ${tone === 'success' ? 'border-secondary/30 bg-secondary-container/30 text-secondary' : 'border-error/30 bg-error-container/20 text-error'}`}>
+  <div
+    role={tone === 'error' ? 'alert' : 'status'}
+    className={`mb-6 whitespace-pre-wrap break-words rounded-md border px-4 py-3 text-body-sm font-semibold [overflow-wrap:anywhere] ${tone === 'success' ? 'border-secondary/30 bg-secondary-container/30 text-secondary' : 'border-error/30 bg-error-container/20 text-error'}`}
+  >
     {text}
   </div>
 );
@@ -1347,28 +1431,61 @@ const IconButton = ({
   </button>
 );
 
-const Modal = ({ title, subtitle, onClose, children }: { title: string; subtitle: string; onClose: () => void; children: ReactNode }) => (
-  <div className="fixed inset-0 z-[60] overflow-y-auto bg-black/60 px-4 py-8">
-    <div className="mx-auto max-w-5xl rounded-lg border border-outline-variant bg-surface-container shadow-xl">
-      <div className="flex items-start justify-between gap-6 border-b border-outline-variant p-6">
-        <div>
-          <p className="mb-2 text-label-sm font-bold uppercase tracking-widest text-outline">{subtitle}</p>
-          <h2 className="text-headline-md font-bold text-primary">{title}</h2>
+const Modal = ({
+  title,
+  subtitle,
+  onClose,
+  children,
+  isCloseDisabled = false,
+  compact = false,
+}: {
+  title: string;
+  subtitle: string;
+  onClose: () => void;
+  children: ReactNode;
+  isCloseDisabled?: boolean;
+  compact?: boolean;
+}) => {
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape' && !isCloseDisabled) {
+        onClose();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isCloseDisabled, onClose]);
+
+  return (
+    <div className="fixed inset-0 z-[60] overflow-y-auto bg-black/60 px-4 py-8">
+      <div
+        className={`mx-auto rounded-lg border border-outline-variant bg-surface-container shadow-xl ${compact ? 'max-w-xl' : 'max-w-5xl'}`}
+        role="dialog"
+        aria-modal="true"
+        aria-label={title}
+      >
+        <div className="flex items-start justify-between gap-6 border-b border-outline-variant p-6">
+          <div>
+            <p className="mb-2 text-label-sm font-bold uppercase tracking-widest text-outline">{subtitle}</p>
+            <h2 className="text-headline-md font-bold text-primary">{title}</h2>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={isCloseDisabled}
+            className="flex h-10 w-10 items-center justify-center rounded-md border border-outline-variant text-on-surface-variant transition-colors hover:border-primary hover:text-primary disabled:cursor-not-allowed disabled:opacity-60"
+            aria-label="Close modal"
+            title="Close modal"
+          >
+            <X className="h-5 w-5" />
+          </button>
         </div>
-        <button
-          type="button"
-          onClick={onClose}
-          className="flex h-10 w-10 items-center justify-center rounded-md border border-outline-variant text-on-surface-variant transition-colors hover:border-primary hover:text-primary"
-          aria-label="Close modal"
-          title="Close modal"
-        >
-          <X className="h-5 w-5" />
-        </button>
+        {children}
       </div>
-      {children}
     </div>
-  </div>
-);
+  );
+};
 
 const Field = ({ label, error, children }: { label: string; error?: string; children: ReactNode }) => (
   <label className="space-y-2">

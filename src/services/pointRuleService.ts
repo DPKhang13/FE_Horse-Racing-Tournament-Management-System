@@ -1,4 +1,4 @@
-import { apiClient, unwrapApiList } from './apiClient';
+import { apiClient, getApiResponseMessage, unwrapApiList } from './apiClient';
 import type { PointRuleRequest, PointRuleResponse } from '../types/pointRule';
 
 type RawRecord = Record<string, unknown>;
@@ -72,6 +72,11 @@ const sortPointRules = <T extends PointRuleRequest>(rules: T[]) =>
 
 const getPointRuleEndpoint = (raceId: number | string) => `/api/v1/admin/races/${raceId}/point-rules`;
 
+export type PointRuleMutationResult = {
+  pointRules: PointRuleResponse[];
+  responseMessage: string;
+};
+
 export const pointRuleService = {
   async getPointRules(raceId: number | string): Promise<PointRuleResponse[]> {
     const response = await apiClient.get(`${getPointRuleEndpoint(raceId)}/get`);
@@ -79,19 +84,26 @@ export const pointRuleService = {
     return sortPointRules(unwrapPointRuleList(response).map((item) => mapPointRule(item, raceId)));
   },
 
-  async createPointRules(raceId: number | string, rules: PointRuleRequest[]): Promise<PointRuleResponse[]> {
+  async createPointRules(raceId: number | string, rules: PointRuleRequest[]): Promise<PointRuleMutationResult> {
     const response = await apiClient.post(`${getPointRuleEndpoint(raceId)}/create`, toPointRulePayload(rules));
 
-    return sortPointRules(unwrapPointRuleList(response).map((item) => mapPointRule(item, raceId)));
+    return {
+      pointRules: sortPointRules(unwrapPointRuleList(response).map((item) => mapPointRule(item, raceId))),
+      responseMessage: getApiResponseMessage(response),
+    };
   },
 
-  async updatePointRules(raceId: number | string, rules: PointRuleRequest[]): Promise<PointRuleResponse[]> {
+  async updatePointRules(raceId: number | string, rules: PointRuleRequest[]): Promise<PointRuleMutationResult> {
     const response = await apiClient.put(`${getPointRuleEndpoint(raceId)}/update`, toPointRulePayload(rules));
 
-    return sortPointRules(unwrapPointRuleList(response).map((item) => mapPointRule(item, raceId)));
+    return {
+      pointRules: sortPointRules(unwrapPointRuleList(response).map((item) => mapPointRule(item, raceId))),
+      responseMessage: getApiResponseMessage(response),
+    };
   },
 
-  async deletePointRule(raceId: number | string, ruleId: number | string): Promise<void> {
-    await apiClient.delete(`${getPointRuleEndpoint(raceId)}/delete/${ruleId}`);
+  async deletePointRule(raceId: number | string, ruleId: number | string): Promise<string> {
+    const response = await apiClient.delete(`${getPointRuleEndpoint(raceId)}/delete/${ruleId}`);
+    return getApiResponseMessage(response);
   },
 };

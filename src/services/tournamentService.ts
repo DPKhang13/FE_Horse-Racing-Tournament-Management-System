@@ -1,4 +1,4 @@
-import { apiClient, unwrapApiData, unwrapApiList } from './apiClient';
+import { apiClient, getApiResponseMessage, unwrapApiData, unwrapApiList } from './apiClient';
 import type { TournamentApiItem } from './scheduleService';
 import type {
   CreatePrizeRequest,
@@ -36,6 +36,7 @@ export type RefereeAssignmentItem = {
   refereeUserId?: number;
   assignedAt?: string;
   status?: string;
+  responseMessage?: string;
 };
 
 type TournamentPayloadData = TournamentFormData | TournamentMutationData;
@@ -200,6 +201,7 @@ const cleanTournamentUpdatePayload = (data: TournamentPayloadData) => ({
   startDate: data.startDate,
   endDate: data.endDate,
   prizePool: isManagementTournamentData(data) ? parseCurrencyAmount(data.prize) : Number(data.prizePool),
+  status: data.status.trim(),
 });
 
 const mapParticipants = (value: unknown): TournamentParticipant[] => {
@@ -635,7 +637,10 @@ export const tournamentService = {
     try {
       const response = await apiClient.post('/api/tournaments/create-tournament', cleanTournamentPayload(data));
       const apiTournament = mapApiTournament(unwrapApiData<RawTournament>(response), 0);
-      return buildTournamentFromData(data, apiTournament.tournamentId, apiTournament);
+      return {
+        ...buildTournamentFromData(data, apiTournament.tournamentId, apiTournament),
+        responseMessage: getApiResponseMessage(response),
+      };
     } catch (error) {
       if (!useMockFallback) {
         throw error;
@@ -649,7 +654,10 @@ export const tournamentService = {
     try {
       const response = await apiClient.put(`/api/tournaments/update-tournament/${tournamentId}`, cleanTournamentUpdatePayload(data));
       const apiTournament = mapApiTournament(unwrapApiData<RawTournament>(response), 0);
-      return buildTournamentFromData(data, apiTournament.tournamentId, apiTournament);
+      return {
+        ...buildTournamentFromData(data, apiTournament.tournamentId, apiTournament),
+        responseMessage: getApiResponseMessage(response),
+      };
     } catch (error) {
       if (!useMockFallback) {
         throw error;
@@ -687,32 +695,44 @@ export const tournamentService = {
     tournamentId: number | string,
     data: { registrationOpenAt?: string; registrationCloseAt: string },
   ): Promise<Tournament> {
-    await apiClient.patch(`/api/v1/admin/tournaments/${tournamentId}/open-registration`, {
+    const response = await apiClient.patch(`/api/v1/admin/tournaments/${tournamentId}/open-registration`, {
       registrationOpenAt: data.registrationOpenAt || undefined,
       registrationCloseAt: data.registrationCloseAt,
     });
-    return this.getTournamentById(tournamentId);
+    return {
+      ...await this.getTournamentById(tournamentId),
+      responseMessage: getApiResponseMessage(response),
+    };
   },
 
   async closeRegistration(
     tournamentId: number | string,
     data: { autoRejectPending?: boolean; autoCancelUnconfirmed?: boolean } = {},
   ): Promise<Tournament> {
-    await apiClient.patch(`/api/v1/admin/tournaments/${tournamentId}/close-registration`, {
+    const response = await apiClient.patch(`/api/v1/admin/tournaments/${tournamentId}/close-registration`, {
       autoRejectPending: data.autoRejectPending ?? false,
       autoCancelUnconfirmed: data.autoCancelUnconfirmed ?? false,
     });
-    return this.getTournamentById(tournamentId);
+    return {
+      ...await this.getTournamentById(tournamentId),
+      responseMessage: getApiResponseMessage(response),
+    };
   },
 
   async startTournament(tournamentId: number | string): Promise<Tournament> {
-    await apiClient.patch(`/api/v1/admin/tournaments/${tournamentId}/start`);
-    return this.getTournamentById(tournamentId);
+    const response = await apiClient.patch(`/api/v1/admin/tournaments/${tournamentId}/start`);
+    return {
+      ...await this.getTournamentById(tournamentId),
+      responseMessage: getApiResponseMessage(response),
+    };
   },
 
   async completeTournament(tournamentId: number | string): Promise<Tournament> {
-    await apiClient.patch(`/api/v1/admin/tournaments/${tournamentId}/complete`);
-    return this.getTournamentById(tournamentId);
+    const response = await apiClient.patch(`/api/v1/admin/tournaments/${tournamentId}/complete`);
+    return {
+      ...await this.getTournamentById(tournamentId),
+      responseMessage: getApiResponseMessage(response),
+    };
   },
 
   async getTournamentSchedule(tournamentId: number | string): Promise<TournamentMatch[]> {
@@ -734,11 +754,14 @@ export const tournamentService = {
     return mapApiPrize(unwrapApiData<RawRecord>(response));
   },
 
-  async createPrizes(tournamentId: number | string, prizes: CreatePrizeRequest[]): Promise<PrizeResponse[]> {
+  async createPrizes(tournamentId: number | string, prizes: CreatePrizeRequest[]): Promise<{ items: PrizeResponse[]; responseMessage: string }> {
     const response = await apiClient.post(`/api/v1/admin/tournaments/${tournamentId}/create-prizes`, {
       prizes: prizes.map(cleanPrizePayload),
     });
-    return unwrapApiList<RawRecord>(response).map((item, index) => mapApiPrize(item, index));
+    return {
+      items: unwrapApiList<RawRecord>(response).map((item, index) => mapApiPrize(item, index)),
+      responseMessage: getApiResponseMessage(response),
+    };
   },
 
   async updatePrize(
@@ -763,6 +786,9 @@ export const tournamentService = {
       refereeId: Number(refereeId),
       refereeRole: refereeRole.trim(),
     });
-    return unwrapApiData<RefereeAssignmentItem>(response);
+    return {
+      ...unwrapApiData<RefereeAssignmentItem>(response),
+      responseMessage: getApiResponseMessage(response),
+    };
   },
 };

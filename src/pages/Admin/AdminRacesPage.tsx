@@ -21,6 +21,7 @@ import { getApiErrorMessage } from '../../services/apiClient';
 import { adminUserService, type AdminRefereeOption } from '../../services/adminUserService';
 import { pointRuleService } from '../../services/pointRuleService';
 import { tournamentService, type RefereeAssignmentItem } from '../../services/tournamentService';
+import { useToastNotifications } from '../../hooks/useToastNotifications';
 import type { PointRuleRequest, PointRuleResponse } from '../../types/pointRule';
 import {
   adminScheduleRaceApi,
@@ -75,6 +76,9 @@ const emptyRefereeForm: RefereeAssignmentFormData = {
 };
 
 const statusFilterOptions: RaceStatusFilter[] = ['All', 'scheduled', 'ongoing', 'completed', 'cancelled'];
+const trackTypeOptions = ['Turf', 'Dirt', 'Synthetic'] as const;
+const createRaceNumberOptions = (raceCount: number, currentRaceNumber: number) =>
+  Array.from({ length: Math.max(1, raceCount + 1, currentRaceNumber) }, (_, index) => index + 1);
 
 const formatDateTime = (value?: string) => {
   if (!value) {
@@ -134,7 +138,12 @@ const getStatusFilterValue = (status: string): Exclude<RaceStatusFilter, 'All'> 
   return 'scheduled';
 };
 
-const validateRaceForm = (data: AdminRaceFormData) => {
+const canStartRace = (status: string) => {
+  const value = normalizeStatus(status);
+  return value === 'scheduled' || value === 'ready' || value === 'pending';
+};
+
+const validateRaceForm = (data: AdminRaceFormData, existingRace?: AdminRaceItem | null) => {
   const errors: RaceFormErrors = {};
 
   if (!data.name.trim()) {
@@ -163,10 +172,18 @@ const validateRaceForm = (data: AdminRaceFormData) => {
 
   if (Number(data.maxHorses) <= 0) {
     errors.maxHorses = 'Max horses must be greater than 0.';
+  } else if (existingRace?.registeredHorseCount && Number(data.maxHorses) < existingRace.registeredHorseCount) {
+    errors.maxHorses = `Capacity cannot be lower than ${existingRace.registeredHorseCount} registered horses.`;
   }
 
   if (Number(data.maxReferees) <= 0) {
     errors.maxReferees = 'Max referees must be greater than 0.';
+  } else if (existingRace?.assignedRefereeCount && Number(data.maxReferees) < existingRace.assignedRefereeCount) {
+    errors.maxReferees = `Capacity cannot be lower than ${existingRace.assignedRefereeCount} assigned referees.`;
+  }
+
+  if (!trackTypeOptions.includes(data.trackType as (typeof trackTypeOptions)[number])) {
+    errors.trackType = 'Select a track type.';
   }
 
   return errors;
@@ -250,7 +267,7 @@ const toFormData = (race: AdminRaceItem): AdminRaceFormData => ({
 
 const defaultScheduledAt = (schedule: AdminScheduleItem | null) => {
   if (!schedule?.raceDate) {
-    return new Date().toISOString().slice(0, 16);
+    return '';
   }
 
   return `${schedule.raceDate}T09:00`;
@@ -299,6 +316,8 @@ const AdminRacesPage = () => {
   const [isAssigningReferee, setIsAssigningReferee] = useState(false);
   const [refereeForm, setRefereeForm] = useState<RefereeAssignmentFormData>(emptyRefereeForm);
 
+  useToastNotifications([notice]);
+
   const selectedTournament = useMemo(
     () => tournaments.find((tournament) => tournament.tournamentId === selectedTournamentId) ?? null,
     [selectedTournamentId, tournaments],
@@ -324,6 +343,12 @@ const AdminRacesPage = () => {
     try {
       const data = await tournamentService.getRaceReferees(raceId);
       setRefereeList(data);
+      setRaces((current) =>
+        current.map((race) => (race.raceId === raceId ? { ...race, assignedRefereeCount: data.length } : race)),
+      );
+      setSelectedRefereeRace((current) =>
+        current?.raceId === raceId ? { ...current, assignedRefereeCount: data.length } : current,
+      );
     } catch (apiError) {
       setRefereeList([]);
       setError(getApiErrorMessage(apiError, 'Unable to load referee assignments.'));
@@ -402,6 +427,9 @@ const AdminRacesPage = () => {
     try {
       const data = await adminScheduleRaceApi.getRacesByTournament(tournamentId);
       setRaces(data);
+      setSelectedRefereeRace((current) =>
+        current ? data.find((race) => race.raceId === current.raceId) ?? current : null,
+      );
     } catch (error) {
       setRaces([]);
       setNotice({ tone: 'error', text: getApiErrorMessage(error, 'Unable to load races.') });
@@ -411,12 +439,20 @@ const AdminRacesPage = () => {
   };
 
   useEffect(() => {
-    void loadTournaments();
+    const timeoutId = window.setTimeout(() => {
+      void loadTournaments();
+    }, 0);
+
+    return () => window.clearTimeout(timeoutId);
   }, []);
 
   useEffect(() => {
-    void loadSchedules();
-    void loadRaces();
+    const timeoutId = window.setTimeout(() => {
+      void loadSchedules();
+      void loadRaces();
+    }, 0);
+
+    return () => window.clearTimeout(timeoutId);
   }, [selectedTournamentId]);
 
   useEffect(() => {
@@ -461,6 +497,11 @@ const AdminRacesPage = () => {
 
     return { scheduled, ongoing, completed };
   }, [scheduleRaces]);
+
+  const availableRaceNumbers = useMemo(
+    () => createRaceNumberOptions(scheduleRaces.length, formData.raceNumber),
+    [formData.raceNumber, scheduleRaces.length],
+  );
 
   const openCreateModal = () => {
     if (!selectedScheduleId || !selectedSchedule) {
@@ -578,6 +619,11 @@ const AdminRacesPage = () => {
       return;
     }
 
+    if (selectedRefereeRace && refereeList.length >= selectedRefereeRace.maxReferees) {
+      setError(`This race already has its maximum of ${selectedRefereeRace.maxReferees} referees.`);
+      return;
+    }
+
     setIsAssigningReferee(true);
     setError(null);
 
@@ -596,6 +642,7 @@ const AdminRacesPage = () => {
         assignedAt: createdAssignment.assignedAt ?? new Date().toISOString(),
       };
 
+      const nextRefereeCount = refereeList.length + 1;
       setRefereeList((current) => [...current, nextAssignment]);
       setRefereeForm(emptyRefereeForm);
       setRaces((current) =>
@@ -603,12 +650,15 @@ const AdminRacesPage = () => {
           race.raceId === raceId
             ? {
                 ...race,
-                assignedRefereeCount: (race.assignedRefereeCount ?? refereeList.length) + 1,
+                assignedRefereeCount: nextRefereeCount,
               }
             : race,
         ),
       );
-      setNotice({ tone: 'success', text: 'Referee assigned successfully.' });
+      setSelectedRefereeRace((current) =>
+        current?.raceId === raceId ? { ...current, assignedRefereeCount: nextRefereeCount } : current,
+      );
+      setNotice({ tone: 'success', text: createdAssignment.responseMessage || 'Referee assigned successfully.' });
     } catch (apiError) {
       setError(getApiErrorMessage(apiError, 'Unable to assign referee.'));
     } finally {
@@ -682,7 +732,7 @@ const AdminRacesPage = () => {
       return;
     }
 
-    const errors = validateRaceForm(formData);
+    const errors = validateRaceForm(formData, editingRace);
     const pointRuleValidation = validatePointRules(pointRules);
     setFormErrors(errors);
     setPointRuleErrors(pointRuleValidation.errors);
@@ -698,18 +748,21 @@ const AdminRacesPage = () => {
     try {
       const pointRulePayload = toPointRulePayload(pointRules);
 
+      let successText: string;
+
       if (editingRace) {
         const updatedRace = await adminScheduleRaceApi.updateRace(editingRace.raceId, formData);
-        await pointRuleService.updatePointRules(updatedRace.raceId || editingRace.raceId, pointRulePayload);
-        setNotice({ tone: 'success', text: 'Race updated successfully.' });
+        const pointRuleResult = await pointRuleService.updatePointRules(updatedRace.raceId || editingRace.raceId, pointRulePayload);
+        successText = [updatedRace.responseMessage, pointRuleResult.responseMessage].filter(Boolean).join('\n') || 'Race updated successfully.';
       } else {
         const createdRace = await adminScheduleRaceApi.createRace(selectedScheduleId, formData);
-        await pointRuleService.createPointRules(createdRace.raceId, pointRulePayload);
-        setNotice({ tone: 'success', text: 'Race created successfully.' });
+        const pointRuleResult = await pointRuleService.createPointRules(createdRace.raceId, pointRulePayload);
+        successText = [createdRace.responseMessage, pointRuleResult.responseMessage].filter(Boolean).join('\n') || 'Race created successfully.';
       }
 
       closeFormModal();
       await loadRaces();
+      setNotice({ tone: 'success', text: successText });
     } catch (error) {
       setNotice({ tone: 'error', text: getApiErrorMessage(error, 'Unable to save race.') });
     } finally {
@@ -724,7 +777,10 @@ const AdminRacesPage = () => {
       cancel: 'cancel',
     };
 
-    const confirmed = window.confirm(`Are you sure you want to ${labels[action]} "${race.name}"?`);
+    const confirmationMessage = action === 'start'
+      ? `Start "${race.name}" as an Admin?\n\nThis will move the race to ongoing and close betting for this race.`
+      : `Are you sure you want to ${labels[action]} "${race.name}"?`;
+    const confirmed = window.confirm(confirmationMessage);
 
     if (!confirmed) {
       return;
@@ -734,23 +790,30 @@ const AdminRacesPage = () => {
     setNotice(null);
 
     try {
+      let successText: string;
+
       if (action === 'start') {
-        await adminScheduleRaceApi.startRace(race.raceId, {
+        const responseMessage = await adminScheduleRaceApi.startRace(race.raceId, {
           forceCloseBetting: true,
-          note: `Started from admin race management: ${race.name}`,
+          note: `Admin started race "${race.name}" and closed betting.`,
         });
-        setNotice({ tone: 'success', text: 'Race started successfully.' });
+        successText = responseMessage
+          ? `Admin action completed for "${race.name}".\n${responseMessage}`
+          : `Race "${race.name}" is now in progress. Betting has been closed for this race.`;
       } else if (action === 'complete') {
-        await adminScheduleRaceApi.completeRace(race.raceId);
-        setNotice({ tone: 'success', text: 'Race completed successfully.' });
+        successText = await adminScheduleRaceApi.completeRace(race.raceId) || `Race "${race.name}" completed successfully.`;
       } else {
-        await adminScheduleRaceApi.cancelRace(race.raceId);
-        setNotice({ tone: 'success', text: 'Race cancelled successfully.' });
+        successText = await adminScheduleRaceApi.cancelRace(race.raceId) || `Race "${race.name}" cancelled successfully.`;
       }
 
       await loadRaces();
+      setNotice({ tone: 'success', text: successText });
     } catch (error) {
-      setNotice({ tone: 'error', text: getApiErrorMessage(error, `Unable to ${labels[action]} race.`) });
+      const detail = getApiErrorMessage(error, `Unable to ${labels[action]} race.`);
+      setNotice({
+        tone: 'error',
+        text: action === 'start' ? `Could not start race "${race.name}" as Admin.\n${detail}` : detail,
+      });
     } finally {
       setActionRaceId(null);
     }
@@ -918,7 +981,11 @@ const AdminRacesPage = () => {
                         <IconButton label={`Manage referees for ${race.name}`} onClick={() => openRefereeModal(race)} disabled={actionRaceId === race.raceId}>
                           <Users className="h-4 w-4" />
                         </IconButton>
-                        <IconButton label={`Start ${race.name}`} onClick={() => void handleRaceAction(race, 'start')} disabled={actionRaceId === race.raceId}>
+                        <IconButton
+                          label={canStartRace(race.status) ? `Start ${race.name}` : `${race.name} cannot be started from ${race.status}`}
+                          onClick={() => void handleRaceAction(race, 'start')}
+                          disabled={actionRaceId === race.raceId || !canStartRace(race.status)}
+                        >
                           <Play className="h-4 w-4" />
                         </IconButton>
                         <IconButton label={`Complete ${race.name}`} onClick={() => void handleRaceAction(race, 'complete')} disabled={actionRaceId === race.raceId}>
@@ -958,6 +1025,7 @@ const AdminRacesPage = () => {
             <RaceForm
               formData={formData}
               formErrors={formErrors}
+              raceNumberOptions={availableRaceNumbers}
               pointRules={pointRules}
               pointRuleErrors={pointRuleErrors}
               pointRuleListError={pointRuleListError}
@@ -1019,7 +1087,10 @@ const MetricCard = ({ icon, label, value }: { icon: ReactNode; label: string; va
 );
 
 const StatusBanner = ({ tone, text }: Notice) => (
-  <div className={`mb-6 rounded-md border px-4 py-3 text-body-sm font-semibold ${tone === 'success' ? 'border-secondary/30 bg-secondary-container/30 text-secondary' : 'border-error/30 bg-error-container/20 text-error'}`}>
+  <div
+    role={tone === 'error' ? 'alert' : 'status'}
+    className={`mb-6 whitespace-pre-wrap break-words rounded-md border px-4 py-3 text-body-sm font-semibold ${tone === 'success' ? 'border-secondary/30 bg-secondary-container/30 text-secondary' : 'border-error/30 bg-error-container/20 text-error'}`}
+  >
     {text}
   </div>
 );
@@ -1068,7 +1139,7 @@ const IconButton = ({
 );
 
 const Modal = ({ title, subtitle, onClose, children }: { title: string; subtitle: string; onClose: () => void; children: ReactNode }) => (
-  <div className="fixed inset-0 z-[60] overflow-y-auto bg-black/60 px-4 py-8">
+  <div className="fixed inset-0 z-[60] overflow-y-auto bg-black/60 px-4 py-8" role="dialog" aria-modal="true" aria-label={title}>
     <div className="mx-auto max-w-5xl rounded-lg border border-outline-variant bg-surface-container shadow-xl">
       <div className="flex items-start justify-between gap-6 border-b border-outline-variant p-6">
         <div>
@@ -1101,6 +1172,7 @@ const Field = ({ label, error, children }: { label: string; error?: string; chil
 const RaceForm = ({
   formData,
   formErrors,
+  raceNumberOptions,
   pointRules,
   pointRuleErrors,
   pointRuleListError,
@@ -1117,6 +1189,7 @@ const RaceForm = ({
 }: {
   formData: AdminRaceFormData;
   formErrors: RaceFormErrors;
+  raceNumberOptions: number[];
   pointRules: PointRuleFormData[];
   pointRuleErrors: PointRuleFormErrors[];
   pointRuleListError: string;
@@ -1137,7 +1210,11 @@ const RaceForm = ({
         <input type="text" value={formData.name} onChange={(event) => onChange('name', event.target.value)} className={inputClassName} />
       </Field>
       <Field label="Race Number" error={formErrors.raceNumber}>
-        <input type="number" min="1" value={formData.raceNumber || ''} onChange={(event) => onChange('raceNumber', Number(event.target.value))} className={inputClassName} />
+        <select value={formData.raceNumber} onChange={(event) => onChange('raceNumber', Number(event.target.value))} className={inputClassName}>
+          {raceNumberOptions.map((raceNumber) => (
+            <option key={raceNumber} value={raceNumber}>Race {raceNumber}</option>
+          ))}
+        </select>
       </Field>
       <Field label="Rank Group" error={formErrors.rankGroup}>
         <select value={formData.rankGroup} onChange={(event) => onChange('rankGroup', event.target.value as RaceRankGroup)} className={inputClassName}>
@@ -1147,7 +1224,7 @@ const RaceForm = ({
         </select>
       </Field>
       <Field label="Scheduled At" error={formErrors.scheduledAt}>
-        <input type="datetime-local" value={formData.scheduledAt} onChange={(event) => onChange('scheduledAt', event.target.value)} className={inputClassName} />
+        <input type="datetime-local" value={formData.scheduledAt} readOnly className={`${inputClassName} cursor-not-allowed opacity-80`} />
       </Field>
       <Field label="Prediction Closes At">
         <input type="datetime-local" value={formData.predictionClosesAt} onChange={(event) => onChange('predictionClosesAt', event.target.value)} className={inputClassName} />
@@ -1168,7 +1245,15 @@ const RaceForm = ({
         <Field label="Track Type">
           <div className="relative">
             <Gauge className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-outline" />
-            <input type="text" value={formData.trackType} onChange={(event) => onChange('trackType', event.target.value)} className={`${inputClassName} pl-10`} />
+            <select
+              value={formData.trackType}
+              onChange={(event) => onChange('trackType', event.target.value)}
+              className={`${inputClassName} pl-10`}
+            >
+              {trackTypeOptions.map((trackType) => (
+                <option key={trackType} value={trackType}>{trackType}</option>
+              ))}
+            </select>
           </div>
         </Field>
       </div>
@@ -1233,6 +1318,7 @@ const RefereeAssignmentPanel = ({
   onCancel: () => void;
 }) => {
   const hasAssignableReferees = refereeOptions.some((referee) => referee.hasRefereeProfile);
+  const isAtCapacity = refereeList.length >= race.maxReferees;
 
   return (
   <form onSubmit={onSubmit} className="space-y-6 p-6">
@@ -1241,7 +1327,7 @@ const RefereeAssignmentPanel = ({
         <select
           value={formData.refereeId || ''}
           onChange={(event) => onChange('refereeId', event.target.value ? Number(event.target.value) : '')}
-          disabled={isRefereeOptionsLoading || refereeOptions.length === 0}
+          disabled={isRefereeOptionsLoading || refereeOptions.length === 0 || isAtCapacity}
           className={inputClassName}
         >
           <option value="">
@@ -1271,12 +1357,13 @@ const RefereeAssignmentPanel = ({
           type="text"
           value={formData.refereeRole}
           onChange={(event) => onChange('refereeRole', event.target.value)}
+          disabled={isAtCapacity}
           className={inputClassName}
         />
       </Field>
       <button
         type="submit"
-        disabled={isAssigning || isRefereeOptionsLoading}
+        disabled={isAssigning || isRefereeOptionsLoading || isAtCapacity}
         className="inline-flex h-[46px] items-center justify-center gap-2 rounded-md bg-secondary px-5 text-body-sm font-bold text-on-secondary transition-all hover:bg-opacity-90 disabled:cursor-not-allowed disabled:opacity-70"
       >
         <UserPlus className="h-4 w-4" />
@@ -1284,9 +1371,9 @@ const RefereeAssignmentPanel = ({
       </button>
     </div>
 
-    {error && (
-      <div className="rounded-md border border-error/30 bg-error-container/20 px-4 py-3 text-body-sm font-semibold text-error">
-        {error}
+    {(error || isAtCapacity) && (
+      <div role="alert" className="whitespace-pre-wrap break-words rounded-md border border-error/30 bg-error-container/20 px-4 py-3 text-body-sm font-semibold text-error">
+        {error || `Referee capacity reached (${refereeList.length}/${race.maxReferees}). Increase Max Referees before assigning another referee.`}
       </div>
     )}
 
