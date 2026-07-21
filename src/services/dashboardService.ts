@@ -1,4 +1,4 @@
-import { apiClient, unwrapApiData } from './apiClient';
+import { apiClient, unwrapApiData, unwrapApiList } from './apiClient';
 import { notificationService } from './notificationService';
 import type { BetItem } from './betService';
 import type { NotificationItem } from './notificationService';
@@ -95,18 +95,24 @@ const normalizeStatus = (status: unknown): RaceResultStatus => {
 const mapUpcomingRace = (raw: RawObject): RaceScheduleItem => ({
   raceId: asNumber(raw.raceId ?? raw.id),
   tournamentId: asNumber(raw.tournamentId),
+  scheduleId: raw.scheduleId === undefined ? undefined : asNumber(raw.scheduleId),
   tournamentName: asString(raw.tournamentName, 'Tournament'),
   location: asString(raw.location, '-'),
   raceName: asString(raw.raceName ?? raw.name, 'Race'),
   raceNumber: asNumber(raw.raceNumber),
   rankGroup: asString(raw.rankGroup, '-'),
+  scheduleTitle: raw.scheduleTitle ? asString(raw.scheduleTitle) : undefined,
+  dayNumber: raw.dayNumber === undefined ? undefined : asNumber(raw.dayNumber),
   lapCount: asNumber(raw.lapCount),
   scheduledAt: asString(raw.scheduledAt, new Date().toISOString()),
   predictionClosesAt: raw.predictionClosesAt ? asString(raw.predictionClosesAt) : undefined,
   distanceM: asNumber(raw.distanceM),
   trackType: asString(raw.trackType, '-'),
   maxHorses: asNumber(raw.maxHorses),
+  maxReferees: raw.maxReferees === undefined ? undefined : asNumber(raw.maxReferees),
   registeredHorseCount: asNumber(raw.registeredHorseCount),
+  acceptedJockeyCount: raw.acceptedJockeyCount === undefined ? undefined : asNumber(raw.acceptedJockeyCount),
+  assignedRefereeCount: raw.assignedRefereeCount === undefined ? undefined : asNumber(raw.assignedRefereeCount),
   status: asString(raw.status, '-'),
   prizePool: raw.prizePool === undefined ? undefined : asNumber(raw.prizePool),
 });
@@ -228,5 +234,27 @@ export const dashboardService = {
       latestResults: mapResultList(asArray(data.latestResults)),
       notifications: notificationResults,
     };
+  },
+
+  async getUpcomingRaceDetail(race: RaceScheduleItem): Promise<RaceScheduleItem> {
+    if (!race.tournamentId) {
+      throw new Error('Tournament ID is required to load race detail.');
+    }
+
+    const response = await apiClient.get(`/api/tournaments/${race.tournamentId}/get-race-list`);
+    const races = unwrapApiList<RawObject>(response);
+    const selectedRace = races.find((item) => String(item.raceId ?? item.id) === String(race.raceId));
+
+    if (!selectedRace) {
+      throw new Error('Race detail was not found in this tournament schedule.');
+    }
+
+    return mapUpcomingRace({
+      ...race,
+      ...selectedRace,
+      tournamentId: selectedRace.tournamentId ?? race.tournamentId,
+      tournamentName: selectedRace.tournamentName ?? race.tournamentName,
+      location: selectedRace.location ?? race.location,
+    });
   },
 };
