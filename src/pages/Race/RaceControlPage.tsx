@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react';
-import { CheckCircle2, ClipboardList, Flag, Gauge, ShieldCheck, Trophy } from 'lucide-react';
+import { ArrowDown, ArrowUp, CheckCircle2, ClipboardList, Flag, Gauge, ShieldCheck, Trophy, Users } from 'lucide-react';
+import { useSearchParams } from 'react-router-dom';
 import { getApiErrorMessage } from '../../services/apiClient';
 import { authService } from '../../services/authService';
+import { jockeyAssignmentService, type JockeyAssignmentItem } from '../../services/jockeyAssignmentService';
 import {
   raceOperationsService,
   type RaceDraftResultItemInput,
@@ -14,12 +16,19 @@ import {
 import { useToastNotifications } from '../../hooks/useToastNotifications';
 import { useAdminRaceResults } from '../../hooks/useAdminRaceResults';
 
-const createEmptyDraftItem = (): RaceDraftResultItemInput => ({
-  assignmentId: 0,
-  finishPosition: undefined,
-  finishTimeSec: undefined,
-  isDisqualified: false,
-  disqualifyReason: '',
+const normalizeStatus = (value?: string) => value?.trim().toLowerCase().replace(/[\s-]+/g, '_') ?? '';
+
+const normalizeDraftPositions = (items: RaceDraftResultItemInput[]) => {
+  let nextPosition = 1;
+  return items.map((item) => ({
+    ...item,
+    finishPosition: item.isDisqualified ? undefined : nextPosition++,
+  }));
+};
+
+const sortDraftItems = (items: RaceDraftResultItemInput[]) => [...items].sort((a, b) => {
+  if (a.isDisqualified !== b.isDisqualified) return a.isDisqualified ? 1 : -1;
+  return (a.finishPosition ?? Number.MAX_SAFE_INTEGER) - (b.finishPosition ?? Number.MAX_SAFE_INTEGER);
 });
 
 const createEmptyPointRule = (): RacePointRuleItem => ({
@@ -36,20 +45,32 @@ const initialReportForm: RefereeReportFormData = {
   verdict: 'clean',
 };
 
+const reportTypeOptions = [
+  { value: 'final', label: 'Final report' },
+  { value: 'incident', label: 'Incident report' },
+  { value: 'inspection', label: 'Inspection report' },
+];
+
+const verdictOptions = [
+  { value: 'clean', label: 'Clean - no violation' },
+  { value: 'violation', label: 'Violation detected' },
+];
+
 const RaceControlPage = () => {
+  const [searchParams, setSearchParams] = useSearchParams();
   const profile = authService.getStoredUserProfile();
   const roleType = profile?.roleType;
   const isAdmin = roleType === 'admin';
   const isReferee = roleType === 'race_referee';
 
-  const [selectedRaceId, setSelectedRaceId] = useState('');
+  const [selectedRaceId, setSelectedRaceId] = useState(() => searchParams.get('raceId') ?? '');
   const [assignedRaces, setAssignedRaces] = useState<RefereeAssignedRaceItem[]>([]);
+  const [participants, setParticipants] = useState<JockeyAssignmentItem[]>([]);
   const [reports, setReports] = useState<RefereeReportItem[]>([]);
   const [draft, setDraft] = useState<RaceResultDraftData | null>(null);
   const [pointRules, setPointRules] = useState<RacePointRuleItem[]>([createEmptyPointRule()]);
   const [reportForm, setReportForm] = useState<RefereeReportFormData>(initialReportForm);
-  const [draftReportId, setDraftReportId] = useState('');
-  const [draftItems, setDraftItems] = useState<RaceDraftResultItemInput[]>([createEmptyDraftItem()]);
+  const [draftItems, setDraftItems] = useState<RaceDraftResultItemInput[]>([]);
   const [cancelReason, setCancelReason] = useState('');
   const [forceCloseBetting, setForceCloseBetting] = useState(true);
   const [isBusy, setIsBusy] = useState(false);
@@ -82,6 +103,24 @@ const RaceControlPage = () => {
     return assignedRaces.find((item) => String(item.raceId) === normalizedRaceId);
   }, [assignedRaces, normalizedRaceId]);
 
+  const refereeRole = normalizeStatus(activeRaceSummary?.refereeRole);
+  const canEditResults = isReferee && ['chief_referee', 'main_referee'].includes(refereeRole);
+  const isRaceInProgress = normalizeStatus(activeRaceSummary?.status ?? draft?.status) === 'in_progress';
+  const currentRefereeId = profile?.refereeProfile?.refereeId ?? profile?.userId;
+  const automaticReportId = draft?.reportId
+    ?? reports.find((report) => report.refereeId === currentRefereeId)?.reportId;
+  const participantByAssignmentId = useMemo(
+    () => new Map(participants.map((participant) => [participant.assignmentId ?? participant.id ?? 0, participant])),
+    [participants],
+  );
+
+  const handleSelectRace = (raceId: string) => {
+    setSelectedRaceId(raceId);
+    const nextParams = new URLSearchParams(searchParams);
+    if (raceId.trim()) nextParams.set('raceId', raceId.trim());
+    else nextParams.delete('raceId');
+    setSearchParams(nextParams, { replace: true });
+  };
   const loadAssignedRaces = async () => {
     if (!isReferee) {
       return;
@@ -92,7 +131,7 @@ const RaceControlPage = () => {
       const data = await raceOperationsService.getAssignedRaces();
       setAssignedRaces(data);
       if (!normalizedRaceId && data.length > 0) {
-        setSelectedRaceId(String(data[0].raceId));
+        handleSelectRace(String(data[0].raceId));
       }
     } catch (error) {
       setErrorMessage(getApiErrorMessage(error, 'Unable to load assigned races.'));
@@ -105,6 +144,8 @@ const RaceControlPage = () => {
     if (!raceId) {
       setReports([]);
       setDraft(null);
+      setParticipants([]);
+      setDraftItems([]);
       setAdminResults([]);
       setPointRules([createEmptyPointRule()]);
       return;
@@ -115,25 +156,35 @@ const RaceControlPage = () => {
 
     try {
       if (isReferee) {
-        const [reportData, draftData] = await Promise.all([
+        const [reportData, draftData, assignmentData] = await Promise.all([
           raceOperationsService.getReports(raceId),
           raceOperationsService.getDraft(raceId).catch(() => null),
+          jockeyAssignmentService.getAll(),
         ]);
+        const raceParticipants = assignmentData
+          .filter((item) => String(item.raceId) === String(raceId) && normalizeStatus(item.status) === 'confirmed')
+          .sort((a, b) => (a.gateNumber ?? Number.MAX_SAFE_INTEGER) - (b.gateNumber ?? Number.MAX_SAFE_INTEGER));
+        const nextDraftItems = draftData?.results.length
+          ? sortDraftItems(draftData.results.map((item) => ({
+            assignmentId: item.assignmentId,
+            finishPosition: item.finishPosition ?? undefined,
+            finishTimeSec: item.finishTimeSec ?? undefined,
+            isDisqualified: item.isDisqualified,
+            disqualifyReason: item.disqualifyReason ?? '',
+          })))
+          : normalizeDraftPositions(raceParticipants
+            .map((item) => ({
+              assignmentId: item.assignmentId ?? item.id ?? 0,
+              finishTimeSec: undefined,
+              isDisqualified: false,
+              disqualifyReason: '',
+            }))
+            .filter((item) => item.assignmentId > 0));
 
+        setParticipants(raceParticipants);
         setReports(reportData);
         setDraft(draftData);
-        setDraftReportId(String(draftData?.reportId ?? reportData[0]?.reportId ?? ''));
-        setDraftItems(
-          draftData?.results.length
-            ? draftData.results.map((item) => ({
-              assignmentId: item.assignmentId,
-              finishPosition: item.finishPosition ?? undefined,
-              finishTimeSec: item.finishTimeSec ?? undefined,
-              isDisqualified: item.isDisqualified,
-              disqualifyReason: item.disqualifyReason ?? '',
-            }))
-            : [createEmptyDraftItem()],
-        );
+        setDraftItems(nextDraftItems);
       }
 
       if (isAdmin) {
@@ -141,7 +192,6 @@ const RaceControlPage = () => {
           fetchAdminRaceResults(raceId),
           raceOperationsService.getPointRules(raceId).catch(() => []),
         ]);
-
         setPointRules(ruleData.length > 0 ? ruleData : [createEmptyPointRule()]);
       }
     } catch (error) {
@@ -181,10 +231,29 @@ const RaceControlPage = () => {
     }
   };
 
+  const moveDraftItem = (index: number, direction: -1 | 1) => {
+    setDraftItems((current) => {
+      const targetIndex = index + direction;
+      if (targetIndex < 0 || targetIndex >= current.length) return current;
+      const next = [...current];
+      [next[index], next[targetIndex]] = [next[targetIndex], next[index]];
+      return normalizeDraftPositions(next);
+    });
+  };
+
+  const updateDraftItem = (index: number, nextItem: RaceDraftResultItemInput) => {
+    setDraftItems((current) => normalizeDraftPositions(
+      current.map((item, itemIndex) => itemIndex === index ? nextItem : item),
+    ));
+  };
   const handleSubmitReport = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!normalizedRaceId) {
       setErrorMessage('Select a race before submitting a report.');
+      return;
+    }
+    if (!isRaceInProgress) {
+      setErrorMessage('Reports can only be submitted while the race is in progress.');
       return;
     }
 
@@ -202,13 +271,24 @@ const RaceControlPage = () => {
       setErrorMessage('Select a race before submitting draft results.');
       return;
     }
+    if (!canEditResults) {
+      setErrorMessage('Only a chief or main referee can save race results.');
+      return;
+    }
+    if (!isRaceInProgress) {
+      setErrorMessage('Race results can only be saved while the race is in progress.');
+      return;
+    }
+    if (draftItems.length === 0) {
+      setErrorMessage('No confirmed horse assignments were found for this race.');
+      return;
+    }
 
     await withBusy(async () => {
       const payload = {
-        reportId: draftReportId ? Number(draftReportId) : undefined,
-        results: draftItems,
+        reportId: automaticReportId,
+        results: normalizeDraftPositions(draftItems),
       };
-
       const nextDraft = draft
         ? await raceOperationsService.updateDraft(normalizedRaceId, payload)
         : await raceOperationsService.createDraft(normalizedRaceId, payload);
@@ -347,7 +427,7 @@ const RaceControlPage = () => {
             <div className="grid min-w-full gap-3 sm:grid-cols-3 xl:min-w-[520px]">
               <MetricCard icon={<Flag className="h-4 w-4" />} label="Selected Race" value={normalizedRaceId || '--'} />
               <MetricCard icon={<ClipboardList className="h-4 w-4" />} label="Reports" value={String(reports.length).padStart(2, '0')} />
-              <MetricCard icon={<CheckCircle2 className="h-4 w-4" />} label="Published" value={String(publishedCount).padStart(2, '0')} />
+              <MetricCard icon={isReferee ? <Users className="h-4 w-4" /> : <CheckCircle2 className="h-4 w-4" />} label={isReferee ? 'Participants' : 'Published'} value={String(isReferee ? participants.length : publishedCount).padStart(2, '0')} />
             </div>
           </div>
         </div>
@@ -362,7 +442,7 @@ const RaceControlPage = () => {
             <TextInput
               label="Race ID"
               value={selectedRaceId}
-              onChange={setSelectedRaceId}
+              onChange={handleSelectRace}
               placeholder="Enter race ID"
             />
 
@@ -388,7 +468,7 @@ const RaceControlPage = () => {
                     <button
                       key={race.assignmentId ?? race.raceId}
                       type="button"
-                      onClick={() => setSelectedRaceId(String(race.raceId))}
+                      onClick={() => handleSelectRace(String(race.raceId))}
                       className={`w-full rounded-lg border px-4 py-3 text-left transition-colors ${
                         String(race.raceId) === normalizedRaceId
                           ? 'border-primary bg-primary-container/10'
@@ -416,10 +496,11 @@ const RaceControlPage = () => {
             ) : isLoadingRaceData || isLoadingAdminResults ? (
               <p className="text-body-sm text-on-surface-variant">Loading workflow data...</p>
             ) : (
-              <div className="grid gap-4 md:grid-cols-3">
+              <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
                 <InfoTile label="Race ID" value={normalizedRaceId} />
                 <InfoTile label="Race Name" value={activeRaceSummary?.raceName ?? draft?.raceName ?? adminResults[0]?.raceName ?? '-'} />
                 <InfoTile label="Status" value={activeRaceSummary?.status ?? draft?.status ?? adminResults[0]?.status ?? '-'} />
+                <InfoTile label={isReferee ? "Participants" : "Result records"} value={String(isReferee ? participants.length : adminResults.length)} />
               </div>
             )}
           </article>
@@ -433,49 +514,67 @@ const RaceControlPage = () => {
                   <ClipboardList className="h-5 w-5 text-secondary" />
                   <h2 className="font-display text-title-large font-bold text-primary">Submit report</h2>
                 </div>
+                {!isRaceInProgress && (
+                  <p className="mb-4 rounded-md border border-outline-variant bg-surface-container-low px-3 py-2 text-body-sm text-on-surface-variant">Reports can be submitted when the race is in progress.</p>
+                )}
                 <form onSubmit={handleSubmitReport} className="grid gap-4">
                   <div className="grid gap-4 md:grid-cols-2">
-                    <TextInput label="Report type" value={reportForm.reportType ?? ''} onChange={(value) => setReportForm((current) => ({ ...current, reportType: value }))} />
-                    <TextInput label="Verdict" value={reportForm.verdict ?? ''} onChange={(value) => setReportForm((current) => ({ ...current, verdict: value }))} />
+                    <SelectInput label="Report type" value={reportForm.reportType ?? 'final'} options={reportTypeOptions} onChange={(value) => setReportForm((current) => ({ ...current, reportType: value }))} />
+                    <SelectInput label="Verdict" value={reportForm.verdict ?? 'clean'} options={verdictOptions} onChange={(value) => setReportForm((current) => ({ ...current, verdict: value }))} />
                   </div>
                   <TextArea label="Inspection notes" value={reportForm.inspectionNotes ?? ''} onChange={(value) => setReportForm((current) => ({ ...current, inspectionNotes: value }))} />
+                  {reportForm.verdict === 'violation' && !reportForm.violationNotes?.trim() && (
+                    <p className="text-label-sm font-semibold text-error">Violation notes are required when the verdict is Violation.</p>
+                  )}
                   <TextArea label="Violation notes" value={reportForm.violationNotes ?? ''} onChange={(value) => setReportForm((current) => ({ ...current, violationNotes: value }))} />
                   <TextArea label="Result notes" value={reportForm.resultNotes ?? ''} onChange={(value) => setReportForm((current) => ({ ...current, resultNotes: value }))} />
-                  <button disabled={isBusy} className="rounded-md bg-secondary px-5 py-3 text-body-sm font-bold text-white hover:bg-opacity-90">
+                  <button disabled={isBusy || !isRaceInProgress} className="cursor-pointer rounded-md bg-secondary px-5 py-3 text-body-sm font-bold text-white hover:bg-opacity-90 disabled:cursor-not-allowed disabled:opacity-60">
                     Submit report
                   </button>
                 </form>
               </article>
 
               <article className="glass-panel rounded-xl p-6">
-                <div className="mb-5 flex items-center gap-3">
-                  <Trophy className="h-5 w-5 text-secondary" />
-                  <h2 className="font-display text-title-large font-bold text-primary">Draft results</h2>
+                <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
+                  <div className="flex items-center gap-3">
+                    <Trophy className="h-5 w-5 text-secondary" />
+                    <h2 className="font-display text-title-large font-bold text-primary">Race ranking</h2>
+                  </div>
+                  <span className="rounded-full bg-surface-container px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-on-surface-variant">{activeRaceSummary?.refereeRole ?? 'Referee'}</span>
                 </div>
+                {!canEditResults && (
+                  <p className="mb-4 rounded-md border border-outline-variant bg-surface-container-low px-3 py-2 text-body-sm text-on-surface-variant">Only a chief or main referee can save the official draft ranking.</p>
+                )}
+                {canEditResults && !isRaceInProgress && (
+                  <p className="mb-4 rounded-md border border-outline-variant bg-surface-container-low px-3 py-2 text-body-sm text-on-surface-variant">Ranking can be saved when the race is in progress.</p>
+                )}
                 <form onSubmit={handleSubmitDraft} className="grid gap-4">
-                  <TextInput label="Report ID" type="number" value={draftReportId} onChange={setDraftReportId} placeholder="Use one submitted report ID" />
+                  <p className="rounded-md border border-outline-variant bg-surface-container-low px-3 py-2 text-label-sm text-on-surface-variant">
+                    {automaticReportId
+                      ? 'Your report will be linked to this ranking automatically.'
+                      : 'No report from your account is available yet. You can still save the ranking without entering a report ID.'}
+                  </p>
+                  <p className="text-label-sm text-on-surface-variant">Use the arrow buttons to reorder horses. Finish positions update automatically.</p>
                   <div className="space-y-3">
                     {draftItems.map((item, index) => (
-                      <DraftRow
-                        key={index}
+                      <ParticipantResultRow
+                        key={item.assignmentId}
                         item={item}
-                        onChange={(nextItem) => setDraftItems((current) => current.map((entry, entryIndex) => entryIndex === index ? nextItem : entry))}
-                        onRemove={() => setDraftItems((current) => current.length === 1 ? current : current.filter((_, entryIndex) => entryIndex !== index))}
+                        participant={participantByAssignmentId.get(item.assignmentId)}
+                        index={index}
+                        total={draftItems.length}
+                        onChange={(nextItem) => updateDraftItem(index, nextItem)}
+                        onMove={(direction) => moveDraftItem(index, direction)}
                       />
                     ))}
+                    {!isLoadingRaceData && draftItems.length === 0 && (
+                      <div className="rounded-lg border border-outline-variant bg-surface-container-low px-4 py-8 text-center text-body-sm text-on-surface-variant">No confirmed horse assignments found for this race.</div>
+                    )}
                   </div>
-                  <div className="flex flex-wrap gap-3">
-                    <button
-                      type="button"
-                      onClick={() => setDraftItems((current) => [...current, createEmptyDraftItem()])}
-                      className="rounded-md border border-outline-variant px-4 py-2 text-label-sm font-bold text-on-surface"
-                    >
-                      Add result row
-                    </button>
-                    <button disabled={isBusy} className="rounded-md bg-secondary px-5 py-3 text-body-sm font-bold text-white hover:bg-opacity-90">
-                      {draft ? 'Update draft' : 'Create draft'}
-                    </button>
-                  </div>
+                  <button disabled={isBusy || !canEditResults || !isRaceInProgress || draftItems.length === 0}
+                    className="cursor-pointer rounded-md bg-secondary px-5 py-3 text-body-sm font-bold text-white hover:bg-opacity-90 disabled:cursor-not-allowed disabled:opacity-60">
+                    {draft ? 'Update draft ranking' : 'Save draft ranking'}
+                  </button>
                 </form>
               </article>
             </section>
@@ -635,34 +734,69 @@ const RaceControlPage = () => {
   );
 };
 
-const DraftRow = ({
+const ParticipantResultRow = ({
   item,
+  participant,
+  index,
+  total,
   onChange,
-  onRemove,
+  onMove,
 }: {
   item: RaceDraftResultItemInput;
+  participant?: JockeyAssignmentItem;
+  index: number;
+  total: number;
   onChange: (item: RaceDraftResultItemInput) => void;
-  onRemove: () => void;
+  onMove: (direction: -1 | 1) => void;
 }) => (
-  <div className="rounded-lg border border-outline-variant bg-surface-container-low p-4">
-    <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-      <TextInput label="Assignment ID" type="number" value={String(item.assignmentId || '')} onChange={(value) => onChange({ ...item, assignmentId: Number(value) })} />
-      <TextInput label="Finish position" type="number" value={String(item.finishPosition ?? '')} onChange={(value) => onChange({ ...item, finishPosition: value ? Number(value) : undefined })} />
-      <TextInput label="Finish time sec" type="number" value={String(item.finishTimeSec ?? '')} onChange={(value) => onChange({ ...item, finishTimeSec: value ? Number(value) : undefined })} />
-      <TextInput label="DQ reason" value={item.disqualifyReason ?? ''} onChange={(value) => onChange({ ...item, disqualifyReason: value })} />
+  <article className="rounded-lg border border-outline-variant bg-surface-container-low p-4">
+    <div className="grid gap-4 lg:grid-cols-[64px_minmax(0,1.2fr)_minmax(0,0.8fr)_120px_auto] lg:items-center">
+      <div className={`flex h-12 w-12 items-center justify-center rounded-lg font-display text-xl font-extrabold ${item.isDisqualified ? 'bg-error-container/40 text-error' : 'bg-secondary/15 text-secondary'}`}>
+        {item.isDisqualified ? 'DQ' : item.finishPosition ?? index + 1}
+      </div>
+      <div className="flex min-w-0 items-center gap-3">
+        {participant?.horseAvatarUrl ? (
+          <img src={participant.horseAvatarUrl} alt={participant.horseName ?? 'Race horse'} className="h-11 w-11 shrink-0 rounded-md border border-outline-variant object-cover" />
+        ) : (
+          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-md border border-outline-variant bg-white text-label-sm font-bold text-outline">H</div>
+        )}
+        <div className="min-w-0">
+          <p className="break-words text-body-sm font-bold text-primary">{participant?.horseName ?? `Assignment #${item.assignmentId}`}</p>
+          <p className="mt-1 text-label-sm text-on-surface-variant">Gate {participant?.gateNumber ?? '-'} ? Assignment #{item.assignmentId}</p>
+        </div>
+      </div>
+      <div className="min-w-0">
+        <p className="text-[10px] font-bold uppercase tracking-wider text-outline">Jockey</p>
+        <p className="mt-1 break-words text-body-sm font-semibold text-on-surface-variant">{participant?.jockeyFullName ?? `Jockey ${participant?.jockeyId ?? '-'}`}</p>
+      </div>
+      <label className="grid gap-1">
+        <span className="text-[10px] font-bold uppercase tracking-wider text-outline">Time (sec)</span>
+        <input type="number" min="0" step="0.001" disabled={item.isDisqualified} value={item.finishTimeSec ?? ''}
+          onChange={(event) => onChange({ ...item, finishTimeSec: event.target.value ? Number(event.target.value) : undefined })}
+          className="w-full rounded-md border border-outline-variant bg-white px-3 py-2 text-body-sm focus:border-primary focus:outline-none disabled:opacity-50" />
+      </label>
+      <div className="flex items-center justify-end gap-2">
+        <button type="button" onClick={() => onMove(-1)} disabled={index === 0} aria-label={`Move ${participant?.horseName ?? 'horse'} up`}
+          className="flex h-9 w-9 cursor-pointer items-center justify-center rounded-md border border-outline-variant bg-white text-primary transition-colors hover:border-primary disabled:cursor-not-allowed disabled:opacity-40"><ArrowUp className="h-4 w-4" /></button>
+        <button type="button" onClick={() => onMove(1)} disabled={index === total - 1} aria-label={`Move ${participant?.horseName ?? 'horse'} down`}
+          className="flex h-9 w-9 cursor-pointer items-center justify-center rounded-md border border-outline-variant bg-white text-primary transition-colors hover:border-primary disabled:cursor-not-allowed disabled:opacity-40"><ArrowDown className="h-4 w-4" /></button>
+      </div>
     </div>
-    <div className="mt-3 flex items-center justify-between">
-      <label className="flex items-center gap-3 text-body-sm font-semibold text-primary">
+    <div className="mt-3 grid gap-3 border-t border-outline-variant pt-3 sm:grid-cols-[auto_minmax(0,1fr)] sm:items-center">
+      <label className="flex cursor-pointer items-center gap-2 text-body-sm font-semibold text-primary">
         <input type="checkbox" checked={item.isDisqualified} onChange={(event) => onChange({ ...item, isDisqualified: event.target.checked })} />
         Disqualified
       </label>
-      <button type="button" onClick={onRemove} className="rounded-md border border-error/40 px-3 py-2 text-label-sm font-bold text-error">
-        Remove row
-      </button>
+      {item.isDisqualified && (
+        <label className="grid gap-1">
+          <span className="text-[10px] font-bold uppercase tracking-wider text-outline">Disqualification reason</span>
+          <input value={item.disqualifyReason ?? ''} onChange={(event) => onChange({ ...item, disqualifyReason: event.target.value })}
+            className="w-full rounded-md border border-outline-variant bg-white px-3 py-2 text-body-sm focus:border-primary focus:outline-none" />
+        </label>
+      )}
     </div>
-  </div>
+  </article>
 );
-
 const MetricCard = ({ icon, label, value }: { icon: ReactNode; label: string; value: string }) => (
   <div className="rounded-xl border border-outline-variant/40 bg-surface-container-lowest/70 p-4">
     <div className="mb-3 flex items-center justify-between text-on-surface-variant">
@@ -702,6 +836,31 @@ const TextInput = ({
       placeholder={placeholder}
       className="min-w-0 w-full rounded-md border border-outline-variant bg-surface-container-low px-4 py-3 text-body-sm focus:border-primary focus:outline-none"
     />
+  </label>
+);
+
+const SelectInput = ({
+  label,
+  value,
+  options,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  options: ReadonlyArray<{ value: string; label: string }>;
+  onChange: (value: string) => void;
+}) => (
+  <label className="grid min-w-0 gap-2">
+    <span className="min-w-0 break-words text-label-sm font-bold uppercase tracking-wider text-outline">{label}</span>
+    <select
+      value={value}
+      onChange={(event) => onChange(event.target.value)}
+      className="min-w-0 w-full cursor-pointer rounded-md border border-outline-variant bg-surface-container-low px-4 py-3 text-body-sm focus:border-primary focus:outline-none"
+    >
+      {options.map((option) => (
+        <option key={option.value} value={option.value}>{option.label}</option>
+      ))}
+    </select>
   </label>
 );
 

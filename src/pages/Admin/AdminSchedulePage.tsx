@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import {
   CalendarDays,
   ClipboardList,
@@ -77,6 +78,9 @@ const toFormData = (schedule: AdminScheduleItem): AdminScheduleFormData => ({
 });
 
 const AdminSchedulePage = () => {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const requestedTournamentId = Number(searchParams.get('tournamentId')) || undefined;
+  const shouldOpenCreateForm = searchParams.get('create') === '1';
   const [tournaments, setTournaments] = useState<AdminTournamentOption[]>([]);
   const [selectedTournamentId, setSelectedTournamentId] = useState<number | ''>('');
   const [schedules, setSchedules] = useState<AdminScheduleItem[]>([]);
@@ -105,8 +109,9 @@ const AdminSchedulePage = () => {
 
     try {
       const data = await adminScheduleRaceApi.getTournaments();
+      const requestedTournament = data.find((tournament) => tournament.tournamentId === requestedTournamentId);
       setTournaments(data);
-      setSelectedTournamentId((current) => current || data[0]?.tournamentId || '');
+      setSelectedTournamentId((current) => requestedTournament?.tournamentId ?? (current || data[0]?.tournamentId || ''));
     } catch (error) {
       setNotice({ tone: 'error', text: getApiErrorMessage(error, 'Unable to load tournaments.') });
     } finally {
@@ -173,7 +178,7 @@ const AdminSchedulePage = () => {
     return schedules.filter((schedule) => schedule.raceDate >= today).length;
   }, [schedules]);
 
-  const openCreateModal = () => {
+  const openCreateModal = useCallback(() => {
     const nextDayNumber = schedules.length + 1;
 
     setEditingSchedule(null);
@@ -186,8 +191,23 @@ const AdminSchedulePage = () => {
     setFormErrors({});
     setFormError('');
     setIsFormOpen(true);
-  };
+  }, [schedules.length, selectedTournament?.startDate]);
 
+
+  useEffect(() => {
+    if (!shouldOpenCreateForm || isTournamentLoading || selectedTournamentId !== requestedTournamentId) {
+      return undefined;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      openCreateModal();
+      const nextSearchParams = new URLSearchParams(searchParams);
+      nextSearchParams.delete('create');
+      setSearchParams(nextSearchParams, { replace: true });
+    }, 0);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [isTournamentLoading, openCreateModal, requestedTournamentId, searchParams, selectedTournamentId, setSearchParams, shouldOpenCreateForm]);
   const openEditModal = async (schedule: AdminScheduleItem) => {
     setEditingSchedule(schedule);
     setFormData(toFormData(schedule));

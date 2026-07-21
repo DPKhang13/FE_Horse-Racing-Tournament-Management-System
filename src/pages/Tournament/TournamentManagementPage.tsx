@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react';
 import { Ban, CalendarDays, ClipboardList, Eye, Filter, Flag, Layers, ListChecks, Pencil, Plus, RefreshCw, Save, Search, Trash2, Trophy, Users, X } from 'lucide-react';
 import { motion } from 'motion/react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { getApiErrorMessage } from '../../services/apiClient';
 import { useToastNotifications } from '../../hooks/useToastNotifications';
 import { raceCrudService, type RaceCrudItem, type RaceFormData, type RaceRoundFormData, type RaceRoundItem, type RaceScheduleOption } from '../../services/raceCrudService';
@@ -456,6 +456,7 @@ const hasRegistrationWindowChanges = (current: TournamentMutationData, original:
   || toInstantString(current.registrationCloseAt) !== toInstantString(original.registrationCloseAt);
 
 const TournamentManagementPage = () => {
+  const navigate = useNavigate();
   const [tournaments, setTournaments] = useState<Tournament[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('All');
@@ -954,12 +955,13 @@ const TournamentManagementPage = () => {
               setLastCreatedTournament(null);
               closeFormModal();
             }}
-            onCreateRace={(tournament) => {
+            onCreateSchedule={(tournament) => {
               setShowTournamentSuccess(false);
               setLastCreatedTournament(null);
-              setRaceModalTournament(tournament);
-              setIsRaceModalOpen(true);
+              setRaceModalTournament(null);
+              setIsRaceModalOpen(false);
               setIsFormOpen(false);
+              navigate(`/admin/schedule?tournamentId=${tournament.tournamentId}&create=1`);
             }}
           />
         </Modal>
@@ -1016,7 +1018,7 @@ const TournamentForm = ({
   showTournamentSuccess,
   lastCreatedTournament,
   onDone,
-  onCreateRace,
+  onCreateSchedule,
 }: {
   formData: TournamentMutationData;
   formErrors: TournamentFormErrors;
@@ -1033,7 +1035,7 @@ const TournamentForm = ({
   showTournamentSuccess?: boolean;
   lastCreatedTournament?: Tournament | null;
   onDone?: () => void;
-  onCreateRace?: (tournament: Tournament) => void;
+  onCreateSchedule?: (tournament: Tournament) => void;
 }) => {
   if (showTournamentSuccess && lastCreatedTournament) {
     return (
@@ -1055,13 +1057,13 @@ const TournamentForm = ({
         <motion.div className="grid gap-3 pt-4" variants={revealContainer}>
           <motion.button
             type="button"
-            onClick={() => onCreateRace?.(lastCreatedTournament)}
+            onClick={() => onCreateSchedule?.(lastCreatedTournament)}
             className="gold-gradient w-full rounded-xl px-6 py-3 text-body-sm font-extrabold text-on-primary"
             variants={revealUp}
             whileHover="hover"
             whileTap="tap"
           >
-            Create Race
+            Create Schedule
           </motion.button>
           <motion.button
             type="button"

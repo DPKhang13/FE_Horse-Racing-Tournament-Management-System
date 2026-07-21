@@ -1353,13 +1353,19 @@ const RefereeAssignmentPanel = ({
         </select>
       </Field>
       <Field label="Referee Role">
-        <input
-          type="text"
+        <select
           value={formData.refereeRole}
           onChange={(event) => onChange('refereeRole', event.target.value)}
           disabled={isAtCapacity}
           className={inputClassName}
-        />
+        >
+          <option value="">Select referee role</option>
+          <option value="chief_referee">Chief referee</option>
+          <option value="main_referee">Main referee</option>
+          <option value="finish_judge">Finish judge</option>
+          <option value="track_judge">Track judge</option>
+          <option value="weight_judge">Weight judge</option>
+        </select>
       </Field>
       <button
         type="submit"

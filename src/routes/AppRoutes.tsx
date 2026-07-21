@@ -22,7 +22,8 @@ import AdminRacesPage from '../pages/Admin/AdminRacesPage';
 import AdminSchedulePage from '../pages/Admin/AdminSchedulePage';
 import AdminBetManagementPage from '../pages/Admin/AdminBetManagementPage';
 import RaceRegistrationPage from '../pages/Race/RaceRegistrationPage';
-import JockeyAssignmentsPage from '../pages/Race/JockeyAssignmentsPage';
+import OwnerInvitationsPage from '../pages/Owner/OwnerInvitationsPage';
+import JockeyInvitationsPage from '../pages/Jockey/JockeyInvitationsPage';
 import RaceControlPage from '../pages/Race/RaceControlPage';
 import NotificationsPage from '../pages/Notifications/NotificationsPage';
 import WalletPaymentPage from '../pages/Wallet/WalletPaymentPage';
@@ -33,6 +34,8 @@ import TournamentManagementPage from '../pages/Tournament/TournamentManagementPa
 import TournamentSchedulePage from '../pages/Tournament/TournamentSchedulePage';
 import UserManagementPage from '../pages/Admin/UserManagementPage';
 import OwnerDashboardPage from '../pages/Owner/OwnerDashboardPage';
+import RefereeDashboardPage from '../pages/Referee/RefereeDashboardPage';
+import { authService } from '../services/authService';
 
 const withLayout = (page: ReactNode) => <MainLayout>{page}</MainLayout>;
 
@@ -43,6 +46,11 @@ const protectedPage = (page: ReactNode, allowedRoles = AUTHENTICATED_ROLES) => (
     </ProtectedRoute>,
   )
 );
+
+const LegacyInvitationsRedirect = () => {
+  const roleType = authService.getStoredUserProfile()?.roleType;
+  return <Navigate to={roleType === 'horse_owner' ? '/owner/invitations' : '/jockey/invitations'} replace />;
+};
 
 const AppRoutes = () => {
   return (
@@ -59,6 +67,7 @@ const AppRoutes = () => {
       <Route path="/results/:resultId" element={protectedPage(<RaceResultDetail />)} />
       <Route path="/horses" element={protectedPage(<HorseManagementPage />, ['horse_owner'])} />
       <Route path="/owner-dashboard" element={protectedPage(<OwnerDashboardPage />, ['horse_owner'])} />
+      <Route path="/referee-dashboard" element={protectedPage(<RefereeDashboardPage />, ['race_referee'])} />
       <Route path="/spectator-dashboard" element={protectedPage(<SpectatorDashboard />, ['spectator'])} />
       <Route path="/prediction" element={protectedPage(<PredictionPage />, ['spectator'])} />
       <Route path="/tracking" element={protectedPage(<ResultTrackingPage />, ['spectator'])} />
@@ -74,8 +83,10 @@ const AppRoutes = () => {
       <Route path="/admin/race-schedule" element={<Navigate to="/admin/schedule" replace />} />
       <Route path="/tournaments" element={protectedPage(<TournamentManagementPage />, ['admin'])} />
       <Route path="/tournaments/:tournamentId/schedule" element={protectedPage(<TournamentSchedulePage />, ['admin'])} />
-      <Route path="/registrations" element={protectedPage(<RaceRegistrationPage />, ['horse_owner', 'admin', 'race_referee'])} />
-      <Route path="/jockey-assignments" element={protectedPage(<JockeyAssignmentsPage />, ['horse_owner', 'jockey'])} />
+      <Route path="/registrations" element={protectedPage(<RaceRegistrationPage />, ['horse_owner', 'admin'])} />
+      <Route path="/owner/invitations" element={protectedPage(<OwnerInvitationsPage />, ['horse_owner'])} />
+      <Route path="/jockey/invitations" element={protectedPage(<JockeyInvitationsPage />, ['jockey'])} />
+      <Route path="/jockey-assignments" element={protectedPage(<LegacyInvitationsRedirect />, ['horse_owner', 'jockey'])} />
       <Route path="/race-control" element={protectedPage(<RaceControlPage />, ['admin', 'race_referee'])} />
       <Route path="/notifications" element={protectedPage(<NotificationsPage />)} />
       <Route path="/wallet" element={protectedPage(<WalletPaymentPage />, ['spectator'])} />

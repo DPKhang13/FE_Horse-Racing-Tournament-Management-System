@@ -64,9 +64,9 @@ export const getDefaultRouteForRole = (roleType: UserRoleType | undefined) => {
     case 'admin':
       return '/admin-ops';
     case 'race_referee':
-      return '/race-control';
+      return '/referee-dashboard';
     case 'jockey':
-      return '/jockey-assignments';
+      return '/jockey/invitations';
     default:
       return '/login';
   }
@@ -83,6 +83,7 @@ export const navigationItems: NavigationItem[] = [
   { label: 'Home', to: '/' },
   { label: 'Dashboard', to: '/spectator-dashboard', allowedRoles: ['spectator'], requiresAuth: true },
   { label: 'Dashboard', to: '/admin-ops', allowedRoles: ['admin'], requiresAuth: true },
+  { label: 'Dashboard', to: '/referee-dashboard', allowedRoles: ['race_referee'], requiresAuth: true },
   { label: 'Users', to: '/admin/users', allowedRoles: ['admin'], requiresAuth: true },
   { label: 'Dashboard', to: '/owner-dashboard', allowedRoles: ['horse_owner'], requiresAuth: true },
   { label: 'Tournaments', to: '/tournaments', allowedRoles: ['admin'], requiresAuth: true },
@@ -93,8 +94,9 @@ export const navigationItems: NavigationItem[] = [
   { label: 'Race Registrations', to: '/admin/registrations', allowedRoles: ['admin'], requiresAuth: true },
   { label: 'Race Control', to: '/race-control', allowedRoles: ['admin', 'race_referee'], requiresAuth: true },
   { label: 'Schedule', to: '/schedule', allowedRoles: ['horse_owner'], requiresAuth: true },
-  { label: 'Registrations', to: '/registrations', allowedRoles: ['horse_owner', 'race_referee'], requiresAuth: true },
-  { label: 'Invitations', to: '/jockey-assignments', allowedRoles: ['horse_owner', 'jockey'], requiresAuth: true },
+  { label: 'Registrations', to: '/registrations', allowedRoles: ['horse_owner'], requiresAuth: true },
+  { label: 'Invitations', to: '/owner/invitations', allowedRoles: ['horse_owner'], requiresAuth: true },
+  { label: 'Invitations', to: '/jockey/invitations', allowedRoles: ['jockey'], requiresAuth: true },
   { label: 'Prediction', to: '/prediction', allowedRoles: ['spectator'], requiresAuth: true },
   { label: 'Wallet', to: '/wallet', allowedRoles: ['spectator'], requiresAuth: true },
   { label: 'Results', to: '/results', allowedRoles: AUTHENTICATED_ROLES, requiresAuth: true },
