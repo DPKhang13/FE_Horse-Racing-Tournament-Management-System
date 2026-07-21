@@ -51,7 +51,7 @@ const RaceControlPage = () => {
   const [draftReportId, setDraftReportId] = useState('');
   const [draftItems, setDraftItems] = useState<RaceDraftResultItemInput[]>([createEmptyDraftItem()]);
   const [cancelReason, setCancelReason] = useState('');
-  const [forceCloseBetting, setForceCloseBetting] = useState(false);
+  const [forceCloseBetting, setForceCloseBetting] = useState(true);
   const [isBusy, setIsBusy] = useState(false);
   const [isLoadingAssigned, setIsLoadingAssigned] = useState(isReferee);
   const [isLoadingRaceData, setIsLoadingRaceData] = useState(false);
@@ -152,11 +152,19 @@ const RaceControlPage = () => {
   };
 
   useEffect(() => {
-    void loadAssignedRaces();
+    const timeoutId = window.setTimeout(() => {
+      void loadAssignedRaces();
+    }, 0);
+
+    return () => window.clearTimeout(timeoutId);
   }, []);
 
   useEffect(() => {
-    void loadRaceData(normalizedRaceId);
+    const timeoutId = window.setTimeout(() => {
+      void loadRaceData(normalizedRaceId);
+    }, 0);
+
+    return () => window.clearTimeout(timeoutId);
   }, [normalizedRaceId, isAdmin, isReferee]);
 
   const withBusy = async (work: () => Promise<void>) => {
@@ -217,10 +225,35 @@ const RaceControlPage = () => {
       return;
     }
 
+    const raceName = activeRaceSummary?.raceName ?? draft?.raceName ?? adminResults[0]?.raceName ?? `Race #${normalizedRaceId}`;
+    const bettingMessage = forceCloseBetting
+      ? 'Betting will be closed when the race starts.'
+      : 'Betting will not be force-closed by this action.';
+
+    if (!window.confirm(`Start "${raceName}" as an Admin?\n\n${bettingMessage}`)) {
+      return;
+    }
+
     await withBusy(async () => {
-      const response = await raceOperationsService.startRace(normalizedRaceId, { forceCloseBetting });
-      setMessage(response.message ?? 'Race started successfully.');
-      await loadRaceData(normalizedRaceId);
+      try {
+        const response = await raceOperationsService.startRace(normalizedRaceId, {
+          forceCloseBetting,
+          note: `Admin started "${raceName}"${forceCloseBetting ? ' and requested betting closure' : ''}.`,
+        });
+        await loadRaceData(normalizedRaceId);
+
+        const bettingWasClosed = response.bettingClosed ?? forceCloseBetting;
+        setMessage(
+          response.message
+            ? `Admin action completed for "${response.raceName || raceName}".\n${response.message}`
+            : `Race "${response.raceName || raceName}" is now in progress.${bettingWasClosed ? ' Betting has been closed for this race.' : ''}`,
+        );
+      } catch (error) {
+        throw new Error(
+          `Could not start "${raceName}" as Admin.\n${getApiErrorMessage(error, 'Unable to start race.')}`,
+          { cause: error },
+        );
+      }
     });
   };
 
@@ -496,8 +529,8 @@ const RaceControlPage = () => {
                   <button
                     type="button"
                     onClick={() => void handleStartRace()}
-                    disabled={isBusy}
-                    className="mt-4 rounded-md bg-secondary px-5 py-3 text-body-sm font-bold text-white hover:bg-opacity-90"
+                    disabled={isBusy || !normalizedRaceId}
+                    className="mt-4 rounded-md bg-secondary px-5 py-3 text-body-sm font-bold text-white hover:bg-opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
                   >
                     Start race
                   </button>

@@ -1,4 +1,4 @@
-import { apiClient, unwrapApiData, unwrapApiList } from './apiClient';
+import { apiClient, getApiResponseMessage, unwrapApiData, unwrapApiList } from './apiClient';
 
 type RawObject = Record<string, unknown>;
 
@@ -299,7 +299,11 @@ export const raceOperationsService = {
       forceCloseBetting: data.forceCloseBetting ?? false,
       note: data.note?.trim() || undefined,
     });
-    return mapRaceStart(unwrapApiData<RawObject>(response));
+    const raceStart = mapRaceStart(unwrapApiData<RawObject>(response));
+    return {
+      ...raceStart,
+      message: getApiResponseMessage(response) || raceStart.message,
+    };
   },
 
   async getAssignedRaces(): Promise<RefereeAssignedRaceItem[]> {

@@ -4,7 +4,7 @@ import { motion } from 'motion/react';
 import { Link } from 'react-router-dom';
 import { getApiErrorMessage } from '../../services/apiClient';
 import { useToastNotifications } from '../../hooks/useToastNotifications';
-import { raceCrudService, type RaceCrudItem, type RaceFormData, type RaceRoundFormData, type RaceRoundItem } from '../../services/raceCrudService';
+import { raceCrudService, type RaceCrudItem, type RaceFormData, type RaceRoundFormData, type RaceRoundItem, type RaceScheduleOption } from '../../services/raceCrudService';
 import { tournamentService } from '../../services/tournamentService';
 import type {
   CreatePrizeRequest,
@@ -49,6 +49,14 @@ const tournamentStatusOptions: TournamentStatus[] = [
   'Completed',
   'Cancelled',
 ];
+const tournamentLocationOptions = [
+  { value: 'HCM', label: 'HCM (Ho Chi Minh)' },
+  { value: 'Hanoi', label: 'Hanoi' },
+] as const;
+const raceRankGroupOptions = ['A', 'B', 'C', 'D', 'E'] as const;
+const raceTrackTypeOptions = ['Turf', 'Dirt', 'Synthetic'] as const;
+const createRaceNumberOptions = (raceCount: number, currentRaceNumber: number) =>
+  Array.from({ length: Math.max(1, raceCount + 1, currentRaceNumber) }, (_, index) => index + 1);
 const emptyFormData: TournamentMutationData = {
   tournamentName: '',
   tournamentType: '',
@@ -69,12 +77,12 @@ const emptyFormData: TournamentMutationData = {
 const emptyRaceFormData: RaceFormData = {
   name: '',
   raceNumber: 1,
-  rankGroup: '',
+  rankGroup: 'A',
   lapCount: 1,
   scheduledAt: '',
   predictionClosesAt: '',
-  distanceM: 0,
-  trackType: '',
+  distanceM: 1000,
+  trackType: 'Turf',
   maxHorses: 8,
   maxReferees: 3,
   pointRuleNote: '',
@@ -171,6 +179,55 @@ const toInstantString = (value?: string) => {
   return Number.isNaN(date.getTime()) ? undefined : date.toISOString();
 };
 
+const normalizeTournamentLocation = (value?: string) => {
+  const normalized = value?.trim().toLowerCase().replace(/[\s_-]+/g, '') ?? '';
+
+  if (normalized === 'hcm' || normalized.includes('hochiminh') || normalized.includes('saigon')) {
+    return 'HCM';
+  }
+
+  if (normalized === 'hanoi' || normalized.includes('hanoi')) {
+    return 'Hanoi';
+  }
+
+  return '';
+};
+
+const isValidDateInput = (value: string) => {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    return false;
+  }
+
+  const date = new Date(`${value}T00:00:00.000Z`);
+  return !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === value;
+};
+
+const getLocalDateInputValue = (date = new Date()) => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
+const getDateTimeInputTimestamp = (value?: string) => {
+  const match = value?.match(/^(\d{4}-\d{2}-\d{2})T(\d{2}):(\d{2})(?::(\d{2})(?:\.\d{1,3})?)?$/);
+
+  if (!match || !isValidDateInput(match[1])) {
+    return null;
+  }
+
+  const hours = Number(match[2]);
+  const minutes = Number(match[3]);
+  const seconds = Number(match[4] ?? 0);
+
+  if (hours > 23 || minutes > 59 || seconds > 59) {
+    return null;
+  }
+
+  const timestamp = new Date(match[0]).getTime();
+  return Number.isNaN(timestamp) ? null : timestamp;
+};
+
 const getStatusClassName = (status: TournamentStatus) => {
   if (status === 'Ongoing') {
     return 'bg-secondary/10 text-secondary';
@@ -211,8 +268,10 @@ const getMatchStatusClassName = (status: MatchStatus) => {
   return 'bg-surface-container-highest text-on-surface-variant';
 };
 
-const validateTournamentForm = (data: TournamentMutationData) => {
+const validateTournamentForm = (data: TournamentMutationData, originalTournament: Tournament | null) => {
   const errors: TournamentFormErrors = {};
+  const startDateIsValid = isValidDateInput(data.startDate);
+  const endDateIsValid = isValidDateInput(data.endDate);
 
   if (!data.tournamentName.trim()) {
     errors.tournamentName = 'Tournament name is required.';
@@ -220,34 +279,56 @@ const validateTournamentForm = (data: TournamentMutationData) => {
 
   if (!data.startDate) {
     errors.startDate = 'Start date is required.';
+  } else if (!startDateIsValid) {
+    errors.startDate = 'Start date must be a valid date.';
+  } else if (
+    data.startDate < getLocalDateInputValue()
+    && (!originalTournament || data.startDate !== originalTournament.startDate)
+  ) {
+    errors.startDate = 'Start date cannot be in the past.';
   }
 
   if (!data.endDate) {
     errors.endDate = 'End date is required.';
+  } else if (!endDateIsValid) {
+    errors.endDate = 'End date must be a valid date.';
   }
 
-  if (!data.location.trim()) {
-    errors.location = 'Location is required.';
+  if (!tournamentLocationOptions.some((option) => option.value === data.location)) {
+    errors.location = 'Select HCM or Hanoi.';
   }
 
   if (parsePrizePoolInput(data.prize) < 0) {
     errors.prize = 'Prize pool cannot be negative.';
   }
 
-  if (data.startDate && data.endDate && new Date(data.endDate) < new Date(data.startDate)) {
+  if (startDateIsValid && endDateIsValid && data.endDate < data.startDate) {
     errors.endDate = 'End date cannot be before start date.';
   }
 
-  if (data.status === 'Registration Open' && !data.registrationCloseAt) {
-    errors.registrationCloseAt = 'Registration close time is required.';
-  }
+  if (data.status === 'Registration Open') {
+    const registrationOpenTimestamp = getDateTimeInputTimestamp(data.registrationOpenAt);
+    const registrationCloseTimestamp = getDateTimeInputTimestamp(data.registrationCloseAt);
 
-  if (
-    data.registrationOpenAt &&
-    data.registrationCloseAt &&
-    new Date(data.registrationCloseAt) <= new Date(data.registrationOpenAt)
-  ) {
-    errors.registrationCloseAt = 'Registration close time must be after open time.';
+    if (!data.registrationOpenAt) {
+      errors.registrationOpenAt = 'Registration open time is required.';
+    } else if (registrationOpenTimestamp === null) {
+      errors.registrationOpenAt = 'Registration open time must be valid.';
+    }
+
+    if (!data.registrationCloseAt) {
+      errors.registrationCloseAt = 'Registration close time is required.';
+    } else if (registrationCloseTimestamp === null) {
+      errors.registrationCloseAt = 'Registration close time must be valid.';
+    }
+
+    if (
+      registrationOpenTimestamp !== null
+      && registrationCloseTimestamp !== null
+      && registrationCloseTimestamp <= registrationOpenTimestamp
+    ) {
+      errors.registrationCloseAt = 'Registration close time must be after open time.';
+    }
   }
 
   return errors;
@@ -259,7 +340,7 @@ const toFormData = (tournament: Tournament): TournamentMutationData => ({
   description: tournament.description,
   startDate: tournament.startDate,
   endDate: tournament.endDate,
-  location: tournament.location,
+  location: normalizeTournamentLocation(tournament.location),
   registrationDeadline: tournament.registrationDeadline,
   maximumParticipants: tournament.maximumParticipants,
   entryFee: tournament.entryFee,
@@ -369,6 +450,10 @@ const hasTournamentCoreChanges = (current: TournamentMutationData, original: Tou
   || current.startDate !== original.startDate
   || current.endDate !== original.endDate
   || String(parsePrizePoolInput(current.prize)) !== String(parsePrizePoolInput(original.prize));
+
+const hasRegistrationWindowChanges = (current: TournamentMutationData, original: Tournament) =>
+  toInstantString(current.registrationOpenAt) !== toInstantString(original.registrationOpenAt)
+  || toInstantString(current.registrationCloseAt) !== toInstantString(original.registrationCloseAt);
 
 const TournamentManagementPage = () => {
   const [tournaments, setTournaments] = useState<Tournament[]>([]);
@@ -535,7 +620,7 @@ const TournamentManagementPage = () => {
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
-    const errors = validateTournamentForm(formData);
+    const errors = validateTournamentForm(formData, selectedTournament);
     const prizeErrors = selectedTournament ? {} : validatePrizeRows(createPrizeRows);
     setFormErrors(errors);
     setCreatePrizeErrors(prizeErrors);
@@ -549,25 +634,49 @@ const TournamentManagementPage = () => {
 
     try {
       if (selectedTournament) {
-        const shouldUseWorkflow = formData.status !== selectedTournament.status && isTournamentWorkflowStatus(formData.status);
+        const statusChanged = formData.status !== selectedTournament.status;
+        const shouldUseWorkflow = statusChanged && isTournamentWorkflowStatus(formData.status);
         const shouldUpdateCoreFields = hasTournamentCoreChanges(formData, selectedTournament);
-        const updatedTournament = shouldUpdateCoreFields || !shouldUseWorkflow
-          ? await tournamentService.updateTournament(selectedTournament.tournamentId, {
+        const shouldUpdateRegistrationWindow = formData.status === 'Registration Open'
+          && (statusChanged || hasRegistrationWindowChanges(formData, selectedTournament));
+        const shouldUpdateThroughGenericEndpoint = shouldUpdateCoreFields || (statusChanged && !shouldUseWorkflow);
+        const responseMessages: string[] = [];
+        let finalTournament = selectedTournament;
+
+        if (shouldUpdateThroughGenericEndpoint) {
+          finalTournament = await tournamentService.updateTournament(selectedTournament.tournamentId, {
             ...formData,
-          })
-          : selectedTournament;
-        const finalTournament = shouldUseWorkflow && formData.status === 'Registration Open'
-          ? await tournamentService.openRegistration(selectedTournament.tournamentId, {
-            registrationOpenAt: toInstantString(formData.registrationOpenAt),
-            registrationCloseAt: toInstantString(formData.registrationCloseAt) ?? '',
-          })
-          : shouldUseWorkflow && formData.status === 'Registration Closed'
-            ? await tournamentService.closeRegistration(selectedTournament.tournamentId)
-            : shouldUseWorkflow && formData.status === 'Ongoing'
-              ? await tournamentService.startTournament(selectedTournament.tournamentId)
-              : shouldUseWorkflow && formData.status === 'Completed'
-                ? await tournamentService.completeTournament(selectedTournament.tournamentId)
-            : updatedTournament;
+            status: shouldUseWorkflow ? selectedTournament.status : formData.status,
+          });
+
+          if (finalTournament.responseMessage) {
+            responseMessages.push(finalTournament.responseMessage);
+          }
+        }
+
+        if (shouldUpdateRegistrationWindow) {
+          const registrationOpenAt = toInstantString(formData.registrationOpenAt);
+          const registrationCloseAt = toInstantString(formData.registrationCloseAt);
+
+          if (!registrationOpenAt || !registrationCloseAt) {
+            throw new Error('Registration dates must be valid.');
+          }
+
+          finalTournament = await tournamentService.openRegistration(selectedTournament.tournamentId, {
+            registrationOpenAt,
+            registrationCloseAt,
+          });
+        } else if (shouldUseWorkflow && formData.status === 'Registration Closed') {
+          finalTournament = await tournamentService.closeRegistration(selectedTournament.tournamentId);
+        } else if (shouldUseWorkflow && formData.status === 'Ongoing') {
+          finalTournament = await tournamentService.startTournament(selectedTournament.tournamentId);
+        } else if (shouldUseWorkflow && formData.status === 'Completed') {
+          finalTournament = await tournamentService.completeTournament(selectedTournament.tournamentId);
+        }
+
+        if (finalTournament.responseMessage && !responseMessages.includes(finalTournament.responseMessage)) {
+          responseMessages.push(finalTournament.responseMessage);
+        }
 
         setTournaments((current) =>
           current.map((tournament) =>
@@ -577,17 +686,22 @@ const TournamentManagementPage = () => {
         setViewingTournament((current) =>
           current?.tournamentId === selectedTournament.tournamentId ? finalTournament : current,
         );
-        setMessage(shouldUseWorkflow ? `Tournament moved to ${formData.status}.` : 'Tournament updated.');
+        const fallbackMessage = shouldUpdateRegistrationWindow && !statusChanged
+            ? 'Tournament registration window updated.'
+            : shouldUseWorkflow
+              ? `Tournament moved to ${formData.status}.`
+              : 'Tournament updated.';
+        setMessage(responseMessages.join('\n') || fallbackMessage);
       } else {
         const newTournament = await tournamentService.createTournament(formData);
-        await tournamentService.createPrizes(newTournament.tournamentId, createPrizeRows.map(toPrizeRequest));
+        const prizeResult = await tournamentService.createPrizes(newTournament.tournamentId, createPrizeRows.map(toPrizeRequest));
         setTournaments((current) => [newTournament, ...current]);
         setGlobalTournamentCount((current) => (current === null ? current : current + 1));
         setLastCreatedTournament(newTournament);
         setCreatePrizeRows(createDefaultPrizeRows());
         setCreatePrizeErrors({});
         setShowTournamentSuccess(true);
-        setMessage('');
+        setMessage([newTournament.responseMessage, prizeResult.responseMessage].filter(Boolean).join('\n') || 'Tournament and prizes created successfully.');
         return;
       }
 
@@ -847,11 +961,6 @@ const TournamentManagementPage = () => {
               setIsRaceModalOpen(true);
               setIsFormOpen(false);
             }}
-            onUpdateRace={(tournament) => {
-              setRaceModalTournament(tournament);
-              setIsRaceModalOpen(true);
-              setIsFormOpen(false);
-            }}
           />
         </Modal>
       )}
@@ -908,7 +1017,6 @@ const TournamentForm = ({
   lastCreatedTournament,
   onDone,
   onCreateRace,
-  onUpdateRace,
 }: {
   formData: TournamentMutationData;
   formErrors: TournamentFormErrors;
@@ -926,7 +1034,6 @@ const TournamentForm = ({
   lastCreatedTournament?: Tournament | null;
   onDone?: () => void;
   onCreateRace?: (tournament: Tournament) => void;
-  onUpdateRace?: (tournament: Tournament) => void;
 }) => {
   if (showTournamentSuccess && lastCreatedTournament) {
     return (
@@ -987,12 +1094,23 @@ const TournamentForm = ({
           </motion.div>
           <motion.div variants={revealUp}>
             <Field label="Location" error={formErrors.location}>
-              <input type="text" value={formData.location} onChange={(event) => onChange('location', event.target.value)} className={inputClassName} />
+              <select value={formData.location} onChange={(event) => onChange('location', event.target.value)} className={inputClassName}>
+                <option value="">Select location</option>
+                {tournamentLocationOptions.map((option) => (
+                  <option key={option.value} value={option.value}>{option.label}</option>
+                ))}
+              </select>
             </Field>
           </motion.div>
           <motion.div variants={revealUp}>
             <Field label="Start Date" error={formErrors.startDate}>
-              <input type="date" value={formData.startDate} onChange={(event) => onChange('startDate', event.target.value)} className={inputClassName} />
+              <input
+                type="date"
+                min={isEditing ? undefined : getLocalDateInputValue()}
+                value={formData.startDate}
+                onChange={(event) => onChange('startDate', event.target.value)}
+                className={inputClassName}
+              />
             </Field>
           </motion.div>
           <motion.div variants={revealUp}>
@@ -1017,7 +1135,7 @@ const TournamentForm = ({
           {formData.status === 'Registration Open' && (
             <>
               <motion.div variants={revealUp}>
-                <Field label="Registration Open At">
+                <Field label="Registration Open At" error={formErrors.registrationOpenAt}>
                   <input
                     type="datetime-local"
                     value={formData.registrationOpenAt ?? ''}
@@ -1064,17 +1182,6 @@ const TournamentForm = ({
             Cancel
           </motion.button>
           <div className="flex gap-3">
-            {isEditing && selectedTournament && (
-              <motion.button
-                type="button"
-                onClick={() => onUpdateRace?.(selectedTournament)}
-                className="rounded-md border border-outline-variant px-6 py-3 text-body-sm font-bold text-on-surface-variant transition-colors hover:border-primary hover:text-primary"
-                whileHover="hover"
-                whileTap="tap"
-              >
-                Update Race
-              </motion.button>
-            )}
             <motion.button 
               type="submit" 
               disabled={isSaving} 
@@ -1349,6 +1456,7 @@ const TournamentPrizeForm = ({
 
 const RaceCrudPanel = ({ tournament }: { tournament: Tournament }) => {
   const [races, setRaces] = useState<RaceCrudItem[]>([]);
+  const [scheduleOptions, setScheduleOptions] = useState<RaceScheduleOption[]>([]);
   const [selectedRace, setSelectedRace] = useState<RaceCrudItem | null>(null);
   const [raceForm, setRaceForm] = useState<RaceFormData>(emptyRaceFormData);
   const [rounds, setRounds] = useState<RaceRoundItem[]>([]);
@@ -1356,11 +1464,16 @@ const RaceCrudPanel = ({ tournament }: { tournament: Tournament }) => {
   const [editingRaceId, setEditingRaceId] = useState<number | null>(null);
   const [editingRoundId, setEditingRoundId] = useState<number | null>(null);
   const [isLoadingRaces, setIsLoadingRaces] = useState(true);
+  const [isLoadingSchedules, setIsLoadingSchedules] = useState(true);
   const [isLoadingRounds, setIsLoadingRounds] = useState(false);
   const [message, setMessage] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
   const [showRaceSuccess, setShowRaceSuccess] = useState(false);
   const [lastCreatedRace, setLastCreatedRace] = useState<RaceCrudItem | null>(null);
+  const availableRaceNumbers = useMemo(
+    () => createRaceNumberOptions(races.length, raceForm.raceNumber),
+    [raceForm.raceNumber, races.length],
+  );
 
   useToastNotifications([
     message ? { tone: 'success', text: message } : null,
@@ -1388,6 +1501,32 @@ const RaceCrudPanel = ({ tournament }: { tournament: Tournament }) => {
     }
   }, [tournament.tournamentId]);
 
+  const loadScheduleOptions = useCallback(async () => {
+    setIsLoadingSchedules(true);
+
+    try {
+      const data = await raceCrudService.getScheduleOptions(tournament.tournamentId);
+      setScheduleOptions(data);
+      setRaceForm((current) => {
+        if (current.scheduleId || data.length === 0) {
+          return current;
+        }
+
+        const firstSchedule = data[0];
+        return {
+          ...current,
+          scheduleId: firstSchedule.scheduleId,
+          scheduledAt: firstSchedule.raceDate ? `${firstSchedule.raceDate}T09:00` : '',
+        };
+      });
+    } catch (error) {
+      setScheduleOptions([]);
+      setErrorMessage(getApiErrorMessage(error, 'Unable to load schedules.'));
+    } finally {
+      setIsLoadingSchedules(false);
+    }
+  }, [tournament.tournamentId]);
+
   const loadRounds = useCallback(async (race: RaceCrudItem | null) => {
     if (!race) {
       setRounds([]);
@@ -1407,35 +1546,64 @@ const RaceCrudPanel = ({ tournament }: { tournament: Tournament }) => {
   }, []);
 
   useEffect(() => {
-    void loadRaces();
+    const timeoutId = window.setTimeout(() => {
+      void loadRaces();
+    }, 0);
+
+    return () => window.clearTimeout(timeoutId);
   }, [loadRaces]);
 
   useEffect(() => {
-    void loadRounds(selectedRace);
+    const timeoutId = window.setTimeout(() => {
+      void loadScheduleOptions();
+    }, 0);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [loadScheduleOptions]);
+
+  useEffect(() => {
+    const timeoutId = window.setTimeout(() => {
+      void loadRounds(selectedRace);
+    }, 0);
+
+    return () => window.clearTimeout(timeoutId);
   }, [selectedRace, loadRounds]);
 
   const resetRaceForm = () => {
+    const firstSchedule = scheduleOptions[0];
     setEditingRaceId(null);
     setRaceForm({
       ...emptyRaceFormData,
       raceNumber: races.length + 1,
-      scheduledAt: tournament.startDate ? `${tournament.startDate}T09:00` : '',
+      scheduleId: firstSchedule?.scheduleId,
+      scheduledAt: firstSchedule?.raceDate ? `${firstSchedule.raceDate}T09:00` : '',
     });
   };
 
+  const handleScheduleChange = (scheduleId?: number) => {
+    const schedule = scheduleOptions.find((option) => option.scheduleId === scheduleId);
+    setRaceForm((current) => ({
+      ...current,
+      scheduleId,
+      scheduledAt: schedule?.raceDate ? `${schedule.raceDate}T09:00` : '',
+    }));
+  };
+
   const editRace = (race: RaceCrudItem) => {
+    const normalizedRankGroup = race.rankGroup.trim().toUpperCase().slice(-1);
+    const normalizedTrackType = raceTrackTypeOptions.find((trackType) => trackType.toLowerCase() === race.trackType.trim().toLowerCase());
     setEditingRaceId(race.raceId);
     setSelectedRace(race);
     setRaceForm({
       scheduleId: race.scheduleId,
       name: race.name,
       raceNumber: race.raceNumber,
-      rankGroup: race.rankGroup,
+      rankGroup: raceRankGroupOptions.includes(normalizedRankGroup as (typeof raceRankGroupOptions)[number]) ? normalizedRankGroup : 'A',
       lapCount: race.lapCount,
       scheduledAt: toDateTimeInputValue(race.scheduledAt),
       predictionClosesAt: toDateTimeInputValue(race.predictionClosesAt),
       distanceM: race.distanceM,
-      trackType: race.trackType,
+      trackType: normalizedTrackType ?? 'Turf',
       maxHorses: race.maxHorses,
       maxReferees: race.maxReferees,
       pointRuleNote: race.pointRuleNote ?? '',
@@ -1448,9 +1616,26 @@ const RaceCrudPanel = ({ tournament }: { tournament: Tournament }) => {
     setMessage('');
     setErrorMessage('');
 
+    if (!editingRaceId && !raceForm.scheduleId) {
+      setErrorMessage('Select a schedule before saving a race.');
+      return;
+    }
+
+    const currentRace = races.find((race) => race.raceId === editingRaceId);
+
+    if (currentRace?.assignedRefereeCount && raceForm.maxReferees < currentRace.assignedRefereeCount) {
+      setErrorMessage(`Max referees cannot be lower than ${currentRace.assignedRefereeCount} assigned referees.`);
+      return;
+    }
+
+    if (currentRace?.registeredHorseCount && raceForm.maxHorses < currentRace.registeredHorseCount) {
+      setErrorMessage(`Max horses cannot be lower than ${currentRace.registeredHorseCount} registered horses.`);
+      return;
+    }
+
     try {
       const savedRace = editingRaceId
-        ? await raceCrudService.updateRace(editingRaceId, tournament.tournamentId, raceForm)
+        ? await raceCrudService.updateRace(editingRaceId, raceForm)
         : await raceCrudService.createRace(tournament.tournamentId, raceForm);
 
       if (!editingRaceId) {
@@ -1687,10 +1872,14 @@ const RaceCrudPanel = ({ tournament }: { tournament: Tournament }) => {
         >
           <RaceFormPanel
             form={raceForm}
+            raceNumberOptions={availableRaceNumbers}
+            scheduleOptions={scheduleOptions}
+            isLoadingSchedules={isLoadingSchedules}
             isEditing={Boolean(editingRaceId)}
             onSubmit={handleRaceSubmit}
             onReset={resetRaceForm}
             onChange={(field, value) => setRaceForm((current) => ({ ...current, [field]: value }))}
+            onScheduleChange={handleScheduleChange}
             showRaceSuccess={showRaceSuccess}
             lastCreatedRace={lastCreatedRace}
             onDone={() => {
@@ -1820,20 +2009,28 @@ const RaceCrudPanel = ({ tournament }: { tournament: Tournament }) => {
 
 const RaceFormPanel = ({
   form,
+  raceNumberOptions,
+  scheduleOptions,
+  isLoadingSchedules,
   isEditing,
   onSubmit,
   onReset,
   onChange,
+  onScheduleChange,
   showRaceSuccess,
   lastCreatedRace,
   onDone,
   onCreateLap,
 }: {
   form: RaceFormData;
+  raceNumberOptions: number[];
+  scheduleOptions: RaceScheduleOption[];
+  isLoadingSchedules: boolean;
   isEditing: boolean;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
   onReset: () => void;
   onChange: <K extends keyof RaceFormData>(field: K, value: RaceFormData[K]) => void;
+  onScheduleChange: (scheduleId?: number) => void;
   showRaceSuccess?: boolean;
   lastCreatedRace?: RaceCrudItem | null;
   onDone?: () => void;
@@ -1913,13 +2110,21 @@ const RaceFormPanel = ({
             <input value={form.name} onChange={(event) => onChange('name', event.target.value)} required className={inputClassName} placeholder="e.g., Opening Sprint" />
           </Field>
           <Field label="Race number">
-            <input type="number" min="1" value={form.raceNumber || ''} onChange={(event) => onChange('raceNumber', Number(event.target.value))} required className={inputClassName} placeholder="1" />
+            <select value={form.raceNumber} onChange={(event) => onChange('raceNumber', Number(event.target.value))} required className={inputClassName}>
+              {raceNumberOptions.map((raceNumber) => (
+                <option key={raceNumber} value={raceNumber}>Race {raceNumber}</option>
+              ))}
+            </select>
           </Field>
         </motion.div>
 
         <motion.div className="grid gap-4 md:grid-cols-2" variants={revealUp}>
           <Field label="Rank group">
-            <input value={form.rankGroup} onChange={(event) => onChange('rankGroup', event.target.value)} required className={inputClassName} placeholder="Group A" />
+            <select value={form.rankGroup} onChange={(event) => onChange('rankGroup', event.target.value)} required className={inputClassName}>
+              {raceRankGroupOptions.map((rankGroup) => (
+                <option key={rankGroup} value={rankGroup}>Group {rankGroup}</option>
+              ))}
+            </select>
           </Field>
           <Field label="Lap count">
             <input type="number" min="1" value={form.lapCount || ''} onChange={(event) => onChange('lapCount', Number(event.target.value))} required className={inputClassName} placeholder="5" />
@@ -1929,7 +2134,7 @@ const RaceFormPanel = ({
         {/* Date & Time */}
         <motion.div className="grid gap-4 md:grid-cols-2" variants={revealUp}>
           <Field label="Scheduled at">
-            <input type="datetime-local" value={form.scheduledAt} onChange={(event) => onChange('scheduledAt', event.target.value)} required className={inputClassName} />
+            <input type="datetime-local" value={form.scheduledAt} readOnly required className={`${inputClassName} cursor-not-allowed opacity-80`} />
           </Field>
           <Field label="Prediction closes">
             <input type="datetime-local" value={form.predictionClosesAt ?? ''} onChange={(event) => onChange('predictionClosesAt', event.target.value)} className={inputClassName} />
@@ -1942,7 +2147,11 @@ const RaceFormPanel = ({
             <input type="number" min="0" value={form.distanceM || ''} onChange={(event) => onChange('distanceM', Number(event.target.value))} className={inputClassName} placeholder="1200" />
           </Field>
           <Field label="Track type">
-            <input value={form.trackType} onChange={(event) => onChange('trackType', event.target.value)} className={inputClassName} placeholder="Dirt" />
+            <select value={form.trackType} onChange={(event) => onChange('trackType', event.target.value)} className={inputClassName}>
+              {raceTrackTypeOptions.map((trackType) => (
+                <option key={trackType} value={trackType}>{trackType}</option>
+              ))}
+            </select>
           </Field>
         </motion.div>
 
@@ -1959,10 +2168,30 @@ const RaceFormPanel = ({
         {/* Advanced */}
         <motion.div className="grid gap-4 md:grid-cols-2" variants={revealUp}>
           <Field label="Status">
-            <input value={form.status} onChange={(event) => onChange('status', event.target.value)} className={inputClassName} placeholder="Scheduled" />
+            <select value={form.status} onChange={(event) => onChange('status', event.target.value)} className={inputClassName}>
+              <option value="scheduled">Scheduled</option>
+              <option value="ongoing">Ongoing</option>
+              <option value="completed">Completed</option>
+              <option value="cancelled">Cancelled</option>
+            </select>
           </Field>
-          <Field label="Schedule ID">
-            <input type="number" min="1" value={form.scheduleId ?? ''} onChange={(event) => onChange('scheduleId', event.target.value ? Number(event.target.value) : undefined)} className={inputClassName} placeholder="Optional" />
+          <Field label="Schedule">
+            <select
+              value={form.scheduleId ?? ''}
+              onChange={(event) => onScheduleChange(event.target.value ? Number(event.target.value) : undefined)}
+              disabled={isEditing || isLoadingSchedules || scheduleOptions.length === 0}
+              required
+              className={inputClassName}
+            >
+              <option value="">
+                {isEditing && !form.scheduleId ? 'Current schedule' : isLoadingSchedules ? 'Loading schedules...' : 'Select schedule'}
+              </option>
+              {scheduleOptions.map((schedule) => (
+                <option key={schedule.scheduleId} value={schedule.scheduleId}>
+                  Day {schedule.dayNumber} - {schedule.title}
+                </option>
+              ))}
+            </select>
           </Field>
         </motion.div>
 
@@ -2334,4 +2563,3 @@ const InlineEmptyState = ({ text }: { text: string }) => (
 );
 
 export default TournamentManagementPage;
-

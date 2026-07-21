@@ -41,6 +41,13 @@ export type RaceFormData = {
   status: string;
 };
 
+export type RaceScheduleOption = {
+  scheduleId: number;
+  raceDate: string;
+  dayNumber: number;
+  title: string;
+};
+
 export type RaceRoundItem = {
   roundId: number;
   raceId: number;
@@ -80,10 +87,24 @@ const asNumber = (value: unknown, fallback = 0) => {
 
 const toDateTimeLocal = (date: string, time: string) => {
   if (!date) {
-    return new Date().toISOString();
+    return '';
   }
 
   return `${date}T${time || '09:00'}`;
+};
+
+const toScheduledAtValue = (value: unknown) => {
+  const text = asString(value);
+
+  if (!text) {
+    return '';
+  }
+
+  if (/^\d{4}-\d{2}-\d{2}$/.test(text)) {
+    return `${text}T09:00`;
+  }
+
+  return text;
 };
 
 const toApiInstant = (value?: string) => {
@@ -124,7 +145,7 @@ const mapRace = (raw: RawRecord, index = 0): RaceCrudItem => ({
   raceNumber: asNumber(raw.raceNumber ?? raw.matchNumber, index + 1),
   rankGroup: asString(raw.rankGroup ?? raw.round, '-'),
   lapCount: asNumber(raw.lapCount, 1),
-  scheduledAt: asString(raw.scheduledAt ?? raw.raceDate ?? raw.matchDate, new Date().toISOString()),
+  scheduledAt: toScheduledAtValue(raw.scheduledAt ?? raw.raceDate ?? raw.matchDate),
   predictionClosesAt: raw.predictionClosesAt ? asString(raw.predictionClosesAt) : undefined,
   distanceM: asNumber(raw.distanceM),
   trackType: asString(raw.trackType ?? raw.arenaLocation ?? raw.location, '-'),
@@ -151,9 +172,14 @@ const mapRound = (raw: RawRecord, index = 0): RaceRoundItem => ({
   recordedAt: raw.recordedAt ? asString(raw.recordedAt) : undefined,
 });
 
-const toRacePayload = (tournamentId: number | string, data: RaceFormData) => ({
-  tournamentId: Number(tournamentId),
-  scheduleId: data.scheduleId ? Number(data.scheduleId) : undefined,
+const mapScheduleOption = (raw: RawRecord, index = 0): RaceScheduleOption => ({
+  scheduleId: asNumber(raw.scheduleId ?? raw.id, index + 1),
+  raceDate: asString(raw.raceDate ?? raw.scheduleDate ?? raw.date),
+  dayNumber: asNumber(raw.dayNumber ?? raw.day, index + 1),
+  title: asString(raw.title ?? raw.scheduleTitle ?? raw.name, `Day ${index + 1}`),
+});
+
+const toRacePayload = (data: RaceFormData) => ({
   name: data.name.trim(),
   raceNumber: Number(data.raceNumber),
   rankGroup: data.rankGroup.trim(),
@@ -178,8 +204,8 @@ const toRoundPayload = (raceId: number | string, data: RaceRoundFormData) => ({
   recordedAt: data.recordedAt || undefined,
 });
 
-let mockRacesByTournament = new Map<string, RaceCrudItem[]>();
-let mockRoundsByRace = new Map<string, RaceRoundItem[]>();
+const mockRacesByTournament = new Map<string, RaceCrudItem[]>();
+const mockRoundsByRace = new Map<string, RaceRoundItem[]>();
 
 const resolveScheduleId = async (tournamentId: number | string, scheduleId?: number) => {
   if (scheduleId) {
@@ -195,6 +221,26 @@ const resolveScheduleId = async (tournamentId: number | string, scheduleId?: num
   }
 
   return resolvedScheduleId;
+};
+
+const getScheduleOptions = async (tournamentId: number | string): Promise<RaceScheduleOption[]> => {
+  try {
+    const response = await apiClient.get(`/api/v1/admin/tournaments/${tournamentId}/get-schedule-list`);
+    return unwrapApiList<RawRecord>(response)
+      .map(mapScheduleOption)
+      .filter((schedule) => schedule.scheduleId > 0)
+      .sort((first, second) => first.raceDate.localeCompare(second.raceDate) || first.dayNumber - second.dayNumber);
+  } catch {
+    const tournament = await tournamentService.getTournamentById(tournamentId);
+    return tournament.schedule
+      .map((schedule, index) => mapScheduleOption({
+        scheduleId: schedule.matchId.replace(/\D/g, ''),
+        raceDate: schedule.matchDate,
+        dayNumber: index + 1,
+        title: schedule.round || schedule.matchName,
+      }, index))
+      .filter((schedule) => schedule.scheduleId > 0);
+  }
 };
 
 const raceFromMatch = (match: TournamentMatch, tournamentId: number | string, index: number): RaceCrudItem => ({
@@ -224,6 +270,8 @@ const ensureMockRaces = async (tournamentId: number | string) => {
 };
 
 export const raceCrudService = {
+  getScheduleOptions,
+
   async getRacesByTournament(tournamentId: number | string): Promise<RaceCrudItem[]> {
     try {
       const response = await apiClient.get(`/api/tournaments/${tournamentId}/get-race-list`);
@@ -235,12 +283,12 @@ export const raceCrudService = {
 
   async createRace(tournamentId: number | string, data: RaceFormData): Promise<RaceCrudItem> {
     const scheduleId = await resolveScheduleId(tournamentId, data.scheduleId);
-    const response = await apiClient.post(`/api/v1/admin/schedules/${scheduleId}/create-race`, toRacePayload(tournamentId, data));
+    const response = await apiClient.post(`/api/v1/admin/schedules/${scheduleId}/create-race`, toRacePayload(data));
     return mapRace(unwrapApiData<RawRecord>(response));
   },
 
-  async updateRace(raceId: number | string, tournamentId: number | string, data: RaceFormData): Promise<RaceCrudItem> {
-    const response = await apiClient.put(`/api/v1/admin/races/update-race/${raceId}`, toRacePayload(tournamentId, data));
+  async updateRace(raceId: number | string, data: RaceFormData): Promise<RaceCrudItem> {
+    const response = await apiClient.put(`/api/v1/admin/races/update-race/${raceId}`, toRacePayload(data));
     return mapRace(unwrapApiData<RawRecord>(response));
   },
 

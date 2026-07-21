@@ -1,4 +1,4 @@
-import { apiClient, unwrapApiData, unwrapApiList } from '../../services/apiClient';
+import { apiClient, getApiResponseMessage, unwrapApiData, unwrapApiList } from '../../services/apiClient';
 
 export type AdminTournamentOption = {
   tournamentId: number;
@@ -19,6 +19,7 @@ export type AdminScheduleItem = {
   note: string;
   createdAt?: string;
   updatedAt?: string;
+  responseMessage?: string;
 };
 
 export type AdminScheduleFormData = {
@@ -56,6 +57,7 @@ export type AdminRaceItem = {
   registeredHorseCount?: number;
   acceptedJockeyCount?: number;
   assignedRefereeCount?: number;
+  responseMessage?: string;
 };
 
 export type AdminRaceFormData = {
@@ -120,6 +122,20 @@ export const toDateTimeInputValue = (value: unknown, fallback = '') => {
 
   const offsetMs = date.getTimezoneOffset() * 60 * 1000;
   return new Date(date.getTime() - offsetMs).toISOString().slice(0, 16);
+};
+
+const toScheduledAtValue = (value: unknown) => {
+  const text = asString(value);
+
+  if (!text) {
+    return '';
+  }
+
+  if (/^\d{4}-\d{2}-\d{2}$/.test(text)) {
+    return `${text}T09:00`;
+  }
+
+  return text;
 };
 
 const toApiInstant = (value: string) => {
@@ -220,7 +236,7 @@ const mapRace = (raw: RawRecord, index: number): AdminRaceItem => ({
   raceNumber: asNumber(raw.raceNumber, index + 1),
   rankGroup: asString(raw.rankGroup, 'A').slice(0, 1).toUpperCase(),
   lapCount: asNumber(raw.lapCount, 1),
-  scheduledAt: asString(raw.scheduledAt ?? raw.raceDate, new Date().toISOString()),
+  scheduledAt: toScheduledAtValue(raw.scheduledAt ?? raw.raceDate),
   predictionClosesAt: raw.predictionClosesAt ? asString(raw.predictionClosesAt) : undefined,
   distanceM: asNumber(raw.distanceM),
   trackType: asString(raw.trackType, '-'),
@@ -321,7 +337,10 @@ export const adminScheduleRaceApi = {
     const response = await apiClient.post(`/api/v1/admin/tournaments/${tournamentId}/create-schedule`, payload);
     const responseData = getResponseObject(unwrapApiData<unknown>(response));
 
-    return mapSchedule({ ...payload, tournamentId, ...responseData }, 0, tournament);
+    return {
+      ...mapSchedule({ ...payload, tournamentId, ...responseData }, 0, tournament),
+      responseMessage: getApiResponseMessage(response),
+    };
   },
 
   async updateSchedule(
@@ -333,7 +352,10 @@ export const adminScheduleRaceApi = {
     const response = await apiClient.put(`/api/v1/admin/schedules/update-schedule/${scheduleId}`, payload);
     const responseData = getResponseObject(unwrapApiData<unknown>(response));
 
-    return mapSchedule({ ...payload, scheduleId, ...responseData }, 0, tournament);
+    return {
+      ...mapSchedule({ ...payload, scheduleId, ...responseData }, 0, tournament),
+      responseMessage: getApiResponseMessage(response),
+    };
   },
 
   async getRacesByTournament(tournamentId: number | string): Promise<AdminRaceItem[]> {
@@ -365,7 +387,10 @@ export const adminScheduleRaceApi = {
     const response = await apiClient.post(`/api/v1/admin/schedules/${scheduleId}/create-race`, payload);
     const responseData = getResponseObject(unwrapApiData<unknown>(response));
 
-    return mapRace({ ...payload, scheduleId, ...responseData }, 0);
+    return {
+      ...mapRace({ ...payload, scheduleId, ...responseData }, 0),
+      responseMessage: getApiResponseMessage(response),
+    };
   },
 
   async updateRace(raceId: number | string, data: AdminRaceFormData): Promise<AdminRaceItem> {
@@ -373,24 +398,31 @@ export const adminScheduleRaceApi = {
     const response = await apiClient.put(`/api/v1/admin/races/update-race/${raceId}`, payload);
     const responseData = getResponseObject(unwrapApiData<unknown>(response));
 
-    return mapRace({ ...payload, raceId, ...responseData }, 0);
+    return {
+      ...mapRace({ ...payload, raceId, ...responseData }, 0),
+      responseMessage: getApiResponseMessage(response),
+    };
   },
 
   async startRace(
     raceId: number | string,
     data: { forceCloseBetting?: boolean; note?: string } = {},
-  ): Promise<void> {
-    await apiClient.patch(`/api/v1/admin/races/${raceId}/start`, {
+  ): Promise<string> {
+    const response = await apiClient.patch(`/api/v1/admin/races/${raceId}/start`, {
       forceCloseBetting: data.forceCloseBetting ?? true,
       note: data.note?.trim() || undefined,
     });
+
+    return getApiResponseMessage(response);
   },
 
-  async completeRace(raceId: number | string): Promise<void> {
-    await apiClient.patch(`/api/v1/admin/races/${raceId}/complete`);
+  async completeRace(raceId: number | string): Promise<string> {
+    const response = await apiClient.patch(`/api/v1/admin/races/${raceId}/complete`);
+    return getApiResponseMessage(response);
   },
 
-  async cancelRace(raceId: number | string): Promise<void> {
-    await apiClient.patch(`/api/v1/admin/races/cancel-race/${raceId}`);
+  async cancelRace(raceId: number | string): Promise<string> {
+    const response = await apiClient.patch(`/api/v1/admin/races/cancel-race/${raceId}`);
+    return getApiResponseMessage(response);
   },
 };

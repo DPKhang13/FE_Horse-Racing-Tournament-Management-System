@@ -10,6 +10,7 @@ import {
   X,
 } from 'lucide-react';
 import { getApiErrorMessage } from '../../services/apiClient';
+import { useToastNotifications } from '../../hooks/useToastNotifications';
 import {
   adminScheduleRaceApi,
   type AdminScheduleFormData,
@@ -88,7 +89,10 @@ const AdminSchedulePage = () => {
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [formData, setFormData] = useState<AdminScheduleFormData>(emptyScheduleForm);
   const [formErrors, setFormErrors] = useState<ScheduleFormErrors>({});
+  const [formError, setFormError] = useState('');
   const [notice, setNotice] = useState<Notice | null>(null);
+
+  useToastNotifications([notice]);
 
   const selectedTournament = useMemo(
     () => tournaments.find((tournament) => tournament.tournamentId === selectedTournamentId) ?? null,
@@ -131,11 +135,19 @@ const AdminSchedulePage = () => {
   };
 
   useEffect(() => {
-    void loadTournaments();
+    const timeoutId = window.setTimeout(() => {
+      void loadTournaments();
+    }, 0);
+
+    return () => window.clearTimeout(timeoutId);
   }, []);
 
   useEffect(() => {
-    void loadSchedules();
+    const timeoutId = window.setTimeout(() => {
+      void loadSchedules();
+    }, 0);
+
+    return () => window.clearTimeout(timeoutId);
   }, [selectedTournamentId]);
 
   const filteredSchedules = useMemo(() => {
@@ -172,6 +184,7 @@ const AdminSchedulePage = () => {
       note: '',
     });
     setFormErrors({});
+    setFormError('');
     setIsFormOpen(true);
   };
 
@@ -179,6 +192,7 @@ const AdminSchedulePage = () => {
     setEditingSchedule(schedule);
     setFormData(toFormData(schedule));
     setFormErrors({});
+    setFormError('');
     setIsFormOpen(true);
 
     try {
@@ -195,21 +209,24 @@ const AdminSchedulePage = () => {
     setEditingSchedule(null);
     setFormData(emptyScheduleForm);
     setFormErrors({});
+    setFormError('');
   };
 
   const handleFieldChange = <K extends keyof AdminScheduleFormData>(field: K, value: AdminScheduleFormData[K]) => {
     setFormData((current) => ({ ...current, [field]: value }));
     setFormErrors((current) => ({ ...current, [field]: undefined }));
+    setFormError('');
   };
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
     if (!selectedTournamentId || !selectedTournament) {
-      setNotice({ tone: 'error', text: 'Select a tournament before saving a schedule.' });
+      setFormError('Select a tournament before saving a schedule.');
       return;
     }
 
+    setFormError('');
     const errors = validateScheduleForm(formData);
     setFormErrors(errors);
 
@@ -221,18 +238,22 @@ const AdminSchedulePage = () => {
     setNotice(null);
 
     try {
+      let savedSchedule: AdminScheduleItem;
+      let fallbackMessage: string;
+
       if (editingSchedule) {
-        await adminScheduleRaceApi.updateSchedule(editingSchedule.scheduleId, formData, selectedTournament);
-        setNotice({ tone: 'success', text: 'Schedule updated successfully.' });
+        savedSchedule = await adminScheduleRaceApi.updateSchedule(editingSchedule.scheduleId, formData, selectedTournament);
+        fallbackMessage = 'Schedule updated successfully.';
       } else {
-        await adminScheduleRaceApi.createSchedule(selectedTournamentId, formData, selectedTournament);
-        setNotice({ tone: 'success', text: 'Schedule created successfully.' });
+        savedSchedule = await adminScheduleRaceApi.createSchedule(selectedTournamentId, formData, selectedTournament);
+        fallbackMessage = 'Schedule created successfully.';
       }
 
       closeFormModal();
       await loadSchedules(selectedTournamentId, selectedTournament);
+      setNotice({ tone: 'success', text: savedSchedule.responseMessage || fallbackMessage });
     } catch (error) {
-      setNotice({ tone: 'error', text: getApiErrorMessage(error, 'Unable to save schedule.') });
+      setFormError(getApiErrorMessage(error, 'Unable to save schedule.'));
     } finally {
       setIsSaving(false);
     }
@@ -389,6 +410,7 @@ const AdminSchedulePage = () => {
             <ScheduleForm
               formData={formData}
               formErrors={formErrors}
+              formError={formError}
               isSaving={isSaving}
               isEditing={Boolean(editingSchedule)}
               onSubmit={handleSubmit}
@@ -422,7 +444,10 @@ const MetricCard = ({ icon, label, value }: { icon: ReactNode; label: string; va
 );
 
 const StatusBanner = ({ tone, text }: Notice) => (
-  <div className={`mb-6 rounded-md border px-4 py-3 text-body-sm font-semibold ${tone === 'success' ? 'border-secondary/30 bg-secondary-container/30 text-secondary' : 'border-error/30 bg-error-container/20 text-error'}`}>
+  <div
+    role={tone === 'error' ? 'alert' : 'status'}
+    className={`mb-6 whitespace-pre-wrap break-words rounded-md border px-4 py-3 text-body-sm font-semibold [overflow-wrap:anywhere] ${tone === 'success' ? 'border-secondary/30 bg-secondary-container/30 text-secondary' : 'border-error/30 bg-error-container/20 text-error'}`}
+  >
     {text}
   </div>
 );
@@ -451,11 +476,17 @@ const IconButton = ({ label, onClick, children }: { label: string; onClick: () =
 
 const Modal = ({ title, subtitle, onClose, children }: { title: string; subtitle: string; onClose: () => void; children: ReactNode }) => (
   <div className="fixed inset-0 z-[60] overflow-y-auto bg-black/60 px-4 py-8">
-    <div className="mx-auto max-w-3xl rounded-lg border border-outline-variant bg-surface-container shadow-xl">
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="schedule-form-modal-title"
+      aria-describedby="schedule-form-modal-subtitle"
+      className="mx-auto max-w-3xl rounded-lg border border-outline-variant bg-surface-container shadow-xl"
+    >
       <div className="flex items-start justify-between gap-6 border-b border-outline-variant p-6">
         <div>
-          <p className="mb-2 text-label-sm font-bold uppercase tracking-widest text-outline">{subtitle}</p>
-          <h2 className="text-headline-md font-bold text-primary">{title}</h2>
+          <p id="schedule-form-modal-subtitle" className="mb-2 text-label-sm font-bold uppercase tracking-widest text-outline">{subtitle}</p>
+          <h2 id="schedule-form-modal-title" className="text-headline-md font-bold text-primary">{title}</h2>
         </div>
         <button
           type="button"
@@ -483,6 +514,7 @@ const Field = ({ label, error, children }: { label: string; error?: string; chil
 const ScheduleForm = ({
   formData,
   formErrors,
+  formError,
   isSaving,
   isEditing,
   onSubmit,
@@ -491,6 +523,7 @@ const ScheduleForm = ({
 }: {
   formData: AdminScheduleFormData;
   formErrors: ScheduleFormErrors;
+  formError: string;
   isSaving: boolean;
   isEditing: boolean;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
@@ -498,6 +531,15 @@ const ScheduleForm = ({
   onCancel: () => void;
 }) => (
   <form onSubmit={onSubmit} className="space-y-6 p-6">
+    {formError && (
+      <div
+        role="alert"
+        aria-live="assertive"
+        className="whitespace-pre-wrap break-words rounded-md border border-error/30 bg-error-container/20 px-4 py-3 text-body-sm font-semibold text-error"
+      >
+        {formError}
+      </div>
+    )}
     <div className="grid gap-5 md:grid-cols-2">
       <Field label="Race Date" error={formErrors.raceDate}>
         <input type="date" value={formData.raceDate} onChange={(event) => onChange('raceDate', event.target.value)} className={inputClassName} />

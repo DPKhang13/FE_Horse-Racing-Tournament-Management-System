@@ -52,6 +52,7 @@ export type Tournament = {
   schedule: TournamentMatch[];
   createdAt?: string;
   updatedAt?: string;
+  responseMessage?: string;
 };
 
 export type TournamentMutationData = {
