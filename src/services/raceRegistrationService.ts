@@ -1,5 +1,14 @@
 import { apiClient, unwrapApiData, unwrapApiList } from './apiClient';
 
+export type GateAvailability = {
+  raceId: number;
+  raceName: string;
+  maxHorses: number;
+  gateCount: number;
+  availableGates: number[];
+  occupiedGates: number[];
+};
+
 export type RaceRegistrationItem = {
   regId?: number;
   id?: number;
@@ -8,6 +17,7 @@ export type RaceRegistrationItem = {
   horseId?: number;
   ownerId?: number;
   jockeyId?: number;
+  gateNumber?: number;
   status?: string;
   ownerConfirmationStatus?: string;
   registeredAt?: string;
@@ -27,6 +37,16 @@ export type RaceRegistrationFormData = {
   tournamentId: number;
   raceId: number;
   horseId: number;
+  gateNumber: number;
+  status?: string;
+  ownerConfirmationStatus?: string;
+};
+
+export type RaceRegistrationUpdateFormData = {
+  tournamentId?: number;
+  raceId?: number;
+  horseId?: number;
+  gateNumber?: number;
   status?: string;
   ownerConfirmationStatus?: string;
 };
@@ -39,17 +59,27 @@ export type AdminRaceRegistrationRejectPayload = {
   reason?: string;
 };
 
+export type RaceRegistrationCancelPayload = {
+  reason?: string;
+};
+
 const toPayload = (data: RaceRegistrationFormData) => ({
   tournamentId: Number(data.tournamentId),
   raceId: Number(data.raceId),
   horseId: Number(data.horseId),
+  gateNumber: Number(data.gateNumber),
 });
 
-const toUpdatePayload = (data: RaceRegistrationFormData) => ({
-  ...toPayload(data),
-  status: data.status?.trim(),
-  ownerConfirmationStatus: data.ownerConfirmationStatus?.trim(),
-});
+const toUpdatePayload = (data: RaceRegistrationUpdateFormData) => {
+  const payload: Record<string, unknown> = {};
+  if (data.tournamentId != null) payload.tournamentId = Number(data.tournamentId);
+  if (data.raceId != null) payload.raceId = Number(data.raceId);
+  if (data.horseId != null) payload.horseId = Number(data.horseId);
+  if (data.gateNumber != null) payload.gateNumber = Number(data.gateNumber);
+  if (data.status) payload.status = data.status.trim();
+  if (data.ownerConfirmationStatus) payload.ownerConfirmationStatus = data.ownerConfirmationStatus.trim();
+  return payload;
+};
 
 export const raceRegistrationService = {
   async getAll(): Promise<RaceRegistrationItem[]> {
@@ -67,13 +97,28 @@ export const raceRegistrationService = {
     return unwrapApiList<RaceRegistrationItem>(response);
   },
 
+  async getMyRegistrationById(id: number | string): Promise<RaceRegistrationItem> {
+    const response = await apiClient.get(`/api/race-registrations/get-my-registration/${id}`);
+    return unwrapApiData<RaceRegistrationItem>(response);
+  },
+
+  async getAvailableGates(raceId: number | string): Promise<GateAvailability> {
+    const response = await apiClient.get(`/api/races/${raceId}/available-gates`);
+    return unwrapApiData<GateAvailability>(response);
+  },
+
   async create(data: RaceRegistrationFormData): Promise<RaceRegistrationItem> {
     const response = await apiClient.post('/api/race-registrations/create', toPayload(data));
     return unwrapApiData<RaceRegistrationItem>(response);
   },
 
-  async update(id: number | string, data: RaceRegistrationFormData): Promise<RaceRegistrationItem> {
+  async update(id: number | string, data: RaceRegistrationUpdateFormData): Promise<RaceRegistrationItem> {
     const response = await apiClient.put(`/api/race-registrations/update/${id}`, toUpdatePayload(data));
+    return unwrapApiData<RaceRegistrationItem>(response);
+  },
+
+  async cancel(id: number | string, payload?: RaceRegistrationCancelPayload): Promise<RaceRegistrationItem> {
+    const response = await apiClient.patch(`/api/race-registrations/cancel/${id}`, payload ?? {});
     return unwrapApiData<RaceRegistrationItem>(response);
   },
 
@@ -85,9 +130,5 @@ export const raceRegistrationService = {
   async reject(id: number | string, payload: AdminRaceRegistrationRejectPayload = {}): Promise<RaceRegistrationItem> {
     const response = await apiClient.patch(`/api/v1/admin/race-registrations/${id}/reject`, payload);
     return unwrapApiData<RaceRegistrationItem>(response);
-  },
-
-  async delete(id: number | string): Promise<void> {
-    throw new Error(`Backend does not provide delete/cancel API for race registration ${id}.`);
   },
 };

@@ -8,6 +8,7 @@ export type RegistrationResponse = {
   horseId: number;
   ownerId: number;
   jockeyId?: number | null;
+  gateNumber?: number | null;
   status: RegistrationStatus;
   ownerConfirmationStatus?: string | null;
   ownerConfirmedAt?: string | null;

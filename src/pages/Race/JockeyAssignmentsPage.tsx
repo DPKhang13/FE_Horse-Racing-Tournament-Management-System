@@ -247,6 +247,34 @@ const JockeyAssignmentsPage = () => {
     }
   };
 
+  const renderAssignmentActions = (
+    item: JockeyAssignmentItem,
+    id: number | string,
+    status: string,
+  ) => (
+    <div className="flex flex-wrap items-center justify-end gap-2">
+      <button
+        type="button"
+        onClick={() => setViewingAssignment(item)}
+        className="cursor-pointer rounded-md border border-outline-variant px-3 py-2 text-label-sm font-bold text-primary transition-colors hover:border-primary"
+      >
+        Details
+      </button>
+      {isJockey && status === 'pending' && (
+        <>
+          <button type="button" onClick={() => void handleRespond(id, 'accepted')} className="cursor-pointer rounded-md bg-secondary px-3 py-2 text-label-sm font-bold text-on-secondary transition-opacity hover:bg-opacity-90">Accept</button>
+          <button type="button" onClick={() => void handleRespond(id, 'rejected')} className="cursor-pointer rounded-md border border-error/40 px-3 py-2 text-label-sm font-bold text-error transition-colors hover:border-error">Reject</button>
+        </>
+      )}
+      {isOwner && status === 'accepted' && (
+        <button type="button" onClick={() => void handleConfirm(id)} className="cursor-pointer rounded-md bg-secondary px-3 py-2 text-label-sm font-bold text-on-secondary transition-opacity hover:bg-opacity-90">Confirm</button>
+      )}
+      {isOwner && status === 'pending' && (
+        <button type="button" onClick={() => void handleDelete(id)} className="cursor-pointer rounded-md border border-outline-variant px-3 py-2 text-label-sm font-bold text-primary transition-colors hover:border-primary">Cancel</button>
+      )}
+    </div>
+  );
+
   return (
     <div className="min-h-screen bg-surface py-8">
       <div className="mx-auto max-w-[1440px] px-4 md:px-8">
@@ -438,100 +466,49 @@ const JockeyAssignmentsPage = () => {
               />
             </div>
 
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[1120px] text-left">
-                <thead className="border-b border-outline-variant bg-surface-container">
-                  <tr>
-                    <th className="px-4 py-3 text-label-sm uppercase tracking-wider text-outline">Tournament</th>
-                    <th className="px-4 py-3 text-label-sm uppercase tracking-wider text-outline">Race</th>
-                    <th className="px-4 py-3 text-label-sm uppercase tracking-wider text-outline">Horse</th>
-                    <th className="px-4 py-3 text-label-sm uppercase tracking-wider text-outline">Jockey</th>
-                    <th className="px-4 py-3 text-label-sm uppercase tracking-wider text-outline">Status</th>
-                    <th className="px-4 py-3 text-label-sm uppercase tracking-wider text-outline">Info</th>
-                    <th className="px-4 py-3 text-label-sm uppercase tracking-wider text-outline text-right">Action</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-outline-variant">
-                  {isLoading ? (
-                    <tr><td colSpan={7} className="px-4 py-8 text-center text-body-sm text-on-surface-variant">Loading invitations...</td></tr>
-                  ) : filteredAssignments.map((item) => {
-                    const id = item.assignmentId ?? item.id ?? '';
-                    const status = getEffectiveAssignmentStatus(item);
-                    return (
-                      <tr key={id}>
-                        <td className="px-4 py-4 text-body-sm font-semibold text-primary">{item.tournamentName ?? '-'}</td>
-                        <td className="px-4 py-4 text-body-sm text-on-surface-variant">{item.raceName ?? `Race ${item.raceId ?? '-'}`}</td>
-                        <td className="px-4 py-4">
-                          <div className="flex items-center gap-2">
-                            {item.horseAvatarUrl && (
-                              <img src={item.horseAvatarUrl} alt="" className="h-8 w-8 rounded border border-outline-variant object-cover" />
-                            )}
-                            <span className="text-body-sm text-on-surface-variant">{item.horseName ?? `Horse ${item.horseId ?? '-'}`}</span>
-                          </div>
-                        </td>
-                        <td className="px-4 py-4">
-                          <div className="flex items-center gap-2">
-                            {item.jockeyAvatarUrl && (
-                              <img src={item.jockeyAvatarUrl} alt="" className="h-8 w-8 rounded-full border border-outline-variant object-cover" />
-                            )}
-                            <span className="text-body-sm text-on-surface-variant">{item.jockeyFullName ?? `Jockey ${item.jockeyId ?? '-'}`}</span>
-                          </div>
-                        </td>
-                        <td className="px-4 py-4 text-body-sm text-on-surface-variant">
-                          {status || item.status || '-'}
-                          {item.responseDeadline && (
-                            <span className="mt-1 block text-[11px] text-outline">
-                              Deadline {formatDateTime(item.responseDeadline)}
-                            </span>
-                          )}
-                        </td>
-                        <td className="px-4 py-4">
-                          <button
-                            type="button"
-                            onClick={() => setViewingAssignment(item)}
-                            className="rounded-md border border-outline-variant px-3 py-2 text-label-sm font-bold text-primary transition-colors hover:border-primary"
-                          >
-                            Details
-                          </button>
-                        </td>
-                        <td className="px-4 py-4">
-                          <div className="flex justify-end gap-2">
-                            {isJockey && (
-                              <>
-                                {status === 'pending' && (
-                                  <>
-                                    <button type="button" onClick={() => void handleRespond(id, 'accepted')} className="rounded-md bg-secondary px-3 py-2 text-label-sm font-bold text-on-secondary">Accept</button>
-                                    <button type="button" onClick={() => void handleRespond(id, 'rejected')} className="rounded-md border border-error/40 px-3 py-2 text-label-sm font-bold text-error">Reject</button>
-                                  </>
-                                )}
-                              </>
-                            )}
-                            {isOwner && (
-                              <>
-                                {status === 'accepted' && (
-                                  <button
-                                    type="button"
-                                    onClick={() => void handleConfirm(id)}
-                                    className="rounded-md bg-secondary px-3 py-2 text-label-sm font-bold text-on-secondary"
-                                  >
-                                    Confirm
-                                  </button>
-                                )}
-                                {status === 'pending' && (
-                                  <button type="button" onClick={() => void handleDelete(id)} className="rounded-md border border-outline-variant px-3 py-2 text-label-sm font-bold text-primary">Cancel</button>
-                                )}
-                              </>
-                            )}
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                  {!isLoading && filteredAssignments.length === 0 && (
-                    <tr><td colSpan={7} className="px-4 py-8 text-center text-body-sm text-on-surface-variant">No invitations found.</td></tr>
-                  )}
-                </tbody>
-              </table>
+            <div className="grid gap-3 lg:grid-cols-2">
+              {isLoading ? (
+                <div className="rounded-lg border border-outline-variant px-4 py-8 text-center text-body-sm text-on-surface-variant lg:col-span-2">Loading invitations...</div>
+              ) : filteredAssignments.map((item) => {
+                const id = item.assignmentId ?? item.id ?? '';
+                const status = getEffectiveAssignmentStatus(item);
+                return (
+                  <article key={id} className="min-w-0 rounded-lg border border-outline-variant bg-white p-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="break-words text-body-sm font-bold text-primary">{item.raceName ?? `Race ${item.raceId ?? '-'}`}</p>
+                        <p className="mt-1 break-words text-label-sm text-outline">{item.tournamentName ?? '-'}</p>
+                      </div>
+                      <span className="shrink-0 rounded-full bg-surface-container px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-on-surface-variant">
+                        {status || item.status || '-'}
+                      </span>
+                    </div>
+
+                    <div className="mt-4 grid gap-3 rounded-md bg-surface-container-low p-3 sm:grid-cols-2">
+                      <div className="min-w-0">
+                        <p className="text-[10px] font-bold uppercase tracking-wider text-outline">Horse</p>
+                        <div className="mt-1 flex min-w-0 items-center gap-2">
+                          {item.horseAvatarUrl && <img src={item.horseAvatarUrl} alt="" className="h-8 w-8 shrink-0 rounded border border-outline-variant object-cover" />}
+                          <span className="break-words text-body-sm text-on-surface-variant">{item.horseName ?? `Horse ${item.horseId ?? '-'}`}</span>
+                        </div>
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-[10px] font-bold uppercase tracking-wider text-outline">Jockey</p>
+                        <div className="mt-1 flex min-w-0 items-center gap-2">
+                          {item.jockeyAvatarUrl && <img src={item.jockeyAvatarUrl} alt="" className="h-8 w-8 shrink-0 rounded-full border border-outline-variant object-cover" />}
+                          <span className="break-words text-body-sm text-on-surface-variant">{item.jockeyFullName ?? `Jockey ${item.jockeyId ?? '-'}`}</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {item.responseDeadline && <p className="mt-3 text-[11px] text-outline">Deadline {formatDateTime(item.responseDeadline)}</p>}
+                    <div className="mt-4 border-t border-outline-variant pt-3">{renderAssignmentActions(item, id, status)}</div>
+                  </article>
+                );
+              })}
+              {!isLoading && filteredAssignments.length === 0 && (
+                <div className="rounded-lg border border-outline-variant px-4 py-8 text-center text-body-sm text-on-surface-variant lg:col-span-2">No invitations found.</div>
+              )}
             </div>
           </div>
         </Modal>
