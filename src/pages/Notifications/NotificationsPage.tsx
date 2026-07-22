@@ -11,14 +11,17 @@ import {
   Search,
   Send,
   Trash2,
+  TriangleAlert,
   Trophy,
   UserCheck,
   X,
 } from 'lucide-react';
 import { authService } from '../../services/authService';
 import { getApiErrorMessage } from '../../services/apiClient';
-import { notificationService, type NotificationFormData, type NotificationItem } from '../../services/notificationService';
+import { useNotifications } from '../../hooks/useNotifications';
+import type { NotificationFormData, NotificationItem } from '../../services/notificationService';
 import type { UserProfile } from '../../types/user';
+import { showToast } from '../../utils/toast';
 
 type ReadFilter = 'all' | 'unread' | 'read';
 type NotificationTone = 'success' | 'warning' | 'info' | 'premium';
@@ -113,36 +116,35 @@ const formatDateTime = (value?: string) => {
 };
 
 const NotificationsPage = () => {
-  const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const [profile, setProfile] = useState<UserProfile | undefined>(() => authService.getStoredUserProfile());
   const [form, setForm] = useState<NotificationFormData>(initialForm);
   const [editingId, setEditingId] = useState<number | undefined>();
-  const [isLoading, setIsLoading] = useState(true);
   const [message, setMessage] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
   const [readFilter, setReadFilter] = useState<ReadFilter>('all');
   const [typeFilter, setTypeFilter] = useState('all');
   const [searchTerm, setSearchTerm] = useState('');
-  const canManageNotifications = profile?.roleType ? profile.roleType !== 'spectator' : false;
-
-  const loadNotifications = async () => {
-    setIsLoading(true);
-    setErrorMessage('');
-
-    try {
-      const notificationList = await notificationService.getNotifications();
-      setNotifications(notificationList);
-    } catch (error) {
-      setErrorMessage(getApiErrorMessage(error, 'Unable to load notifications.'));
-      setNotifications([]);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    void loadNotifications();
-  }, []);
+  const [pendingDelete, setPendingDelete] = useState<NotificationItem | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const canManageNotifications = profile?.roleType === 'admin';
+  const {
+    notifications,
+    unreadCount,
+    hasMore,
+    isLoading,
+    isLoadingMore,
+    error: notificationError,
+    loadMore,
+    markAsRead,
+    deleteNotification,
+    createNotification,
+    updateNotification,
+    clearError,
+  } = useNotifications({
+    scope: canManageNotifications ? 'all' : 'mine',
+    params: { size: 20 },
+  });
+  const showCreateComposer = canManageNotifications && editingId === undefined;
 
   useEffect(() => {
     const syncProfile = () => setProfile(authService.getStoredUserProfile());
@@ -157,13 +159,6 @@ const NotificationsPage = () => {
       window.removeEventListener('auth-changed', syncProfile);
     };
   }, []);
-
-  useEffect(() => {
-    if (!canManageNotifications && editingId) {
-      setEditingId(undefined);
-      setForm(initialForm);
-    }
-  }, [canManageNotifications, editingId]);
 
   const filteredNotifications = useMemo(() => {
     const normalizedSearch = searchTerm.trim().toLowerCase();
@@ -186,7 +181,6 @@ const NotificationsPage = () => {
   }, [notifications, readFilter, searchTerm, typeFilter]);
 
   const metrics = useMemo(() => {
-    const unreadCount = notifications.filter((item) => !isReadNotification(item)).length;
     const resultCount = notifications.filter((item) => item.type === 'race_result_published').length;
     const rewardCount = notifications.filter((item) => item.type === 'prediction_reward').length;
 
@@ -196,12 +190,13 @@ const NotificationsPage = () => {
       { label: 'Results', value: resultCount, tone: 'text-secondary' },
       { label: 'Rewards', value: rewardCount, tone: 'text-primary' },
     ];
-  }, [notifications]);
+  }, [notifications, unreadCount]);
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setMessage('');
     setErrorMessage('');
+    clearError();
 
     if (!canManageNotifications) {
       setErrorMessage('Your role can only view notifications.');
@@ -210,15 +205,15 @@ const NotificationsPage = () => {
 
     try {
       if (editingId) {
-        await notificationService.updateNotification(editingId, form);
+        await updateNotification(editingId, form);
         setMessage('Notification updated.');
       } else {
-        await notificationService.createNotification(form);
-        setMessage('Notification created.');
+        await createNotification(form);
+        showToast({ tone: 'success', text: 'Notification created successfully.' });
+        setMessage('');
       }
       setForm(initialForm);
       setEditingId(undefined);
-      await loadNotifications();
     } catch (error) {
       setErrorMessage(getApiErrorMessage(error, 'Could not save notification.'));
     }
@@ -248,28 +243,60 @@ const NotificationsPage = () => {
   const handleMarkRead = async (id: number) => {
     setMessage('');
     setErrorMessage('');
+    clearError();
 
     try {
-      await notificationService.markAsRead(id);
+      await markAsRead(id);
       setMessage('Notification marked as read.');
-      await loadNotifications();
     } catch (error) {
       setErrorMessage(getApiErrorMessage(error, 'Could not mark notification as read.'));
     }
   };
 
-  const handleDelete = async (id: number) => {
-    setMessage('');
-    setErrorMessage('');
+  const handleDelete = (id: number) => {
+    const item = notifications.find((notification) => notification.notificationId === id);
 
-    try {
-      await notificationService.deleteNotification(id);
-      setNotifications((current) => current.filter((item) => item.notificationId !== id));
-      setMessage('Notification deleted.');
-    } catch (error) {
-      setErrorMessage(getApiErrorMessage(error, 'Could not delete notification.'));
+    if (item) {
+      setPendingDelete(item);
+      setErrorMessage('');
+      clearError();
     }
   };
+
+  const handleDeleteConfirmed = async () => {
+    if (!pendingDelete || isDeleting) {
+      return;
+    }
+
+    const id = pendingDelete.notificationId;
+    setMessage('');
+    setErrorMessage('');
+    clearError();
+    setIsDeleting(true);
+
+    try {
+      await deleteNotification(id);
+      setPendingDelete(null);
+      showToast({ tone: 'success', text: 'Notification deleted successfully.' });
+    } catch (error) {
+      setErrorMessage(getApiErrorMessage(error, 'Could not delete notification.'));
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
+  const handleLoadMore = async () => {
+    setErrorMessage('');
+    clearError();
+
+    try {
+      await loadMore();
+    } catch (error) {
+      setErrorMessage(getApiErrorMessage(error, 'Could not load more notifications.'));
+    }
+  };
+
+  const visibleErrorMessage = errorMessage || notificationError || '';
 
   return (
     <main className="min-h-screen bg-surface text-on-surface">
@@ -295,60 +322,31 @@ const NotificationsPage = () => {
         </div>
       </section>
 
-      {(message || errorMessage) && (
+      {(message || visibleErrorMessage) && (
         <section className="mx-auto grid max-w-[1440px] gap-3 px-4 pt-8 md:px-8">
           {message && <StatusBanner tone="success" text={message} />}
-          {errorMessage && <StatusBanner tone="error" text={errorMessage} />}
+          {visibleErrorMessage && <StatusBanner tone="error" text={visibleErrorMessage} />}
         </section>
       )}
 
-      <section className={`mx-auto grid max-w-[1440px] gap-6 px-4 ${message || errorMessage ? 'py-6' : 'py-8'} md:px-8 ${canManageNotifications ? 'xl:grid-cols-[minmax(300px,420px)_minmax(0,1fr)]' : 'xl:grid-cols-1'}`}>
-        {canManageNotifications && (
+      <section className={`mx-auto grid max-w-[1440px] gap-6 px-4 ${message || visibleErrorMessage ? 'py-6' : 'py-8'} md:px-8 ${showCreateComposer ? 'xl:grid-cols-[minmax(300px,420px)_minmax(0,1fr)]' : 'xl:grid-cols-1'}`}>
+        {showCreateComposer && (
           <aside className="space-y-6">
             <section className="glass-panel rounded-xl p-5">
               <div className="mb-5 flex items-center justify-between gap-3">
                 <div>
                   <p className="text-xs font-bold uppercase tracking-[0.18em] text-secondary">Composer</p>
-                  <h2 className="font-display mt-1 text-2xl font-bold text-on-surface">
-                    {editingId ? 'Edit alert' : 'Create alert'}
-                  </h2>
+                  <h2 className="font-display mt-1 text-2xl font-bold text-on-surface">Create alert</h2>
                 </div>
-                {editingId ? (
-                  <button
-                    type="button"
-                    onClick={handleCancelEdit}
-                    className="rounded-lg border border-outline-variant/60 p-2 text-on-surface-variant transition hover:border-primary hover:text-primary"
-                    aria-label="Cancel edit"
-                    title="Cancel edit"
-                  >
-                    <X className="h-5 w-5" />
-                  </button>
-                ) : (
-                  <Send className="h-5 w-5 text-secondary" />
-                )}
+                <Send className="h-5 w-5 text-secondary" />
               </div>
 
               <form onSubmit={handleSubmit} className="grid gap-4">
-                <TextInput label="Title" value={form.title} onChange={(value) => setForm((current) => ({ ...current, title: value }))} required />
-                <TextArea label="Message" value={form.message} onChange={(value) => setForm((current) => ({ ...current, message: value }))} required />
-                <SelectInput label="Notification type" value={form.type} onChange={(value) => setForm((current) => ({ ...current, type: value }))} />
-                <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-1 2xl:grid-cols-2">
-                  <TextInput label="Reference ID" type="number" value={form.refId ? String(form.refId) : ''} onChange={(value) => setForm((current) => ({ ...current, refId: value ? Number(value) : undefined }))} />
-                  <TextInput label="Reference type" value={form.refType ?? ''} onChange={(value) => setForm((current) => ({ ...current, refType: value }))} />
-                </div>
-                <label className="flex items-center gap-3 rounded-lg border border-outline-variant/50 bg-surface-container-lowest/50 px-4 py-3 text-sm font-semibold text-on-surface">
-                  <input
-                    type="checkbox"
-                    checked={form.isRead}
-                    onChange={(event) => setForm((current) => ({ ...current, isRead: event.target.checked }))}
-                    className="h-4 w-4 accent-secondary"
-                  />
-                  Mark as read after sending
-                </label>
-                <button className="gold-gradient inline-flex items-center justify-center gap-2 rounded-lg px-5 py-3 text-sm font-extrabold text-on-primary transition active:scale-[0.99]">
-                  {editingId ? <Check className="h-4 w-4" /> : <Send className="h-4 w-4" />}
-                  {editingId ? 'Update alert' : 'Create alert'}
-                </button>
+                <NotificationFormFields
+                  form={form}
+                  mode="create"
+                  onChange={(changes) => setForm((current) => ({ ...current, ...changes }))}
+                />
               </form>
             </section>
           </aside>
@@ -358,7 +356,9 @@ const NotificationsPage = () => {
           <div className="flex flex-col gap-5 border-b border-outline-variant/40 pb-5 lg:flex-row lg:items-center lg:justify-between">
             <div>
               <p className="text-xs font-bold uppercase tracking-[0.18em] text-secondary">Inbox</p>
-              <h2 className="font-display mt-1 text-2xl font-bold text-on-surface">All notifications</h2>
+              <h2 className="font-display mt-1 text-2xl font-bold text-on-surface">
+                {canManageNotifications ? 'All system notifications' : 'My notifications'}
+              </h2>
             </div>
 
             <div className="flex flex-col gap-3 sm:flex-row">
@@ -417,12 +417,177 @@ const NotificationsPage = () => {
                 text="Try changing the filters or search keyword."
               />
             )}
+
+            {!isLoading && hasMore && (
+              <div className="flex justify-center pt-3">
+                <button
+                  type="button"
+                  onClick={() => void handleLoadMore()}
+                  disabled={isLoadingMore}
+                  className="rounded-lg border border-primary/60 px-5 py-2.5 text-sm font-bold text-primary transition hover:bg-primary/10 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {isLoadingMore ? 'Loading...' : 'Load more'}
+                </button>
+              </div>
+            )}
           </div>
         </section>
       </section>
+
+      {editingId !== undefined && (
+        <div
+          className="fixed inset-0 z-[170] flex items-center justify-center overflow-y-auto bg-black/60 px-4 py-8"
+          role="presentation"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) {
+              handleCancelEdit();
+            }
+          }}
+        >
+          <section
+            className="max-h-[calc(100vh-4rem)] w-full max-w-2xl overflow-y-auto rounded-lg border border-outline-variant/60 bg-surface-container-low p-5 shadow-2xl shadow-black/40 md:p-6"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="edit-notification-title"
+          >
+            <div className="mb-6 flex items-start justify-between gap-4 border-b border-outline-variant/40 pb-4">
+              <div className="flex min-w-0 items-center gap-3">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-primary/40 bg-primary/10 text-primary">
+                  <Edit3 className="h-5 w-5" />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-xs font-bold uppercase tracking-[0.18em] text-secondary">Notification editor</p>
+                  <h2 id="edit-notification-title" className="font-display mt-1 text-xl font-bold text-on-surface">
+                    Edit notification
+                  </h2>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={handleCancelEdit}
+                className="rounded-lg border border-outline-variant/60 p-2 text-on-surface-variant transition hover:border-primary hover:text-primary"
+                aria-label="Close notification editor"
+                title="Close"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSubmit} className="grid gap-4">
+              <NotificationFormFields
+                form={form}
+                mode="edit"
+                onChange={(changes) => setForm((current) => ({ ...current, ...changes }))}
+              />
+              <button
+                type="button"
+                onClick={handleCancelEdit}
+                className="rounded-lg border border-outline-variant/60 px-5 py-3 text-sm font-bold text-on-surface-variant transition hover:border-primary hover:text-primary"
+              >
+                Cancel
+              </button>
+            </form>
+          </section>
+        </div>
+      )}
+
+      {pendingDelete && (
+        <div
+          className="fixed inset-0 z-[180] flex items-center justify-center overflow-y-auto bg-black/60 px-4 py-8"
+          role="presentation"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget && !isDeleting) {
+              setPendingDelete(null);
+            }
+          }}
+        >
+          <section
+            className="w-full max-w-md rounded-lg border border-outline-variant/60 bg-surface-container-low p-6 shadow-2xl shadow-black/40"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="delete-notification-title"
+          >
+            <div className="flex items-start gap-4">
+              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border border-error/40 bg-error-container/25 text-error">
+                <TriangleAlert className="h-5 w-5" />
+              </div>
+              <div className="min-w-0">
+                <h2 id="delete-notification-title" className="font-display text-xl font-bold text-on-surface">
+                  Delete notification?
+                </h2>
+                <p className="mt-2 break-words text-sm leading-6 text-on-surface-variant">
+                  &quot;{pendingDelete.title}&quot; will be permanently removed. This action cannot be undone.
+                </p>
+              </div>
+            </div>
+
+            <div className="mt-6 flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setPendingDelete(null)}
+                disabled={isDeleting}
+                autoFocus
+                className="rounded-lg border border-outline-variant/60 px-4 py-2.5 text-sm font-bold text-on-surface-variant transition hover:border-primary hover:text-primary disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => void handleDeleteConfirmed()}
+                disabled={isDeleting}
+                className="inline-flex items-center gap-2 rounded-lg bg-error px-4 py-2.5 text-sm font-bold text-on-error transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                <Trash2 className="h-4 w-4" />
+                {isDeleting ? 'Deleting...' : 'Delete'}
+              </button>
+            </div>
+          </section>
+        </div>
+      )}
     </main>
   );
 };
+
+const NotificationFormFields = ({
+  form,
+  mode,
+  onChange,
+}: {
+  form: NotificationFormData;
+  mode: 'create' | 'edit';
+  onChange: (changes: Partial<NotificationFormData>) => void;
+}) => (
+  <>
+    <TextInput label="Title" value={form.title} onChange={(value) => onChange({ title: value })} required />
+    <TextArea label="Message" value={form.message} onChange={(value) => onChange({ message: value })} required />
+    <SelectInput label="Notification type" value={form.type} onChange={(value) => onChange({ type: value })} />
+    <div className="grid gap-4 md:grid-cols-2">
+      <TextInput
+        label="Reference ID"
+        type="number"
+        value={form.refId === undefined ? '' : String(form.refId)}
+        onChange={(value) => onChange({ refId: value ? Number(value) : undefined })}
+      />
+      <TextInput label="Reference type" value={form.refType ?? ''} onChange={(value) => onChange({ refType: value })} />
+    </div>
+    <label className="flex items-center gap-3 rounded-lg border border-outline-variant/50 bg-surface-container-lowest/50 px-4 py-3 text-sm font-semibold text-on-surface">
+      <input
+        type="checkbox"
+        checked={form.isRead}
+        onChange={(event) => onChange({ isRead: event.target.checked })}
+        className="h-4 w-4 accent-secondary"
+      />
+      {mode === 'edit' ? 'Mark notification as read' : 'Mark as read after sending'}
+    </label>
+    <button
+      type="submit"
+      className="gold-gradient inline-flex items-center justify-center gap-2 rounded-lg px-5 py-3 text-sm font-extrabold text-on-primary transition active:scale-[0.99]"
+    >
+      {mode === 'edit' ? <Check className="h-4 w-4" /> : <Send className="h-4 w-4" />}
+      {mode === 'edit' ? 'Update notification' : 'Create alert'}
+    </button>
+  </>
+);
 
 const NotificationCard = ({
   item,
