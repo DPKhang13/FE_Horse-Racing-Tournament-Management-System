@@ -34,6 +34,7 @@ import TournamentManagementPage from '../pages/Tournament/TournamentManagementPa
 import TournamentSchedulePage from '../pages/Tournament/TournamentSchedulePage';
 import UserManagementPage from '../pages/Admin/UserManagementPage';
 import OwnerDashboardPage from '../pages/Owner/OwnerDashboardPage';
+import AdminRaceResultsPage from '../pages/Admin/AdminRaceResultsPage';
 import RefereeDashboardPage from '../pages/Referee/RefereeDashboardPage';
 import { authService } from '../services/authService';
 
@@ -79,6 +80,7 @@ const AppRoutes = () => {
       <Route path="/admin/race-registrations" element={protectedPage(<RegistrationManagementPage />, ['admin'])} />
       <Route path="/admin/schedule" element={protectedPage(<AdminSchedulePage />, ['admin'])} />
       <Route path="/admin/races" element={protectedPage(<AdminRacesPage />, ['admin'])} />
+      <Route path="/admin/race-results" element={protectedPage(<AdminRaceResultsPage />, ['admin'])} />
       <Route path="/admin/bets" element={protectedPage(<AdminBetManagementPage />, ['admin'])} />
       <Route path="/admin/race-schedule" element={<Navigate to="/admin/schedule" replace />} />
       <Route path="/tournaments" element={protectedPage(<TournamentManagementPage />, ['admin'])} />
