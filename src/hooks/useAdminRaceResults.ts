@@ -3,6 +3,7 @@ import { getApiErrorMessage } from '../services/apiClient';
 import {
   adminRaceResultService,
   type AdminRaceResultCancelPayload,
+  type AdminRaceResultCreatePayload,
   type AdminRaceResult,
   type AdminRaceResultUpdatePayload,
   type RaceResultId,
@@ -199,6 +200,52 @@ export const useAdminRaceResults = ({
     [handleError, refreshCurrentResults, selectedRaceId],
   );
 
+  const handleCreate = useCallback(
+    async (
+      payload: AdminRaceResultCreatePayload,
+      refreshRaceId: RaceResultId | null = selectedRaceId,
+    ) => {
+      setIsLoading(true);
+      setError(null);
+
+      try {
+        await adminRaceResultService.createResult(payload);
+        showToast({ tone: 'success', text: 'Race result created.' });
+        await refreshCurrentResults(refreshRaceId);
+        return true;
+      } catch (caughtError) {
+        handleError(caughtError, 'Unable to create race result.');
+        return false;
+      } finally {
+        setIsLoading(false);
+      }
+    },
+    [handleError, refreshCurrentResults, selectedRaceId],
+  );
+
+  const handlePublishResult = useCallback(
+    async (
+      id: RaceResultId,
+      refreshRaceId: RaceResultId | null = selectedRaceId,
+    ) => {
+      setIsLoading(true);
+      setError(null);
+
+      try {
+        await adminRaceResultService.publishResult(id);
+        showToast({ tone: 'success', text: 'Race result published.' });
+        await refreshCurrentResults(refreshRaceId);
+        return true;
+      } catch (caughtError) {
+        handleError(caughtError, 'Unable to publish race result.');
+        return false;
+      } finally {
+        setIsLoading(false);
+      }
+    },
+    [handleError, refreshCurrentResults, selectedRaceId],
+  );
+
   return {
     resultList,
     selectedResult,
@@ -213,6 +260,8 @@ export const useAdminRaceResults = ({
     handlePublish,
     handleConfirm,
     handleCancel,
+    handleCreate,
+    handlePublishResult,
     handleUpdate,
   };
 };
