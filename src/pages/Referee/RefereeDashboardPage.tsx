@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { getApiErrorMessage } from '../../services/apiClient';
 import { authService } from '../../services/authService';
 import { raceOperationsService, type RefereeAssignedRaceItem } from '../../services/raceOperationsService';
+import { formatRefereeRoleLabel } from '../../utils/permissions';
 
 const normalizeStatus = (value?: string) => value?.trim().toLowerCase().replace(/[\s-]+/g, '_') ?? '';
 
@@ -122,7 +123,7 @@ const RefereeDashboardPage = () => {
                 <StatusBadge status={nextDuty.status} />
                 <h3 className="mt-4 text-body-lg font-bold text-primary">{nextDuty.raceName}</h3>
                 <p className="mt-2 text-body-sm text-on-surface-variant">{formatDateTime(nextDuty.scheduledAt)}</p>
-                <p className="mt-1 text-label-sm font-semibold text-outline">{nextDuty.refereeRole ?? 'Referee'}</p>
+                <p className="mt-1 text-label-sm font-semibold text-outline">{formatRefereeRoleLabel(nextDuty.refereeRole)}</p>
                 <button type="button" onClick={() => openRaceControl(nextDuty.raceId)}
                   className="mt-5 w-full cursor-pointer rounded-md bg-secondary px-4 py-3 text-body-sm font-bold text-on-secondary transition-opacity hover:bg-opacity-90">
                   Open race control
@@ -164,7 +165,7 @@ const RaceList = ({ races, isLoading, emptyText, onOpen }: { races: RefereeAssig
       <div className="min-w-0">
         <div className="flex flex-wrap items-center gap-2"><StatusBadge status={race.status} /><span className="text-[11px] font-semibold text-outline">Race #{race.raceId}</span></div>
         <p className="mt-2 break-words text-body-sm font-bold text-primary">{race.raceName}</p>
-        <p className="mt-1 text-label-sm text-on-surface-variant">{formatDateTime(race.scheduledAt)} ? {race.refereeRole ?? 'Referee'}</p>
+        <p className="mt-1 text-label-sm text-on-surface-variant">{formatDateTime(race.scheduledAt)} | {formatRefereeRoleLabel(race.refereeRole)}</p>
       </div>
       <span className="text-label-sm font-bold text-secondary">View control</span>
     </button>

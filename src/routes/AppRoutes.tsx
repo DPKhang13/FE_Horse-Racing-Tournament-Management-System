@@ -24,6 +24,8 @@ import AdminBetManagementPage from '../pages/Admin/AdminBetManagementPage';
 import RaceRegistrationPage from '../pages/Race/RaceRegistrationPage';
 import OwnerInvitationsPage from '../pages/Owner/OwnerInvitationsPage';
 import JockeyInvitationsPage from '../pages/Jockey/JockeyInvitationsPage';
+import JockeyDashboardPage from '../pages/Jockey/JockeyDashboardPage';
+import JockeySchedulePage from '../pages/Jockey/JockeySchedulePage';
 import RaceControlPage from '../pages/Race/RaceControlPage';
 import NotificationsPage from '../pages/Notifications/NotificationsPage';
 import WalletPaymentPage from '../pages/Wallet/WalletPaymentPage';
@@ -68,6 +70,8 @@ const AppRoutes = () => {
       <Route path="/results/:resultId" element={protectedPage(<RaceResultDetail />)} />
       <Route path="/horses" element={protectedPage(<HorseManagementPage />, ['horse_owner'])} />
       <Route path="/owner-dashboard" element={protectedPage(<OwnerDashboardPage />, ['horse_owner'])} />
+      <Route path="/jockey-dashboard" element={protectedPage(<JockeyDashboardPage />, ['jockey'])} />
+      <Route path="/jockey/schedule" element={protectedPage(<JockeySchedulePage />, ['jockey'])} />
       <Route path="/referee-dashboard" element={protectedPage(<RefereeDashboardPage />, ['race_referee'])} />
       <Route path="/spectator-dashboard" element={protectedPage(<SpectatorDashboard />, ['spectator'])} />
       <Route path="/prediction" element={protectedPage(<PredictionPage />, ['spectator'])} />

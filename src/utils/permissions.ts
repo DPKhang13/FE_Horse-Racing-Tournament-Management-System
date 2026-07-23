@@ -46,6 +46,15 @@ export const roleLabels: Record<UserRoleType, string> = {
   race_referee: 'Race Referee',
   spectator: 'Spectator',
 };
+export const formatRefereeRoleLabel = (value: unknown, fallback = 'Referee') => {
+  if (value === null || value === undefined || String(value).trim() === '') {
+    return fallback;
+  }
+
+  return String(value).trim().replace(/[_-]+/g, ' ').replace(/\s+/g, ' ')
+    .replace(/\b\w/g, (character) => character.toUpperCase());
+};
+
 
 export const canAccessRole = (roleType: UserRoleType | undefined, allowedRoles?: UserRoleType[]) => {
   if (!allowedRoles || allowedRoles.length === 0) {
@@ -66,7 +75,7 @@ export const getDefaultRouteForRole = (roleType: UserRoleType | undefined) => {
     case 'race_referee':
       return '/referee-dashboard';
     case 'jockey':
-      return '/jockey/invitations';
+      return '/jockey-dashboard';
     default:
       return '/login';
   }
@@ -86,6 +95,7 @@ export const navigationItems: NavigationItem[] = [
   { label: 'Dashboard', to: '/referee-dashboard', allowedRoles: ['race_referee'], requiresAuth: true },
   { label: 'Users', to: '/admin/users', allowedRoles: ['admin'], requiresAuth: true },
   { label: 'Dashboard', to: '/owner-dashboard', allowedRoles: ['horse_owner'], requiresAuth: true },
+  { label: 'Dashboard', to: '/jockey-dashboard', allowedRoles: ['jockey'], requiresAuth: true },
   { label: 'Tournaments', to: '/tournaments', allowedRoles: ['admin'], requiresAuth: true },
   { label: 'Schedule', to: '/admin/schedule', allowedRoles: ['admin'], requiresAuth: true },
   { label: 'Races', to: '/admin/races', allowedRoles: ['admin'], requiresAuth: true },
@@ -97,6 +107,7 @@ export const navigationItems: NavigationItem[] = [
   { label: 'Schedule', to: '/schedule', allowedRoles: ['horse_owner'], requiresAuth: true },
   { label: 'Registrations', to: '/registrations', allowedRoles: ['horse_owner'], requiresAuth: true },
   { label: 'Invitations', to: '/owner/invitations', allowedRoles: ['horse_owner'], requiresAuth: true },
+  { label: 'Schedule', to: '/jockey/schedule', allowedRoles: ['jockey'], requiresAuth: true },
   { label: 'Invitations', to: '/jockey/invitations', allowedRoles: ['jockey'], requiresAuth: true },
   { label: 'Prediction', to: '/prediction', allowedRoles: ['spectator'], requiresAuth: true },
   { label: 'Wallet', to: '/wallet', allowedRoles: ['spectator'], requiresAuth: true },

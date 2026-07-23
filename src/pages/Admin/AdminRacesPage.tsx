@@ -22,6 +22,7 @@ import { adminUserService, type AdminRefereeOption } from '../../services/adminU
 import { pointRuleService } from '../../services/pointRuleService';
 import { tournamentService, type RefereeAssignmentItem } from '../../services/tournamentService';
 import { useToastNotifications } from '../../hooks/useToastNotifications';
+import { formatRefereeRoleLabel } from '../../utils/permissions';
 import type { PointRuleRequest, PointRuleResponse } from '../../types/pointRule';
 import {
   adminScheduleRaceApi,
@@ -1428,7 +1429,7 @@ const RefereeAssignmentPanel = ({
                     </p>
                   </td>
                   <td className="px-4 py-3 text-body-sm font-semibold text-on-surface-variant">
-                    {assignment.refereeRole ?? '-'}
+                    {formatRefereeRoleLabel(assignment.refereeRole, '-')}
                   </td>
                   <td className="px-4 py-3 text-body-sm font-semibold text-on-surface-variant">
                     {formatDateTime(assignment.assignedAt)}

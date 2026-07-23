@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Calendar, ChevronRight, Clock, MapPin, Search, Trophy, X } from 'lucide-react';
-import { getApiErrorMessage, apiClient, unwrapApiData, unwrapApiList } from '../../services/apiClient';
+import { getApiErrorMessage, apiClient, unwrapApiList } from '../../services/apiClient';
 import { authService } from '../../services/authService';
 import { useToastNotifications } from '../../hooks/useToastNotifications';
 import { scheduleService, type TournamentApiItem } from '../../services/scheduleService';
@@ -12,13 +12,6 @@ const formatDate = (value?: string) => {
   const d = new Date(value);
   if (isNaN(d.getTime())) return '-';
   return new Intl.DateTimeFormat('en-US', { month: 'short', day: '2-digit', year: 'numeric' }).format(d);
-};
-
-const formatTime = (value?: string) => {
-  if (!value) return '-';
-  const d = new Date(value);
-  if (isNaN(d.getTime())) return '-';
-  return new Intl.DateTimeFormat('en-US', { hour: '2-digit', minute: '2-digit' }).format(d);
 };
 
 const formatDateTime = (value?: string) => {

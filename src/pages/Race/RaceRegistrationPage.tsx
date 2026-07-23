@@ -252,11 +252,13 @@ const RaceRegistrationPage = () => {
                 : 'Review registrations that already have a confirmed jockey assignment before approving them.'}
             </p>
           </div>
-          <button type="button" onClick={() => setIsQueueOpen(true)}
-            className="inline-flex items-center gap-2 self-start rounded-md border border-outline-variant bg-white px-4 py-2 text-body-sm font-bold text-primary shadow-sm transition-colors hover:border-primary">
-            <ClipboardList className="h-4 w-4" /> Registration queue
-            <span className="rounded-full bg-surface-container px-2 py-0.5 text-[11px] font-extrabold text-on-surface-variant">{items.length}</span>
-          </button>
+          {!isOwner && (
+            <button type="button" onClick={() => setIsQueueOpen(true)}
+              className="inline-flex items-center gap-2 self-start rounded-md border border-outline-variant bg-white px-4 py-2 text-body-sm font-bold text-primary shadow-sm transition-colors hover:border-primary">
+              <ClipboardList className="h-4 w-4" /> Registration queue
+              <span className="rounded-full bg-surface-container px-2 py-0.5 text-[11px] font-extrabold text-on-surface-variant">{items.length}</span>
+            </button>
+          )}
         </div>
 
         {isOwner ? (
@@ -308,6 +310,95 @@ const RaceRegistrationPage = () => {
         ) : (
           <section className="rounded-xl border border-outline-variant bg-white p-6 shadow-sm">
             <EmptyState title="Queue-focused view" description="This role does not register horses directly. Use the queue button to review and process requests." icon={<CheckCircle2 className="h-5 w-5" />} />
+          </section>
+        )}
+
+        {isOwner && (
+          <section className="mt-6 rounded-xl border border-outline-variant bg-white p-5 shadow-sm sm:p-6">
+            <div className="mb-5 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+              <div className="flex items-start gap-3">
+                <ClipboardList className="mt-1 h-5 w-5 shrink-0 text-secondary" />
+                <div>
+                  <h2 className="text-title-large font-bold text-primary">Registration queue</h2>
+                  <p className="mt-1 text-body-sm text-on-surface-variant">
+                    Your race registrations are shown as cards for quick review.
+                  </p>
+                </div>
+              </div>
+              <label className="relative block w-full md:max-w-sm">
+                <span className="sr-only">Search race registrations</span>
+                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-outline" />
+                <input
+                  type="search"
+                  value={queueSearch}
+                  onChange={(event) => setQueueSearch(event.target.value)}
+                  placeholder="Search horse, race, or status"
+                  className="w-full rounded-md border border-outline-variant bg-white py-2.5 pl-10 pr-3 text-body-sm text-on-surface outline-none transition-colors focus:border-primary"
+                />
+              </label>
+            </div>
+
+            {isLoading ? (
+              <EmptyState title="Loading registrations" description="Fetching your race registrations from the server." icon={<Search className="h-5 w-5" />} />
+            ) : filteredQueue.length === 0 ? (
+              <EmptyState title="No registrations found" description="Try another search or register a horse for an open race." icon={<ClipboardList className="h-5 w-5" />} />
+            ) : (
+              <div className="grid gap-4 lg:grid-cols-2 xl:grid-cols-3">
+                {filteredQueue.map((item) => {
+                  const id = item.regId ?? item.id ?? '';
+                  const isPending = normalizeStatus(item.status) === 'pending';
+                  return (
+                    <article key={id} className="flex h-full min-w-0 flex-col rounded-xl border border-outline-variant bg-surface-container-low p-5">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-secondary">REG-{id}</p>
+                          <h3 className="mt-1 truncate text-body-lg font-bold text-primary">
+                            {item.horseName ?? `Horse ${item.horseId ?? '-'}`}
+                          </h3>
+                        </div>
+                        <span className={`shrink-0 rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider ${getQueueStatusClassName(item.status)}`}>
+                          {item.status ?? '-'}
+                        </span>
+                      </div>
+
+                      <p className="mt-3 break-words text-body-sm font-semibold text-on-surface">
+                        {item.raceName ?? `Race ${item.raceId ?? '-'}`}
+                      </p>
+                      <p className="mt-1 break-words text-body-sm text-on-surface-variant">
+                        {item.tournamentName ?? `Tournament ${item.tournamentId ?? '-'}`}
+                      </p>
+
+                      <div className="mt-4 grid grid-cols-2 gap-3">
+                        <InfoPill label="Gate" value={item.gateNumber != null ? `#${item.gateNumber}` : '-'} />
+                        <InfoPill label="Schedule" value={formatDateTime(item.scheduledAt)} />
+                        <InfoPill label="Jockey" value={item.jockeyFullName ?? 'Not assigned'} />
+                        <InfoPill label="Owner confirmation" value={item.ownerConfirmationStatus ?? '-'} />
+                      </div>
+
+                      <div className="mt-auto flex flex-wrap justify-end gap-2 pt-5">
+                        <button
+                          type="button"
+                          onClick={() => setViewingRegistration(item)}
+                          className="rounded-md border border-outline-variant bg-white px-3 py-2 text-label-sm font-bold text-primary transition-colors hover:border-primary"
+                        >
+                          Details
+                        </button>
+                        {isPending && (
+                          <button
+                            type="button"
+                            disabled={cancellingId === id}
+                            onClick={() => void handleCancel(id)}
+                            className="rounded-md border border-error/40 bg-white px-3 py-2 text-label-sm font-bold text-error transition-colors hover:bg-error/5 disabled:cursor-not-allowed disabled:opacity-60"
+                          >
+                            {cancellingId === id ? 'Cancelling...' : 'Cancel'}
+                          </button>
+                        )}
+                      </div>
+                    </article>
+                  );
+                })}
+              </div>
+            )}
           </section>
         )}
       </div>
@@ -422,7 +513,7 @@ const RaceRegistrationPage = () => {
       )}
 
       {/* Registration queue */}
-      {isQueueOpen && (
+      {!isOwner && isQueueOpen && (
         <Modal title="Registration queue" subtitle="Review and processing" onClose={() => setIsQueueOpen(false)}>
           <div className="space-y-4 p-6">
             <div className="relative">

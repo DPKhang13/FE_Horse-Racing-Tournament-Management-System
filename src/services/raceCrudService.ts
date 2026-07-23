@@ -61,14 +61,6 @@ export type RaceRoundItem = {
   recordedAt?: string;
 };
 
-export type RaceRoundFormData = {
-  assignmentId?: number;
-  horseId?: number;
-  roundNumber: number;
-  position?: number;
-  lapTimeSec: number;
-  recordedAt?: string;
-};
 
 type RawRecord = Record<string, unknown>;
 
@@ -159,18 +151,6 @@ const mapRace = (raw: RawRecord, index = 0): RaceCrudItem => ({
   assignedRefereeCount: raw.assignedRefereeCount === undefined ? undefined : asNumber(raw.assignedRefereeCount),
 });
 
-const mapRound = (raw: RawRecord, index = 0): RaceRoundItem => ({
-  roundId: asNumber(raw.roundId ?? raw.id, index + 1),
-  raceId: asNumber(raw.raceId),
-  assignmentId: raw.assignmentId === undefined ? undefined : asNumber(raw.assignmentId),
-  horseId: raw.horseId === undefined ? undefined : asNumber(raw.horseId),
-  horseName: raw.horseName ? asString(raw.horseName) : undefined,
-  jockeyFullName: raw.jockeyFullName ? asString(raw.jockeyFullName) : undefined,
-  roundNumber: asNumber(raw.roundNumber, index + 1),
-  position: raw.position === undefined ? undefined : asNumber(raw.position),
-  lapTimeSec: asNumber(raw.lapTimeSec),
-  recordedAt: raw.recordedAt ? asString(raw.recordedAt) : undefined,
-});
 
 const mapScheduleOption = (raw: RawRecord, index = 0): RaceScheduleOption => ({
   scheduleId: asNumber(raw.scheduleId ?? raw.id, index + 1),
@@ -194,18 +174,8 @@ const toRacePayload = (data: RaceFormData) => ({
   status: data.status.trim(),
 });
 
-const toRoundPayload = (raceId: number | string, data: RaceRoundFormData) => ({
-  raceId: Number(raceId),
-  assignmentId: data.assignmentId ? Number(data.assignmentId) : undefined,
-  horseId: data.horseId ? Number(data.horseId) : undefined,
-  roundNumber: Number(data.roundNumber),
-  position: data.position ? Number(data.position) : undefined,
-  lapTimeSec: Number(data.lapTimeSec),
-  recordedAt: data.recordedAt || undefined,
-});
 
 const mockRacesByTournament = new Map<string, RaceCrudItem[]>();
-const mockRoundsByRace = new Map<string, RaceRoundItem[]>();
 
 const resolveScheduleId = async (tournamentId: number | string, scheduleId?: number) => {
   if (scheduleId) {
@@ -271,6 +241,11 @@ const ensureMockRaces = async (tournamentId: number | string) => {
 
 export const raceCrudService = {
   getScheduleOptions,
+  async getRaceById(raceId: number | string): Promise<RaceCrudItem> {
+    const response = await apiClient.get(`/api/v1/admin/races/get-race/${raceId}`);
+    return mapRace(unwrapApiData<RawRecord>(response));
+  },
+
 
   async getRacesByTournament(tournamentId: number | string): Promise<RaceCrudItem[]> {
     try {
@@ -308,31 +283,4 @@ export const raceCrudService = {
     }
   },
 
-  async getRoundsByRace(raceId: number | string): Promise<RaceRoundItem[]> {
-    return mockRoundsByRace.get(String(raceId)) ?? [];
-  },
-
-  async createRound(raceId: number | string, data: RaceRoundFormData): Promise<RaceRoundItem> {
-    const rounds = mockRoundsByRace.get(String(raceId)) ?? [];
-    const round = mapRound({
-      ...toRoundPayload(raceId, data),
-      roundId: Math.max(0, ...rounds.map((item) => item.roundId)) + 1,
-    });
-    mockRoundsByRace.set(String(raceId), [round, ...rounds]);
-    return round;
-  },
-
-  async updateRound(roundId: number | string, raceId: number | string, data: RaceRoundFormData): Promise<RaceRoundItem> {
-    const rounds = mockRoundsByRace.get(String(raceId)) ?? [];
-    const updatedRound = mapRound({ ...toRoundPayload(raceId, data), roundId: Number(roundId) });
-    mockRoundsByRace.set(
-      String(raceId),
-      rounds.map((round) => (String(round.roundId) === String(roundId) ? updatedRound : round)),
-    );
-    return updatedRound;
-  },
-
-  async deleteRound(roundId: number | string, raceId: number | string): Promise<void> {
-    throw new Error(`Backend does not provide delete API for lap ${roundId} in race ${raceId}.`);
-  },
 };
