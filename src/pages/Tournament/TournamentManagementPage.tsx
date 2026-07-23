@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react';
-import { Ban, CalendarDays, ClipboardList, Eye, Filter, Flag, Layers, ListChecks, Pencil, Plus, RefreshCw, Save, Search, Trash2, Trophy, Users, X } from 'lucide-react';
+import { Ban, CalendarDays, ClipboardList, Eye, Filter, Flag, ListChecks, Pencil, Plus, RefreshCw, Save, Search, Trash2, Trophy, Users, X } from 'lucide-react';
 import { motion } from 'motion/react';
 import { Link, useNavigate } from 'react-router-dom';
 import { getApiErrorMessage } from '../../services/apiClient';
 import { useToastNotifications } from '../../hooks/useToastNotifications';
-import { raceCrudService, type RaceCrudItem, type RaceFormData, type RaceRoundFormData, type RaceRoundItem, type RaceScheduleOption } from '../../services/raceCrudService';
+import { raceCrudService, type RaceCrudItem, type RaceFormData, type RaceScheduleOption } from '../../services/raceCrudService';
 import { tournamentService } from '../../services/tournamentService';
 import type {
   CreatePrizeRequest,
@@ -89,14 +89,6 @@ const emptyRaceFormData: RaceFormData = {
   status: 'scheduled',
 };
 
-const emptyRoundFormData: RaceRoundFormData = {
-  assignmentId: undefined,
-  horseId: undefined,
-  roundNumber: 1,
-  position: undefined,
-  lapTimeSec: 0,
-  recordedAt: '',
-};
 
 const prizePositionLabels: Record<number, string> = {
   1: 'First',
@@ -1459,15 +1451,10 @@ const TournamentPrizeForm = ({
 const RaceCrudPanel = ({ tournament }: { tournament: Tournament }) => {
   const [races, setRaces] = useState<RaceCrudItem[]>([]);
   const [scheduleOptions, setScheduleOptions] = useState<RaceScheduleOption[]>([]);
-  const [selectedRace, setSelectedRace] = useState<RaceCrudItem | null>(null);
   const [raceForm, setRaceForm] = useState<RaceFormData>(emptyRaceFormData);
-  const [rounds, setRounds] = useState<RaceRoundItem[]>([]);
-  const [roundForm, setRoundForm] = useState<RaceRoundFormData>(emptyRoundFormData);
   const [editingRaceId, setEditingRaceId] = useState<number | null>(null);
-  const [editingRoundId, setEditingRoundId] = useState<number | null>(null);
   const [isLoadingRaces, setIsLoadingRaces] = useState(true);
   const [isLoadingSchedules, setIsLoadingSchedules] = useState(true);
-  const [isLoadingRounds, setIsLoadingRounds] = useState(false);
   const [message, setMessage] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
   const [showRaceSuccess, setShowRaceSuccess] = useState(false);
@@ -1489,13 +1476,6 @@ const RaceCrudPanel = ({ tournament }: { tournament: Tournament }) => {
     try {
       const data = await raceCrudService.getRacesByTournament(tournament.tournamentId);
       setRaces(data);
-      setSelectedRace((current) => {
-        if (!current) {
-          return data[0] ?? null;
-        }
-
-        return data.find((race) => race.raceId === current.raceId) ?? data[0] ?? null;
-      });
     } catch (error) {
       setErrorMessage(getApiErrorMessage(error, 'Unable to load races.'));
     } finally {
@@ -1529,23 +1509,6 @@ const RaceCrudPanel = ({ tournament }: { tournament: Tournament }) => {
     }
   }, [tournament.tournamentId]);
 
-  const loadRounds = useCallback(async (race: RaceCrudItem | null) => {
-    if (!race) {
-      setRounds([]);
-      return;
-    }
-
-    setIsLoadingRounds(true);
-    setErrorMessage('');
-
-    try {
-      setRounds(await raceCrudService.getRoundsByRace(race.raceId));
-    } catch (error) {
-      setErrorMessage(getApiErrorMessage(error, 'Unable to load laps.'));
-    } finally {
-      setIsLoadingRounds(false);
-    }
-  }, []);
 
   useEffect(() => {
     const timeoutId = window.setTimeout(() => {
@@ -1563,13 +1526,6 @@ const RaceCrudPanel = ({ tournament }: { tournament: Tournament }) => {
     return () => window.clearTimeout(timeoutId);
   }, [loadScheduleOptions]);
 
-  useEffect(() => {
-    const timeoutId = window.setTimeout(() => {
-      void loadRounds(selectedRace);
-    }, 0);
-
-    return () => window.clearTimeout(timeoutId);
-  }, [selectedRace, loadRounds]);
 
   const resetRaceForm = () => {
     const firstSchedule = scheduleOptions[0];
@@ -1595,7 +1551,6 @@ const RaceCrudPanel = ({ tournament }: { tournament: Tournament }) => {
     const normalizedRankGroup = race.rankGroup.trim().toUpperCase().slice(-1);
     const normalizedTrackType = raceTrackTypeOptions.find((trackType) => trackType.toLowerCase() === race.trackType.trim().toLowerCase());
     setEditingRaceId(race.raceId);
-    setSelectedRace(race);
     setRaceForm({
       scheduleId: race.scheduleId,
       name: race.name,
@@ -1646,7 +1601,6 @@ const RaceCrudPanel = ({ tournament }: { tournament: Tournament }) => {
       } else {
         setMessage('Race updated.');
       }
-      setSelectedRace(savedRace);
       resetRaceForm();
       await loadRaces();
     } catch (error) {
@@ -1667,56 +1621,9 @@ const RaceCrudPanel = ({ tournament }: { tournament: Tournament }) => {
     try {
       await raceCrudService.deleteRace(race.raceId, tournament.tournamentId);
       setMessage('Race cancelled.');
-      if (selectedRace?.raceId === race.raceId) {
-        setSelectedRace(null);
-      }
       await loadRaces();
     } catch (error) {
       setErrorMessage(getApiErrorMessage(error, 'Unable to cancel race.'));
-    }
-  };
-
-  const editRound = (round: RaceRoundItem) => {
-    setEditingRoundId(round.roundId);
-    setRoundForm({
-      assignmentId: round.assignmentId,
-      horseId: round.horseId,
-      roundNumber: round.roundNumber,
-      position: round.position,
-      lapTimeSec: round.lapTimeSec,
-      recordedAt: toDateTimeInputValue(round.recordedAt),
-    });
-  };
-
-  const resetRoundForm = () => {
-    setEditingRoundId(null);
-    setRoundForm({
-      ...emptyRoundFormData,
-      roundNumber: rounds.length + 1,
-      recordedAt: toDateTimeInputValue(new Date().toISOString()),
-    });
-  };
-
-  const handleRoundSubmit = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-
-    if (!selectedRace) {
-      setErrorMessage('Select a race before creating laps.');
-      return;
-    }
-
-    setMessage('');
-    setErrorMessage('');
-
-    try {
-      await (editingRoundId
-        ? raceCrudService.updateRound(editingRoundId, selectedRace.raceId, roundForm)
-        : raceCrudService.createRound(selectedRace.raceId, roundForm));
-      setMessage(editingRoundId ? 'Lap updated.' : 'Lap created.');
-      resetRoundForm();
-      await loadRounds(selectedRace);
-    } catch (error) {
-      setErrorMessage(getApiErrorMessage(error, 'Unable to save lap.'));
     }
   };
 
@@ -1736,7 +1643,7 @@ const RaceCrudPanel = ({ tournament }: { tournament: Tournament }) => {
           <p className="text-label-sm font-bold uppercase tracking-[0.2em] text-secondary mb-2">Race Management</p>
           <h2 className="font-display text-3xl font-extrabold text-primary">Races in {tournament.tournamentName}</h2>
           <p className="text-body-md text-on-surface-variant mt-2">
-            Manage race schedules, lap configurations, and track information
+            Manage race schedules, capacity, and track information
           </p>
         </div>
         <motion.button 
@@ -1784,7 +1691,7 @@ const RaceCrudPanel = ({ tournament }: { tournament: Tournament }) => {
                 <Flag className="h-10 w-10 text-outline" />
               </div>
               <h4 className="text-title-lg font-bold text-primary mb-3">No races yet</h4>
-              <p className="text-body-md text-on-surface-variant mb-8">Create your first race to get started with lap management</p>
+              <p className="text-body-md text-on-surface-variant mb-8">Create your first race to start building the tournament schedule</p>
               <motion.button 
                 type="button" 
                 onClick={resetRaceForm} 
@@ -1804,12 +1711,7 @@ const RaceCrudPanel = ({ tournament }: { tournament: Tournament }) => {
               {races.map((race) => (
                 <motion.div
                   key={race.raceId}
-                  onClick={() => setSelectedRace(race)}
-                  className={`glass-panel rounded-3xl p-6 cursor-pointer transition-all duration-300 border-2 ${
-                    selectedRace?.raceId === race.raceId
-                      ? 'border-primary shadow-xl shadow-primary/15 scale-[1.02]'
-                      : 'border-outline-variant hover:border-primary/50 hover:shadow-lg hover:shadow-primary/10'
-                  }`}
+                  className="glass-panel rounded-3xl border-2 border-outline-variant p-6 transition-all duration-300 hover:border-primary/50 hover:shadow-lg hover:shadow-primary/10"
                   variants={revealUp}
                   whileHover="hover"
                 >
@@ -1854,12 +1756,6 @@ const RaceCrudPanel = ({ tournament }: { tournament: Tournament }) => {
                       <div className="h-2 w-2 rounded-full bg-secondary animate-pulse"></div>
                       <span className="text-label-sm font-semibold text-on-surface-variant">Rank Group: {race.rankGroup}</span>
                     </div>
-                    {selectedRace?.raceId === race.raceId && (
-                      <div className="flex items-center gap-2">
-                        <div className="h-2 w-2 rounded-full bg-primary"></div>
-                        <span className="text-label-sm font-extrabold text-primary">Selected</span>
-                      </div>
-                    )}
                   </div>
                 </motion.div>
               ))}
@@ -1888,123 +1784,10 @@ const RaceCrudPanel = ({ tournament }: { tournament: Tournament }) => {
               setShowRaceSuccess(false);
               setLastCreatedRace(null);
             }}
-            onCreateLap={() => {
-              // Đảm bảo race vừa tạo được chọn (dùng trước khi set về null)
-              if (lastCreatedRace) {
-                setSelectedRace(lastCreatedRace);
-              }
-              resetRoundForm();
-              setShowRaceSuccess(false);
-              setLastCreatedRace(null);
-            }}
           />
         </motion.div>
       </motion.div>
 
-      {/* Lap Management Section */}
-      <motion.div 
-        className="glass-panel rounded-3xl p-8"
-        variants={revealUp}
-      >
-        <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between mb-8">
-          <div className="flex items-center gap-4">
-            <div className="h-14 w-14 rounded-2xl bg-secondary/10 flex items-center justify-center">
-              <Layers className="h-7 w-7 text-secondary" />
-            </div>
-            <div>
-              <h3 className="font-display text-2xl font-bold text-primary">Lap Management</h3>
-              <p className="text-body-sm text-on-surface-variant">
-                {selectedRace ? `Managing laps for: ${selectedRace.name}` : 'Select a race above to manage laps'}
-              </p>
-            </div>
-          </div>
-          <motion.button 
-            type="button" 
-            onClick={resetRoundForm} 
-            disabled={!selectedRace} 
-            className="gold-gradient inline-flex items-center justify-center gap-3 rounded-2xl px-8 py-4 text-label-lg font-extrabold text-on-primary disabled:opacity-50 disabled:cursor-not-allowed"
-            whileHover="hover"
-            whileTap="tap"
-          >
-            <Plus className="h-6 w-6" />
-            Add New Lap
-          </motion.button>
-        </div>
-
-        <motion.div 
-          className="grid gap-8 lg:grid-cols-2"
-          variants={revealContainer}
-        >
-          {/* Lap List */}
-          <motion.div variants={revealUp}>
-            {selectedRace ? (
-              isLoadingRounds ? (
-                <div className="rounded-2xl border border-outline-variant bg-surface-container-low/40 p-8 text-center">
-                  <div className="mx-auto mb-4 h-12 w-12 rounded-full bg-surface-container flex items-center justify-center">
-                    <div className="h-6 w-6 text-outline animate-spin">⚙</div>
-                  </div>
-                  <p className="text-body-md font-semibold text-on-surface-variant">Loading laps...</p>
-                </div>
-              ) : rounds.length === 0 ? (
-                <div className="rounded-2xl border border-dashed border-outline-variant bg-surface-container-low/40 p-8 text-center">
-                  <div className="mx-auto mb-4 h-14 w-14 rounded-full bg-surface-container flex items-center justify-center">
-                    <Layers className="h-7 w-7 text-outline" />
-                  </div>
-                  <h4 className="text-title-md font-bold text-primary mb-2">No laps yet</h4>
-                  <p className="text-body-sm text-on-surface-variant">Add laps to this race to get started</p>
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  {rounds.map((round) => (
-                    <motion.div 
-                      key={round.roundId} 
-                      className="rounded-2xl border border-outline-variant bg-surface-container-low/40 p-5 flex items-center justify-between"
-                      variants={revealUp}
-                    >
-                      <div className="flex items-center gap-4">
-                        <div className="h-12 w-12 rounded-xl bg-secondary/10 flex items-center justify-center">
-                          <span className="font-display text-xl font-extrabold text-secondary">{round.roundNumber}</span>
-                        </div>
-                        <div>
-                          <p className="text-body-sm font-bold text-primary">Lap {round.roundNumber}</p>
-                          <p className="text-body-xs text-on-surface-variant">
-                            {round.horseName || `Horse #${round.horseId}`} • {round.lapTimeSec}s
-                          </p>
-                        </div>
-                      </div>
-                      <div className="flex gap-2">
-                        <IconButton label={`Update lap ${round.roundNumber}`} onClick={() => editRound(round)}>
-                          <Pencil className="h-4 w-4" />
-                        </IconButton>
-                      </div>
-                    </motion.div>
-                  ))}
-                </div>
-              )
-            ) : (
-              <div className="rounded-2xl border border-dashed border-outline-variant bg-surface-container-low/40 p-8 text-center">
-                <div className="mx-auto mb-4 h-14 w-14 rounded-full bg-surface-container flex items-center justify-center">
-                  <Layers className="h-7 w-7 text-outline" />
-                </div>
-                <h4 className="text-title-md font-bold text-primary mb-2">Select a race</h4>
-                <p className="text-body-sm text-on-surface-variant">Choose a race from the list above to manage its laps</p>
-              </div>
-            )}
-          </motion.div>
-
-          {/* Lap Form */}
-          <motion.div variants={revealUp}>
-            <LapFormPanel
-              form={roundForm}
-              disabled={!selectedRace}
-              isEditing={Boolean(editingRoundId)}
-              onSubmit={handleRoundSubmit}
-              onReset={resetRoundForm}
-              onChange={(field, value) => setRoundForm((current) => ({ ...current, [field]: value }))}
-            />
-          </motion.div>
-        </motion.div>
-      </motion.div>
     </motion.section>
   );
 };
@@ -2022,7 +1805,6 @@ const RaceFormPanel = ({
   showRaceSuccess,
   lastCreatedRace,
   onDone,
-  onCreateLap,
 }: {
   form: RaceFormData;
   raceNumberOptions: number[];
@@ -2036,7 +1818,6 @@ const RaceFormPanel = ({
   showRaceSuccess?: boolean;
   lastCreatedRace?: RaceCrudItem | null;
   onDone?: () => void;
-  onCreateLap?: () => void;
 }) => {
   if (showRaceSuccess && lastCreatedRace) {
     return (
@@ -2053,21 +1834,11 @@ const RaceFormPanel = ({
           <div className="space-y-3">
             <h3 className="font-display text-2xl font-extrabold text-primary">Race Created!</h3>
             <p className="text-body-lg text-on-surface-variant">
-              {lastCreatedRace.name} is now ready for lap configurations
+              {lastCreatedRace.name} has been added to the tournament schedule
             </p>
           </div>
         </motion.div>
         <motion.div className="grid gap-4" variants={revealContainer}>
-          <motion.button
-            type="button"
-            onClick={onCreateLap}
-            className="gold-gradient w-full rounded-2xl px-8 py-4 text-label-lg font-extrabold text-on-primary"
-            variants={revealUp}
-            whileHover="hover"
-            whileTap="tap"
-          >
-            Start Adding Laps
-          </motion.button>
           <motion.button
             type="button"
             onClick={onDone}
@@ -2076,7 +1847,7 @@ const RaceFormPanel = ({
             whileHover="hover"
             whileTap="tap"
           >
-            Finish for Now
+            Done
           </motion.button>
         </motion.div>
       </motion.div>
@@ -2216,83 +1987,6 @@ const RaceFormPanel = ({
     </motion.form>
   );
 };
-
-const LapFormPanel = ({
-  form,
-  disabled,
-  isEditing,
-  onSubmit,
-  onReset,
-  onChange,
-}: {
-  form: RaceRoundFormData;
-  disabled: boolean;
-  isEditing: boolean;
-  onSubmit: (event: FormEvent<HTMLFormElement>) => void;
-  onReset: () => void;
-  onChange: <K extends keyof RaceRoundFormData>(field: K, value: RaceRoundFormData[K]) => void;
-}) => (
-  <motion.form 
-    onSubmit={onSubmit} 
-    className="glass-panel rounded-3xl p-6"
-    initial="hidden"
-    animate="visible"
-    variants={revealContainer}
-  >
-    <motion.div className="mb-6 flex items-center justify-between gap-4" variants={revealUp}>
-      <div className="flex items-center gap-3">
-        <div className="h-10 w-10 rounded-2xl bg-secondary/10 flex items-center justify-center">
-          <Layers className="h-5 w-5 text-secondary" />
-        </div>
-        <h4 className="font-display text-xl font-extrabold text-primary">
-          {isEditing ? 'Update Lap' : 'Create Lap'}
-        </h4>
-      </div>
-      <button type="button" onClick={onReset} disabled={disabled} className="text-label-sm font-extrabold text-on-surface-variant hover:text-primary transition-colors disabled:opacity-50">
-        Reset
-      </button>
-    </motion.div>
-    <fieldset disabled={disabled} className="space-y-4 disabled:opacity-60">
-      <motion.div className="grid gap-4 md:grid-cols-2" variants={revealUp}>
-        <Field label="Lap number">
-          <input type="number" min="1" value={form.roundNumber || ''} onChange={(event) => onChange('roundNumber', Number(event.target.value))} required className={inputClassName} placeholder="1" />
-        </Field>
-        <Field label="Lap time (sec)">
-          <input type="number" min="0" step="0.01" value={form.lapTimeSec || ''} onChange={(event) => onChange('lapTimeSec', Number(event.target.value))} required className={inputClassName} placeholder="45.50" />
-        </Field>
-      </motion.div>
-
-      <motion.div className="grid gap-4 md:grid-cols-2" variants={revealUp}>
-        <Field label="Position">
-          <input type="number" min="1" value={form.position ?? ''} onChange={(event) => onChange('position', event.target.value ? Number(event.target.value) : undefined)} className={inputClassName} placeholder="1" />
-        </Field>
-        <Field label="Horse ID">
-          <input type="number" min="1" value={form.horseId ?? ''} onChange={(event) => onChange('horseId', event.target.value ? Number(event.target.value) : undefined)} className={inputClassName} placeholder="123" />
-        </Field>
-      </motion.div>
-
-      <motion.div className="grid gap-4 md:grid-cols-2" variants={revealUp}>
-        <Field label="Assignment ID">
-          <input type="number" min="1" value={form.assignmentId ?? ''} onChange={(event) => onChange('assignmentId', event.target.value ? Number(event.target.value) : undefined)} className={inputClassName} placeholder="Optional" />
-        </Field>
-        <Field label="Recorded at">
-          <input type="datetime-local" value={form.recordedAt ?? ''} onChange={(event) => onChange('recordedAt', event.target.value)} className={inputClassName} />
-        </Field>
-      </motion.div>
-    </fieldset>
-
-    <motion.button 
-      type="submit" 
-      disabled={disabled} 
-      className="mt-8 w-full gold-gradient rounded-2xl px-8 py-4 text-label-lg font-extrabold text-on-primary shadow-lg shadow-primary/20 hover:shadow-xl hover:shadow-primary/30 transition-all disabled:cursor-not-allowed disabled:opacity-60"
-      variants={revealUp}
-      whileHover="hover"
-      whileTap="tap"
-    >
-      {isEditing ? 'Update Lap' : 'Create Lap'}
-    </motion.button>
-  </motion.form>
-);
 
 const TournamentDetailModal = ({
   tournament,

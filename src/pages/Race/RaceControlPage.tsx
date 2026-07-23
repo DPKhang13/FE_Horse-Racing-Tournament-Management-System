@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react';
-import { ArrowDown, ArrowUp, CheckCircle2, ClipboardList, Flag, Gauge, ShieldCheck, Trophy, Users } from 'lucide-react';
+import { ArrowDown, ArrowUp, CheckCircle2, ClipboardList, Flag, Gauge, Layers, ShieldCheck, Trophy, Users } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
 import { getApiErrorMessage } from '../../services/apiClient';
 import { authService } from '../../services/authService';
@@ -9,14 +9,55 @@ import {
   type RaceDraftResultItemInput,
   type RacePointRuleItem,
   type RaceResultDraftData,
+  type RaceResultWorkflowItem,
   type RefereeAssignedRaceItem,
   type RefereeReportFormData,
   type RefereeReportItem,
 } from '../../services/raceOperationsService';
+import { raceRoundService, type RaceRoundItem } from '../../services/raceRoundService';
+import { scheduleService, type RaceParticipantItem } from '../../services/scheduleService';
+import { raceCrudService, type RaceCrudItem } from '../../services/raceCrudService';
 import { useToastNotifications } from '../../hooks/useToastNotifications';
 import { useAdminRaceResults } from '../../hooks/useAdminRaceResults';
+import { formatRefereeRoleLabel } from '../../utils/permissions';
 
 const normalizeStatus = (value?: string) => value?.trim().toLowerCase().replace(/[\s-]+/g, '_') ?? '';
+const toDateTimeInputValue = (value?: string) => {
+  if (!value) {
+    return '';
+  }
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return '';
+  }
+
+  const localDate = new Date(date.getTime() - date.getTimezoneOffset() * 60_000);
+  return localDate.toISOString().slice(0, 16);
+};
+
+type LapEntryDraft = {
+  position: string;
+  lapTimeSec: string;
+  recordedAt: string;
+};
+
+const getLapDraftKey = (lapNumber: number, assignmentId: number) => `${lapNumber}:${assignmentId}`;
+
+const formatSeconds = (value?: number | null) => {
+  if (value === null || value === undefined || !Number.isFinite(value)) return '-';
+  return `${value.toFixed(2)}s`;
+};
+
+const roundSeconds = (value?: number | null) => {
+  if (value === null || value === undefined || !Number.isFinite(value)) return undefined;
+  return Number(value.toFixed(2));
+};
+
+const formatSecondsInput = (value?: number | null) => {
+  const rounded = roundSeconds(value);
+  return rounded === undefined ? '' : rounded.toFixed(2);
+};
 
 const normalizeDraftPositions = (items: RaceDraftResultItemInput[]) => {
   let nextPosition = 1;
@@ -68,6 +109,13 @@ const RaceControlPage = () => {
   const [participants, setParticipants] = useState<JockeyAssignmentItem[]>([]);
   const [reports, setReports] = useState<RefereeReportItem[]>([]);
   const [draft, setDraft] = useState<RaceResultDraftData | null>(null);
+  const [raceSnapshot, setRaceSnapshot] = useState<RaceCrudItem | null>(null);
+  const [raceRounds, setRaceRounds] = useState<RaceRoundItem[]>([]);
+  const [lapRanking, setLapRanking] = useState<RaceResultWorkflowItem[]>([]);
+  const [lapParticipants, setLapParticipants] = useState<RaceParticipantItem[]>([]);
+  const [selectedLapNumber, setSelectedLapNumber] = useState(1);
+  const [lapEntryDrafts, setLapEntryDrafts] = useState<Record<string, LapEntryDraft>>({});
+  const [savingLapAssignmentId, setSavingLapAssignmentId] = useState<number | null>(null);
   const [pointRules, setPointRules] = useState<RacePointRuleItem[]>([createEmptyPointRule()]);
   const [reportForm, setReportForm] = useState<RefereeReportFormData>(initialReportForm);
   const [draftItems, setDraftItems] = useState<RaceDraftResultItemInput[]>([]);
@@ -105,7 +153,7 @@ const RaceControlPage = () => {
 
   const refereeRole = normalizeStatus(activeRaceSummary?.refereeRole);
   const canEditResults = isReferee && ['chief_referee', 'main_referee'].includes(refereeRole);
-  const isRaceInProgress = normalizeStatus(activeRaceSummary?.status ?? draft?.status) === 'in_progress';
+  const isRaceInProgress = normalizeStatus(activeRaceSummary?.status ?? raceSnapshot?.status ?? draft?.status) === 'in_progress';
   const currentRefereeId = profile?.refereeProfile?.refereeId ?? profile?.userId;
   const automaticReportId = draft?.reportId
     ?? reports.find((report) => report.refereeId === currentRefereeId)?.reportId;
@@ -113,8 +161,38 @@ const RaceControlPage = () => {
     () => new Map(participants.map((participant) => [participant.assignmentId ?? participant.id ?? 0, participant])),
     [participants],
   );
+  const configuredLapCount = useMemo(
+    () => raceSnapshot?.lapCount ?? raceRounds.find((round) => round.lapCount && round.lapCount > 0)?.lapCount,
+    [raceRounds, raceSnapshot?.lapCount],
+  );
+  const lapStatsByAssignment = useMemo(() => {
+    const stats = new Map<number, { completedLaps: number; bestLapSec?: number; averageLapSec?: number }>();
+
+    lapParticipants.forEach((participant) => {
+      const participantRounds = raceRounds.filter((round) => (
+        round.assignmentId === participant.assignmentId
+        && round.lapTimeSec !== undefined
+      ));
+      const lapTimes = participantRounds
+        .map((round) => round.lapTimeSec as number)
+        .filter((time) => Number.isFinite(time) && time > 0);
+      const totalTime = lapTimes.reduce((total, time) => total + time, 0);
+
+      stats.set(participant.assignmentId, {
+        completedLaps: participantRounds.length,
+        bestLapSec: lapTimes.length > 0 ? Math.min(...lapTimes) : undefined,
+        averageLapSec: lapTimes.length > 0 ? totalTime / lapTimes.length : undefined,
+      });
+    });
+
+    return stats;
+  }, [lapParticipants, raceRounds]);
 
   const handleSelectRace = (raceId: string) => {
+    if (raceId.trim() !== normalizedRaceId) {
+      setSelectedLapNumber(1);
+      setLapEntryDrafts({});
+    }
     setSelectedRaceId(raceId);
     const nextParams = new URLSearchParams(searchParams);
     if (raceId.trim()) nextParams.set('raceId', raceId.trim());
@@ -145,6 +223,11 @@ const RaceControlPage = () => {
       setReports([]);
       setDraft(null);
       setParticipants([]);
+      setRaceRounds([]);
+      setLapRanking([]);
+      setRaceSnapshot(null);
+      setLapParticipants([]);
+      setLapEntryDrafts({});
       setDraftItems([]);
       setAdminResults([]);
       setPointRules([createEmptyPointRule()]);
@@ -155,6 +238,17 @@ const RaceControlPage = () => {
     setErrorMessage('');
 
     try {
+      const [roundData, lapParticipantData, rankingData, raceSnapshotData] = await Promise.all([
+        raceRoundService.getRoundsByRace(raceId),
+        scheduleService.getRaceParticipants(Number(raceId)),
+        raceOperationsService.getResultsByRace(raceId).catch(() => []),
+        isAdmin ? raceCrudService.getRaceById(raceId).catch(() => null) : Promise.resolve(null),
+      ]);
+      setRaceRounds(roundData);
+      setLapParticipants(lapParticipantData.filter((participant) => participant.assignmentId > 0));
+      setLapRanking(rankingData);
+      setRaceSnapshot(raceSnapshotData);
+
       if (isReferee) {
         const [reportData, draftData, assignmentData] = await Promise.all([
           raceOperationsService.getReports(raceId),
@@ -168,7 +262,7 @@ const RaceControlPage = () => {
           ? sortDraftItems(draftData.results.map((item) => ({
             assignmentId: item.assignmentId,
             finishPosition: item.finishPosition ?? undefined,
-            finishTimeSec: item.finishTimeSec ?? undefined,
+            finishTimeSec: roundSeconds(item.finishTimeSec),
             isDisqualified: item.isDisqualified,
             disqualifyReason: item.disqualifyReason ?? '',
           })))
@@ -228,6 +322,108 @@ const RaceControlPage = () => {
       setErrorMessage(getApiErrorMessage(error, 'Request failed.'));
     } finally {
       setIsBusy(false);
+    }
+  };
+
+  const updateLapEntryDraft = (assignmentId: number, field: keyof LapEntryDraft, value: string) => {
+    const draftKey = getLapDraftKey(selectedLapNumber, assignmentId);
+    setLapEntryDrafts((current) => ({
+      ...current,
+      [draftKey]: {
+        ...(current[draftKey] ?? { position: '', lapTimeSec: '', recordedAt: '' }),
+        [field]: value,
+      },
+    }));
+  };
+
+  const handleSaveLapEntry = async (participant: RaceParticipantItem) => {
+    if (!normalizedRaceId) {
+      setErrorMessage('Select a race before saving lap results.');
+      return;
+    }
+
+    if (!Number.isInteger(selectedLapNumber) || selectedLapNumber < 1) {
+      setErrorMessage('Lap number must be a positive integer.');
+      return;
+    }
+
+    if (configuredLapCount && selectedLapNumber > configuredLapCount) {
+      setErrorMessage(`Lap number cannot be greater than the configured ${configuredLapCount} laps.`);
+      return;
+    }
+
+    const existingRound = raceRounds.find((round) => (
+      round.assignmentId === participant.assignmentId
+      && round.roundNumber === selectedLapNumber
+    ));
+    const draftKey = getLapDraftKey(selectedLapNumber, participant.assignmentId);
+    const draftEntry = lapEntryDrafts[draftKey] ?? {
+      position: existingRound?.position ? String(existingRound.position) : '',
+      lapTimeSec: formatSecondsInput(existingRound?.lapTimeSec),
+      recordedAt: toDateTimeInputValue(existingRound?.recordedAt ?? new Date().toISOString()),
+    };
+    const position = Number(draftEntry?.position);
+    const lapTimeSec = roundSeconds(Number(draftEntry?.lapTimeSec));
+
+    if (!Number.isInteger(position) || position < 1) {
+      setErrorMessage(`Enter a valid position for ${participant.horseName}.`);
+      return;
+    }
+
+    if (lapTimeSec === undefined || lapTimeSec < 0.01) {
+      setErrorMessage(`Enter a lap time of at least 0.01 seconds for ${participant.horseName}.`);
+      return;
+    }
+
+    setSavingLapAssignmentId(participant.assignmentId);
+    setMessage('');
+    setErrorMessage('');
+    try {
+      const payload = {
+        assignmentId: participant.assignmentId,
+        roundNumber: selectedLapNumber,
+        position,
+        lapTimeSec,
+        recordedAt: draftEntry?.recordedAt,
+      };
+
+      if (existingRound) {
+        await raceRoundService.updateRound(existingRound.roundId, payload);
+      } else {
+        await raceRoundService.createRound(payload);
+      }
+
+      const refreshedRounds = await raceRoundService.getRoundsByRace(normalizedRaceId);
+      setRaceRounds(refreshedRounds);
+      setLapEntryDrafts((current) => {
+        const nextDrafts = { ...current };
+        delete nextDrafts[draftKey];
+        return nextDrafts;
+      });
+
+      const savedMessage = `${participant.horseName} - Lap ${selectedLapNumber} ${existingRound ? 'updated' : 'created'}.`;
+      try {
+        const recalculatedRanking = await raceOperationsService.recalculateResultsFromRounds(normalizedRaceId);
+        setLapRanking(recalculatedRanking);
+        setAdminResults(recalculatedRanking);
+        if (isReferee) {
+          setDraftItems(sortDraftItems(recalculatedRanking.map((result) => ({
+            assignmentId: result.assignmentId,
+            finishPosition: result.finishPosition ?? undefined,
+            finishTimeSec: roundSeconds(result.finishTimeSec),
+            isDisqualified: result.isDisqualified,
+            disqualifyReason: result.disqualifyReason ?? '',
+          }))));
+        }
+        setMessage(`${savedMessage} Race ranking recalculated.`);
+      } catch (rankingError) {
+        setMessage(savedMessage);
+        setErrorMessage(`Lap was saved, but ranking could not be recalculated. ${getApiErrorMessage(rankingError, 'Please retry.')}`);
+      }
+    } catch (error) {
+      setErrorMessage(getApiErrorMessage(error, 'Unable to save lap result.'));
+    } finally {
+      setSavingLapAssignmentId(null);
     }
   };
 
@@ -496,10 +692,11 @@ const RaceControlPage = () => {
             ) : isLoadingRaceData || isLoadingAdminResults ? (
               <p className="text-body-sm text-on-surface-variant">Loading workflow data...</p>
             ) : (
-              <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+              <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
                 <InfoTile label="Race ID" value={normalizedRaceId} />
-                <InfoTile label="Race Name" value={activeRaceSummary?.raceName ?? draft?.raceName ?? adminResults[0]?.raceName ?? '-'} />
-                <InfoTile label="Status" value={activeRaceSummary?.status ?? draft?.status ?? adminResults[0]?.status ?? '-'} />
+                <InfoTile label="Race Name" value={activeRaceSummary?.raceName ?? raceSnapshot?.name ?? draft?.raceName ?? adminResults[0]?.raceName ?? '-'} />
+                <InfoTile label="Tournament" value={activeRaceSummary?.tournamentName ?? raceSnapshot?.tournamentName ?? adminResults[0]?.tournamentName ?? lapRanking[0]?.tournamentName ?? '-'} />
+                <InfoTile label="Status" value={activeRaceSummary?.status ?? raceSnapshot?.status ?? draft?.status ?? adminResults[0]?.status ?? '-'} />
                 <InfoTile label={isReferee ? "Participants" : "Result records"} value={String(isReferee ? participants.length : adminResults.length)} />
               </div>
             )}
@@ -507,6 +704,159 @@ const RaceControlPage = () => {
         </section>
 
         <div className="space-y-6">
+          <section className="glass-panel rounded-xl p-6">
+            <div className="mb-5 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+              <div>
+                <div className="flex items-center gap-3">
+                  <Layers className="h-5 w-5 text-secondary" />
+                  <h2 className="font-display text-title-large font-bold text-primary">Lap results</h2>
+                </div>
+                <p className="mt-2 text-body-sm text-on-surface-variant">
+                  Save each participant result separately for the selected lap. Admin and every race referee can use this section.
+                </p>
+              </div>
+              <label className="w-full max-w-[220px] text-label-sm font-semibold text-on-surface-variant">
+                Lap number{configuredLapCount ? ` (1-${configuredLapCount})` : ''}
+                <input
+                  type="number"
+                  min="1"
+                  max={configuredLapCount}
+                  step="1"
+                  value={selectedLapNumber}
+                  onChange={(event) => {
+                    const nextLap = Number(event.target.value);
+                    setSelectedLapNumber(Number.isFinite(nextLap) ? Math.max(1, Math.trunc(nextLap)) : 1);
+                  }}
+                  className="mt-2 w-full rounded-md border border-outline-variant bg-white px-3 py-2 text-body-sm text-primary focus:border-primary focus:outline-none"
+                />
+              </label>
+            </div>
+
+            {!normalizedRaceId ? (
+              <p className="rounded-md border border-outline-variant bg-surface-container-low px-4 py-8 text-center text-body-sm text-on-surface-variant">
+                Select a race to manage lap results.
+              </p>
+            ) : isLoadingRaceData ? (
+              <p className="rounded-md border border-outline-variant bg-surface-container-low px-4 py-8 text-center text-body-sm text-on-surface-variant">
+                Loading lap results...
+              </p>
+            ) : lapParticipants.length === 0 ? (
+              <p className="rounded-md border border-outline-variant bg-surface-container-low px-4 py-8 text-center text-body-sm text-on-surface-variant">
+                No confirmed participants were found for this race.
+              </p>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[980px] text-left">
+                  <thead className="border-b border-outline-variant bg-surface-container">
+                    <tr>
+                      <th className="px-4 py-3 text-label-sm uppercase tracking-wider text-outline">Participant</th>
+                      <th className="px-4 py-3 text-label-sm uppercase tracking-wider text-outline">Position</th>
+                      <th className="px-4 py-3 text-label-sm uppercase tracking-wider text-outline">Lap time (sec)</th>
+                      <th className="px-4 py-3 text-label-sm uppercase tracking-wider text-outline">Recorded at</th>
+                      <th className="px-4 py-3 text-label-sm uppercase tracking-wider text-outline">Status</th>
+                      <th className="px-4 py-3 text-right text-label-sm uppercase tracking-wider text-outline">Action</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-outline-variant">
+                    {lapParticipants.map((participant) => {
+                      const existingRound = raceRounds.find((round) => (
+                        round.assignmentId === participant.assignmentId
+                        && round.roundNumber === selectedLapNumber
+                      ));
+                      const draftKey = getLapDraftKey(selectedLapNumber, participant.assignmentId);
+                      const entry = lapEntryDrafts[draftKey] ?? {
+                        position: existingRound?.position ? String(existingRound.position) : '',
+                        lapTimeSec: formatSecondsInput(existingRound?.lapTimeSec),
+                        recordedAt: toDateTimeInputValue(existingRound?.recordedAt ?? new Date().toISOString()),
+                      };
+
+                      return (
+                        <tr key={participant.assignmentId}>
+                          <td className="px-4 py-4">
+                            <p className="text-body-sm font-bold text-primary">{participant.horseName}</p>
+                            <p className="mt-1 text-label-sm text-on-surface-variant">
+                              {participant.jockeyName} | Gate {participant.gateNumber || '-'} | Assignment #{participant.assignmentId}
+                            </p>
+                          </td>
+                          <td className="px-4 py-4">
+                            <input type="number" min="1" step="1" value={entry.position} onChange={(event) => updateLapEntryDraft(participant.assignmentId, 'position', event.target.value)} aria-label={`Position for ${participant.horseName}`} className="w-24 rounded-md border border-outline-variant bg-white px-3 py-2 text-body-sm focus:border-primary focus:outline-none" />
+                          </td>
+                          <td className="px-4 py-4">
+                            <input type="number" min="0.01" step="0.01" value={entry.lapTimeSec} onChange={(event) => updateLapEntryDraft(participant.assignmentId, 'lapTimeSec', event.target.value)} aria-label={`Lap time for ${participant.horseName}`} className="w-32 rounded-md border border-outline-variant bg-white px-3 py-2 text-body-sm focus:border-primary focus:outline-none" />
+                          </td>
+                          <td className="px-4 py-4">
+                            <input type="datetime-local" value={entry.recordedAt} onChange={(event) => updateLapEntryDraft(participant.assignmentId, 'recordedAt', event.target.value)} aria-label={`Recorded time for ${participant.horseName}`} className="rounded-md border border-outline-variant bg-white px-3 py-2 text-body-sm focus:border-primary focus:outline-none" />
+                          </td>
+                          <td className="px-4 py-4 text-body-sm text-on-surface-variant">
+                            {existingRound ? `Saved #${existingRound.roundId}` : 'Not saved'}
+                          </td>
+                          <td className="px-4 py-4 text-right">
+                            <button type="button" onClick={() => void handleSaveLapEntry(participant)} disabled={savingLapAssignmentId !== null} className="rounded-md bg-secondary px-4 py-2 text-label-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-60">
+                              {savingLapAssignmentId === participant.assignmentId ? 'Saving...' : existingRound ? 'Update' : 'Save'}
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+
+            <div className="mt-8 border-t border-outline-variant pt-6">
+              <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+                <div>
+                  <h3 className="font-display text-title-medium font-bold text-primary">Provisional race ranking</h3>
+                  <p className="mt-1 text-body-sm text-on-surface-variant">Automatically recalculated from saved laps. Final ranking still follows the confirm and publish workflow.</p>
+                </div>
+                <span className="text-label-sm font-semibold text-on-surface-variant">{lapRanking.length} ranked participant(s)</span>
+              </div>
+              {lapRanking.length === 0 ? (
+                <p className="rounded-md bg-surface-container-low px-4 py-6 text-center text-body-sm text-on-surface-variant">Save a lap result to calculate the provisional ranking.</p>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full min-w-[920px] text-left">
+                    <thead className="border-b border-outline-variant bg-surface-container">
+                      <tr>
+                        <th className="px-4 py-3 text-label-sm uppercase tracking-wider text-outline">Rank</th>
+                        <th className="px-4 py-3 text-label-sm uppercase tracking-wider text-outline">Participant</th>
+                        <th className="px-4 py-3 text-label-sm uppercase tracking-wider text-outline">Completed</th>
+                        <th className="px-4 py-3 text-label-sm uppercase tracking-wider text-outline">Total time</th>
+                        <th className="px-4 py-3 text-label-sm uppercase tracking-wider text-outline">Best lap</th>
+                        <th className="px-4 py-3 text-label-sm uppercase tracking-wider text-outline">Average</th>
+                        <th className="px-4 py-3 text-label-sm uppercase tracking-wider text-outline">Gap</th>
+                        <th className="px-4 py-3 text-label-sm uppercase tracking-wider text-outline">Points</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-outline-variant">
+                      {lapRanking.map((result, index) => {
+                        const participant = lapParticipants.find((item) => item.assignmentId === result.assignmentId);
+                        const stats = lapStatsByAssignment.get(result.assignmentId);
+                        const leader = lapRanking[0];
+                        const leaderStats = leader ? lapStatsByAssignment.get(leader.assignmentId) : undefined;
+                        const canCompareGap = index > 0 && stats?.completedLaps === leaderStats?.completedLaps && result.finishTimeSec != null && leader?.finishTimeSec != null;
+                        const gap = canCompareGap ? Number(result.finishTimeSec) - Number(leader.finishTimeSec) : undefined;
+
+                        return (
+                          <tr key={result.resultId ?? result.assignmentId}>
+                            <td className="px-4 py-4 font-display text-title-medium font-extrabold text-secondary">#{result.finishPosition ?? index + 1}</td>
+                            <td className="px-4 py-4"><p className="text-body-sm font-bold text-primary">{participant?.horseName ?? result.horseName ?? `Assignment #${result.assignmentId}`}</p><p className="mt-1 text-label-sm text-on-surface-variant">{participant?.jockeyName ?? result.jockeyFullName ?? '-'}</p></td>
+                            <td className="px-4 py-4 text-body-sm text-on-surface-variant">{stats?.completedLaps ?? 0}{configuredLapCount ? `/${configuredLapCount}` : ''}</td>
+                            <td className="px-4 py-4 text-body-sm font-bold text-primary">{formatSeconds(result.finishTimeSec)}</td>
+                            <td className="px-4 py-4 text-body-sm text-on-surface-variant">{formatSeconds(stats?.bestLapSec)}</td>
+                            <td className="px-4 py-4 text-body-sm text-on-surface-variant">{formatSeconds(stats?.averageLapSec)}</td>
+                            <td className="px-4 py-4 text-body-sm text-on-surface-variant">{index === 0 ? 'Leader' : gap === undefined ? '-' : `+${formatSeconds(gap)}`}</td>
+                            <td className="px-4 py-4 text-body-sm font-bold text-primary">{result.pointsAwarded ?? 0}</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          </section>
+
           {isReferee && (
             <section className="grid gap-6 xl:grid-cols-2">
               <article className="glass-panel rounded-xl p-6">
@@ -540,7 +890,7 @@ const RaceControlPage = () => {
                     <Trophy className="h-5 w-5 text-secondary" />
                     <h2 className="font-display text-title-large font-bold text-primary">Race ranking</h2>
                   </div>
-                  <span className="rounded-full bg-surface-container px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-on-surface-variant">{activeRaceSummary?.refereeRole ?? 'Referee'}</span>
+                  <span className="rounded-full bg-surface-container px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-on-surface-variant">{formatRefereeRoleLabel(activeRaceSummary?.refereeRole)}</span>
                 </div>
                 {!canEditResults && (
                   <p className="mb-4 rounded-md border border-outline-variant bg-surface-container-low px-3 py-2 text-body-sm text-on-surface-variant">Only a chief or main referee can save the official draft ranking.</p>
@@ -589,6 +939,8 @@ const RaceControlPage = () => {
                     <tr>
                       <th className="px-4 py-3 text-label-sm uppercase tracking-wider text-outline">Report ID</th>
                       <th className="px-4 py-3 text-label-sm uppercase tracking-wider text-outline">Verdict</th>
+                      <th className="px-4 py-3 text-label-sm uppercase tracking-wider text-outline">Referee</th>
+                      <th className="px-4 py-3 text-label-sm uppercase tracking-wider text-outline">Role</th>
                       <th className="px-4 py-3 text-label-sm uppercase tracking-wider text-outline">Type</th>
                       <th className="px-4 py-3 text-label-sm uppercase tracking-wider text-outline">Submitted</th>
                     </tr>
@@ -598,13 +950,15 @@ const RaceControlPage = () => {
                       <tr key={report.reportId}>
                         <td className="px-4 py-4 text-body-sm font-semibold text-primary">{report.reportId}</td>
                         <td className="px-4 py-4 text-body-sm text-on-surface-variant">{report.verdict ?? '-'}</td>
+                        <td className="px-4 py-4 text-body-sm text-on-surface-variant">{report.refereeFullName ?? `Referee #${report.refereeId ?? '-'}`}</td>
+                        <td className="px-4 py-4 text-body-sm text-on-surface-variant">{formatRefereeRoleLabel(report.refereeRole)}</td>
                         <td className="px-4 py-4 text-body-sm text-on-surface-variant">{report.reportType ?? '-'}</td>
                         <td className="px-4 py-4 text-body-sm text-on-surface-variant">{formatDateTime(report.submittedAt)}</td>
                       </tr>
                     ))}
                     {reports.length === 0 && (
                       <tr>
-                        <td colSpan={4} className="px-4 py-8 text-center text-body-sm text-on-surface-variant">No reports found for this race.</td>
+                        <td colSpan={6} className="px-4 py-8 text-center text-body-sm text-on-surface-variant">No reports found for this race.</td>
                       </tr>
                     )}
                   </tbody>
@@ -712,7 +1066,7 @@ const RaceControlPage = () => {
                           <td className="px-4 py-4 text-body-sm text-on-surface-variant">{item.horseName ?? '-'}</td>
                           <td className="px-4 py-4 text-body-sm text-on-surface-variant">{item.jockeyFullName ?? '-'}</td>
                           <td className="px-4 py-4 text-body-sm text-on-surface-variant">{item.finishPosition ?? '-'}</td>
-                          <td className="px-4 py-4 text-body-sm text-on-surface-variant">{item.finishTimeSec ?? '-'}</td>
+                          <td className="px-4 py-4 text-body-sm text-on-surface-variant">{formatSeconds(item.finishTimeSec)}</td>
                           <td className="px-4 py-4 text-body-sm text-on-surface-variant">{item.pointsAwarded ?? 0}</td>
                           <td className="px-4 py-4 text-body-sm text-on-surface-variant">{item.status ?? '-'}</td>
                         </tr>
@@ -771,7 +1125,7 @@ const ParticipantResultRow = ({
       </div>
       <label className="grid gap-1">
         <span className="text-[10px] font-bold uppercase tracking-wider text-outline">Time (sec)</span>
-        <input type="number" min="0" step="0.001" disabled={item.isDisqualified} value={item.finishTimeSec ?? ''}
+        <input type="number" min="0" step="0.01" disabled={item.isDisqualified} value={item.finishTimeSec ?? ''}
           onChange={(event) => onChange({ ...item, finishTimeSec: event.target.value ? Number(event.target.value) : undefined })}
           className="w-full rounded-md border border-outline-variant bg-white px-3 py-2 text-body-sm focus:border-primary focus:outline-none disabled:opacity-50" />
       </label>

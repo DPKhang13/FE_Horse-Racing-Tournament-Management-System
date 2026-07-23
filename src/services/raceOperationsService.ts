@@ -1,4 +1,5 @@
 import { apiClient, getApiResponseMessage, unwrapApiData, unwrapApiList } from './apiClient';
+import { formatRefereeRoleLabel } from '../utils/permissions';
 
 type RawObject = Record<string, unknown>;
 
@@ -13,6 +14,7 @@ export type RacePointRuleItem = {
 export type RefereeAssignedRaceItem = {
   raceId: number;
   raceName: string;
+  tournamentName?: string;
   status: string;
   scheduledAt?: string;
   predictionClosesAt?: string;
@@ -35,6 +37,7 @@ export type RefereeReportItem = {
   raceName: string;
   refereeId?: number;
   refereeFullName?: string;
+  refereeRole?: string;
   reportType?: string;
   inspectionNotes?: string;
   violationNotes?: string;
@@ -119,6 +122,7 @@ const asString = (value: unknown, fallback = '') => {
   return String(value);
 };
 
+
 const asNumber = (value: unknown, fallback = 0) => {
   const numericValue = Number(value);
   return Number.isFinite(numericValue) ? numericValue : fallback;
@@ -166,11 +170,12 @@ const mapPointRule = (raw: RawObject): RacePointRuleItem => ({
 
 const mapAssignedRace = (raw: RawObject): RefereeAssignedRaceItem => ({
   raceId: asNumber(raw.raceId),
+  tournamentName: asString(raw.tournamentName) || undefined,
   raceName: asString(raw.raceName, 'Race'),
   status: asString(raw.status, 'scheduled'),
   scheduledAt: asString(raw.scheduledAt) || undefined,
   predictionClosesAt: asString(raw.predictionClosesAt) || undefined,
-  refereeRole: asString(raw.refereeRole) || undefined,
+  refereeRole: formatRefereeRoleLabel(raw.refereeRole, '') || undefined,
   assignmentId: asOptionalNumber(raw.assignmentId),
   assignedAt: asString(raw.assignedAt) || undefined,
 });
@@ -181,6 +186,7 @@ const mapReport = (raw: RawObject): RefereeReportItem => ({
   raceName: asString(raw.raceName, 'Race'),
   refereeId: asOptionalNumber(raw.refereeId),
   refereeFullName: asString(raw.refereeFullName) || undefined,
+  refereeRole: formatRefereeRoleLabel(raw.refereeRole, '') || undefined,
   reportType: asString(raw.reportType) || undefined,
   inspectionNotes: asString(raw.inspectionNotes) || undefined,
   violationNotes: asString(raw.violationNotes) || undefined,
@@ -254,7 +260,7 @@ const toDraftPayload = (data: { reportId?: number; results: RaceDraftResultItemI
   results: data.results.map((item) => ({
     assignmentId: Number(item.assignmentId),
     finishPosition: item.finishPosition ? Number(item.finishPosition) : undefined,
-    finishTimeSec: item.finishTimeSec ? Number(item.finishTimeSec) : undefined,
+    finishTimeSec: item.finishTimeSec ? Number(item.finishTimeSec.toFixed(2)) : undefined,
     isDisqualified: Boolean(item.isDisqualified),
     disqualifyReason: item.disqualifyReason?.trim() || undefined,
   })),
@@ -344,6 +350,16 @@ export const raceOperationsService = {
 
   async getAdminResults(raceId: number | string): Promise<RaceResultWorkflowItem[]> {
     const response = await apiClient.get(`/api/v1/admin/races/${raceId}/results/get`);
+    return unwrapApiList<RawObject>(response).map(mapWorkflowResult);
+  },
+
+  async getResultsByRace(raceId: number | string): Promise<RaceResultWorkflowItem[]> {
+    const response = await apiClient.get(`/api/race-results/race/${raceId}/get-all`);
+    return unwrapApiList<RawObject>(response).map(mapWorkflowResult);
+  },
+
+  async recalculateResultsFromRounds(raceId: number | string): Promise<RaceResultWorkflowItem[]> {
+    const response = await apiClient.post(`/api/race-results/race/${raceId}/recalculate-from-rounds`);
     return unwrapApiList<RawObject>(response).map(mapWorkflowResult);
   },
 

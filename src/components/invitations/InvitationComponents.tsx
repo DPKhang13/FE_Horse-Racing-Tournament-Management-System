@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { CalendarDays, Clock3, MapPin, X } from 'lucide-react';
+import { CalendarDays, Clock3, MapPin, Trophy, X } from 'lucide-react';
 import type { JockeyAssignmentItem } from '../../services/jockeyAssignmentService';
 import { formatInvitationDateTime, getEffectiveInvitationStatus } from './invitationUtils';
 const statusClasses: Record<string, string> = {
@@ -64,9 +64,9 @@ export const InvitationCard = ({
           <h3 className="mt-1 break-words text-body-lg font-bold text-primary">
             {assignment.raceName ?? `Race ${assignment.raceId ?? '-'}`}
           </h3>
-          {assignment.tournamentName && (
-            <p className="mt-1 break-words text-body-sm text-on-surface-variant">{assignment.tournamentName}</p>
-          )}
+          <p className="mt-2 inline-flex min-w-0 items-center gap-2 break-words text-body-sm font-semibold text-on-surface-variant">
+            <Trophy className="h-4 w-4 shrink-0 text-secondary" /> {assignment.tournamentName ?? 'Tournament information unavailable'}
+          </p>
         </div>
         <InvitationStatusBadge status={status} />
       </div>
