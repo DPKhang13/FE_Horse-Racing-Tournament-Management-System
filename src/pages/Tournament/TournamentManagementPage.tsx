@@ -48,6 +48,7 @@ const tournamentStatusOptions: TournamentStatus[] = [
   'Upcoming',
   'Registration Open',
   'Registration Closed',
+  'Ongoing',
   'Completed',
   'Cancelled',
 ];
@@ -57,6 +58,13 @@ const tournamentLocationOptions = [
 ] as const;
 const raceRankGroupOptions = ['A', 'B', 'C', 'D', 'E'] as const;
 const raceTrackTypeOptions = ['Turf', 'Dirt', 'Synthetic'] as const;
+const raceStatusOptions = [
+  { value: 'ready', label: 'Ready' },
+  { value: 'open_for_betting', label: 'Open for betting' },
+  { value: 'in_progress', label: 'In progress' },
+  { value: 'completed', label: 'Completed' },
+  { value: 'cancelled', label: 'Cancelled' },
+] as const;
 const createRaceNumberOptions = (raceCount: number, currentRaceNumber: number) =>
   Array.from({ length: Math.max(1, raceCount + 1, currentRaceNumber) }, (_, index) => index + 1);
 const emptyFormData: TournamentMutationData = {
@@ -87,7 +95,7 @@ const emptyRaceFormData: RaceFormData = {
   trackType: 'Turf',
   maxHorses: 8,
   maxReferees: 3,
-  status: 'scheduled',
+  status: 'ready',
 };
 const createDefaultPointRules = (): PointRuleRequest[] =>
   [1, 2, 3].map((finishPosition) => ({
@@ -219,6 +227,28 @@ const normalizeTournamentLocation = (value?: string) => {
   }
 
   return '';
+};
+
+const normalizeRaceCrudStatus = (status?: string) => {
+  const value = status?.trim().toLowerCase().replace(/[\s-]+/g, '_') ?? '';
+
+  if (value === 'open_for_betting' || value === 'betting_open' || (value.includes('open') && value.includes('betting'))) {
+    return 'open_for_betting';
+  }
+
+  if (value.includes('progress') || value.includes('ongoing') || value.includes('running') || value === 'live') {
+    return 'in_progress';
+  }
+
+  if (value.includes('complete') || value.includes('finish')) {
+    return 'completed';
+  }
+
+  if (value.includes('cancel')) {
+    return 'cancelled';
+  }
+
+  return 'ready';
 };
 
 const isValidDateInput = (value: string) => {
@@ -445,6 +475,7 @@ const validatePrizeRows = (rows: PrizeFormRow[]) => {
 const isTournamentWorkflowStatus = (status: TournamentStatus) =>
   status === 'Registration Open'
   || status === 'Registration Closed'
+  || status === 'Ongoing'
   || status === 'Completed';
 
 const getEditableTournamentStatuses = (selectedTournament: Tournament | null): TournamentStatus[] => {
@@ -461,7 +492,7 @@ const getEditableTournamentStatuses = (selectedTournament: Tournament | null): T
   }
 
   if (selectedTournament.status === 'Registration Closed') {
-    return ['Registration Closed'];
+    return ['Registration Closed', 'Ongoing'];
   }
 
   if (selectedTournament.status === 'Ongoing') {
@@ -550,10 +581,6 @@ const TournamentManagementPage = () => {
     const query = searchTerm.toLowerCase().trim();
 
     return tournaments.filter((tournament) => {
-      if (tournament.status === 'Ongoing') {
-        return false;
-      }
-
       const searchableValues = [
         tournament.id,
         tournament.tournamentName,
@@ -699,6 +726,8 @@ const TournamentManagementPage = () => {
           });
         } else if (shouldUseWorkflow && formData.status === 'Registration Closed') {
           finalTournament = await tournamentService.closeRegistration(selectedTournament.tournamentId);
+        } else if (shouldUseWorkflow && formData.status === 'Ongoing') {
+          finalTournament = await tournamentService.startTournament(selectedTournament.tournamentId);
         } else if (shouldUseWorkflow && formData.status === 'Completed') {
           finalTournament = await tournamentService.completeTournament(selectedTournament.tournamentId);
         }
@@ -1614,7 +1643,7 @@ const RaceCrudPanel = ({ tournament }: { tournament: Tournament }) => {
       trackType: normalizedTrackType ?? 'Turf',
       maxHorses: race.maxHorses,
       maxReferees: race.maxReferees,
-      status: race.status,
+      status: normalizeRaceCrudStatus(race.status),
     });
 
     try {
@@ -2071,10 +2100,9 @@ const RaceFormPanel = ({
         <motion.div className="grid gap-4 md:grid-cols-2" variants={revealUp}>
           <Field label="Status">
             <select value={form.status} onChange={(event) => onChange('status', event.target.value)} className={inputClassName}>
-              <option value="scheduled">Scheduled</option>
-              <option value="ongoing">Ongoing</option>
-              <option value="completed">Completed</option>
-              <option value="cancelled">Cancelled</option>
+              {raceStatusOptions.map((status) => (
+                <option key={status.value} value={status.value}>{status.label}</option>
+              ))}
             </select>
           </Field>
           <Field label="Schedule">
