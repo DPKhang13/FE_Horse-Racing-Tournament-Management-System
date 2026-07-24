@@ -46,7 +46,7 @@ type PointRuleFormData = PointRuleRequest & {
   raceId?: number;
 };
 type PointRuleFormErrors = Partial<Record<keyof PointRuleRequest, string>>;
-type RaceAction = 'start' | 'openBetting' | 'complete' | 'cancel';
+type RaceAction = 'start' | 'openBetting' | 'cancel';
 type ConfirmableRaceAction = Exclude<RaceAction, 'openBetting'>;
 type PendingRaceAction = {
   action: ConfirmableRaceAction;
@@ -159,7 +159,7 @@ const getStatusFilterValue = (status: string): Exclude<RaceStatusFilter, 'All'> 
 
 const canStartRace = (status: string) => {
   const value = normalizeStatus(status);
-  return value === 'scheduled' || value === 'ready' || value === 'pending' || isOpenForBettingStatus(status);
+  return value === 'ready' || isOpenForBettingStatus(status);
 };
 
 const canOpenBetting = (status: string) => normalizeStatus(status) === 'ready';
@@ -817,7 +817,6 @@ const AdminRacesPage = () => {
     const labels: Record<RaceAction, string> = {
       start: 'start',
       openBetting: 'open betting for',
-      complete: 'complete',
       cancel: 'cancel',
     };
 
@@ -844,8 +843,6 @@ const AdminRacesPage = () => {
           : `Race "${race.name}" is now in progress. Betting has been closed for this race.`;
       } else if (action === 'openBetting') {
         successText = await adminScheduleRaceApi.openBetting(race.raceId) || `Race "${race.name}" is now open for betting.`;
-      } else if (action === 'complete') {
-        successText = await adminScheduleRaceApi.completeRace(race.raceId) || `Race "${race.name}" completed successfully.`;
       } else {
         successText = await adminScheduleRaceApi.cancelRace(race.raceId) || `Race "${race.name}" cancelled successfully.`;
       }
@@ -1052,9 +1049,6 @@ const AdminRacesPage = () => {
                           disabled={actionRaceId === race.raceId || !canStartRace(race.status)}
                         >
                           <Play className="h-4 w-4" />
-                        </IconButton>
-                        <IconButton label={`Complete ${race.name}`} onClick={() => openRaceActionConfirmation(race, 'complete')} disabled={actionRaceId === race.raceId}>
-                          <CheckCircle2 className="h-4 w-4" />
                         </IconButton>
                         <IconButton label={`Cancel ${race.name}`} onClick={() => openRaceActionConfirmation(race, 'cancel')} disabled={actionRaceId === race.raceId} danger>
                           <Ban className="h-4 w-4" />
@@ -1272,18 +1266,10 @@ const raceActionCopy: Record<ConfirmableRaceAction, {
   start: {
     title: 'Start Race',
     question: 'Start this race now?',
-    description: 'The race will move to Ongoing and betting for this race will close immediately.',
+    description: 'The race will move to in_progress and betting for this race will close immediately.',
     confirmLabel: 'Start Race',
     processingLabel: 'Starting...',
     successTitle: 'Race Started',
-  },
-  complete: {
-    title: 'Complete Race',
-    question: 'Mark this race as completed?',
-    description: 'Confirm that all race operations are finished before completing this race.',
-    confirmLabel: 'Complete Race',
-    processingLabel: 'Completing...',
-    successTitle: 'Race Completed',
   },
   cancel: {
     title: 'Cancel Race',
@@ -1309,7 +1295,7 @@ const RaceActionConfirmationModal = ({
   onClose: () => void;
 }) => {
   const copy = raceActionCopy[action];
-  const ActionIcon = action === 'start' ? Play : action === 'complete' ? CheckCircle2 : Ban;
+  const ActionIcon = action === 'start' ? Play : Ban;
   const isDanger = action === 'cancel';
 
   return (

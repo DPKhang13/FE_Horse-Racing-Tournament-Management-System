@@ -1,6 +1,6 @@
 import { apiClient, unwrapApiData, unwrapApiList } from './apiClient';
 import { tournamentService } from './tournamentService';
-import type { MatchStatus, TournamentMatch } from '../types/tournament';
+import type { TournamentMatch } from '../types/tournament';
 
 export type RaceCrudItem = {
   raceId: number;
@@ -110,22 +110,26 @@ const toApiInstant = (value?: string) => {
   return Number.isNaN(date.getTime()) ? undefined : date.toISOString();
 };
 
-const normalizeRaceStatus = (value: unknown): MatchStatus => {
-  const text = asString(value, 'Scheduled').toLowerCase();
+const normalizeRaceStatus = (value: unknown) => {
+  const text = asString(value, 'ready').trim().toLowerCase().replace(/[\s-]+/g, '_');
 
-  if (text.includes('ongoing') || text === 'live') {
-    return 'Ongoing';
+  if (text === 'open_for_betting' || text === 'betting_open' || (text.includes('open') && text.includes('betting'))) {
+    return 'open_for_betting';
+  }
+
+  if (text.includes('progress') || text.includes('ongoing') || text.includes('running') || text === 'live') {
+    return 'in_progress';
   }
 
   if (text.includes('finish') || text.includes('complete')) {
-    return 'Finished';
+    return 'completed';
   }
 
   if (text.includes('cancel')) {
-    return 'Cancelled';
+    return 'cancelled';
   }
 
-  return 'Scheduled';
+  return 'ready';
 };
 
 const mapRace = (raw: RawRecord, index = 0): RaceCrudItem => ({
@@ -145,7 +149,7 @@ const mapRace = (raw: RawRecord, index = 0): RaceCrudItem => ({
   trackType: asString(raw.trackType ?? raw.arenaLocation ?? raw.location, '-'),
   maxHorses: asNumber(raw.maxHorses, 8),
   maxReferees: asNumber(raw.maxReferees, 3),
-  status: asString(raw.status ?? raw.matchStatus, 'scheduled'),
+  status: asString(raw.status ?? raw.matchStatus, 'ready'),
   location: raw.location ? asString(raw.location) : undefined,
   registeredHorseCount: raw.registeredHorseCount === undefined ? undefined : asNumber(raw.registeredHorseCount),
   acceptedJockeyCount: raw.acceptedJockeyCount === undefined ? undefined : asNumber(raw.acceptedJockeyCount),
@@ -171,7 +175,7 @@ const toRacePayload = (data: RaceFormData) => ({
   trackType: data.trackType.trim(),
   maxHorses: Number(data.maxHorses),
   maxReferees: Number(data.maxReferees),
-  status: data.status.trim(),
+  status: normalizeRaceStatus(data.status),
 });
 
 
@@ -225,7 +229,7 @@ const raceFromMatch = (match: TournamentMatch, tournamentId: number | string, in
   trackType: match.arenaLocation,
   maxHorses: 8,
   maxReferees: 3,
-  status: normalizeRaceStatus(match.matchStatus).toLowerCase(),
+  status: normalizeRaceStatus(match.matchStatus),
 });
 
 const ensureMockRaces = async (tournamentId: number | string) => {

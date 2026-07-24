@@ -242,7 +242,7 @@ const mapRace = (raw: RawRecord, index: number): AdminRaceItem => ({
   trackType: asString(raw.trackType, '-'),
   maxHorses: asNumber(raw.maxHorses, 8),
   maxReferees: asNumber(raw.maxReferees, 3),
-  status: asString(raw.status, 'scheduled'),
+  status: asString(raw.status, 'ready'),
   registeredHorseCount: raw.registeredHorseCount === undefined ? undefined : asNumber(raw.registeredHorseCount),
   acceptedJockeyCount: raw.acceptedJockeyCount === undefined ? undefined : asNumber(raw.acceptedJockeyCount),
   assignedRefereeCount: raw.assignedRefereeCount === undefined ? undefined : asNumber(raw.assignedRefereeCount),
@@ -418,11 +418,6 @@ export const adminScheduleRaceApi = {
 
   async openBetting(raceId: number | string): Promise<string> {
     const response = await apiClient.patch(`/api/v1/admin/races/${raceId}/open-betting`);
-    return getApiResponseMessage(response);
-  },
-
-  async completeRace(raceId: number | string): Promise<string> {
-    const response = await apiClient.patch(`/api/v1/admin/races/${raceId}/complete`);
     return getApiResponseMessage(response);
   },
 

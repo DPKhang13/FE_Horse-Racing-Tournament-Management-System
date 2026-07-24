@@ -21,12 +21,17 @@ const statusClassName = (status?: string) => {
   const normalized = normalizeStatus(status);
   if (normalized === 'completed') return 'border-secondary/30 bg-secondary/10 text-secondary';
   if (normalized === 'in_progress') return 'border-primary/30 bg-primary/10 text-primary';
+  if (normalized === 'ready' || normalized === 'open_for_betting' || normalized === 'betting_open') return 'border-tertiary/30 bg-tertiary/10 text-tertiary';
   if (normalized === 'cancelled') return 'border-error/30 bg-error-container/20 text-error';
   return 'border-outline-variant bg-surface-container text-on-surface-variant';
 };
 
 const byScheduledAt = (a: RefereeAssignedRaceItem, b: RefereeAssignedRaceItem) =>
   new Date(a.scheduledAt ?? 0).getTime() - new Date(b.scheduledAt ?? 0).getTime();
+
+const isUpcomingRaceStatus = (status?: string) =>
+  ['scheduled', 'upcoming', 'registration_open', 'registration_closed', 'ready', 'open_for_betting', 'betting_open']
+    .includes(normalizeStatus(status));
 
 const RefereeDashboardPage = () => {
   const navigate = useNavigate();
@@ -54,7 +59,7 @@ const RefereeDashboardPage = () => {
 
   const groups = useMemo(() => {
     const upcoming = races
-      .filter((race) => ['scheduled', 'upcoming', 'registration_open', 'registration_closed'].includes(normalizeStatus(race.status)))
+      .filter((race) => isUpcomingRaceStatus(race.status))
       .sort(byScheduledAt);
     const active = races.filter((race) => normalizeStatus(race.status) === 'in_progress').sort(byScheduledAt);
     const managed = races
