@@ -152,6 +152,7 @@ const toUpdatePayload = (data: UserFormData): AdminUpdateUserRequest => ({
   licenseNumber: data.licenseNumber,
   experienceYears: data.experienceYears,
   address: data.address,
+  avatarUrl: data.avatarUrl,
 });
 
 const UserManagementPage = () => {
@@ -369,26 +370,41 @@ const UserManagementPage = () => {
     setErrorMessage('');
 
     try {
-      let nextFormData = formData;
+      if (selectedUser) {
+        let nextFormData = formData;
 
-      if (selectedImageFile) {
-        const uploadResponse = selectedUser
-          ? await uploadService.uploadUserImage(selectedUser.userId, selectedImageFile)
-          : await uploadService.uploadNewUserImage(selectedImageFile);
-        const avatarUrl = getUploadedImageUrl(uploadResponse);
+        if (selectedImageFile) {
+          const uploadResponse = await uploadService.uploadUserImage(selectedUser.userId, selectedImageFile);
+          const avatarUrl = getUploadedImageUrl(uploadResponse);
 
-        if (!avatarUrl) {
-          throw new Error('The image upload did not return an image URL.');
+          if (!avatarUrl) {
+            throw new Error('Cloudinary did not return an image URL.');
+          }
+
+          nextFormData = { ...formData, avatarUrl };
         }
 
-        nextFormData = { ...formData, avatarUrl };
-      }
-
-      if (selectedUser) {
         await adminUserService.updateUser(selectedUser.userId, toUpdatePayload(nextFormData));
         setMessage('User updated.');
       } else {
-        await adminUserService.createUser(nextFormData);
+        const createdUser = await adminUserService.createUser(formData);
+
+        if (selectedImageFile) {
+          try {
+            const uploadResponse = await uploadService.uploadUserImage(createdUser.userId, selectedImageFile);
+
+            if (!getUploadedImageUrl(uploadResponse)) {
+              throw new Error('Cloudinary did not return an image URL.');
+            }
+          } catch (uploadError) {
+            closeFormModal();
+            await loadUsers();
+            await loadStats();
+            setErrorMessage(`User was created, but the avatar could not be uploaded. ${getApiErrorMessage(uploadError, 'Please edit the user and try the avatar upload again.')}`);
+            return;
+          }
+        }
+
         setMessage('User created.');
       }
 
@@ -898,6 +914,7 @@ const UserForm = ({
       shape="circle"
       label="User avatar"
       tone="dark"
+      helpText="JPG, PNG or WebP, up to 5 MB. The avatar is uploaded to Cloudinary when you save."
     />
     <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
       <Field label="Username" error={formErrors.username}>

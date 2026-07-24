@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react';
-import { Ban, CalendarDays, ClipboardList, Eye, Filter, Flag, ListChecks, Pencil, Plus, RefreshCw, Save, Search, Trash2, Trophy, Users, X } from 'lucide-react';
+import { Ban, CalendarDays, ClipboardList, Eye, Filter, Flag, Pencil, Plus, RefreshCw, Save, Search, Trash2, Trophy, Users, X } from 'lucide-react';
 import { motion } from 'motion/react';
 import { Link, useNavigate } from 'react-router-dom';
 import { getApiErrorMessage } from '../../services/apiClient';
@@ -48,7 +48,6 @@ const tournamentStatusOptions: TournamentStatus[] = [
   'Upcoming',
   'Registration Open',
   'Registration Closed',
-  'Ongoing',
   'Completed',
   'Cancelled',
 ];
@@ -446,7 +445,6 @@ const validatePrizeRows = (rows: PrizeFormRow[]) => {
 const isTournamentWorkflowStatus = (status: TournamentStatus) =>
   status === 'Registration Open'
   || status === 'Registration Closed'
-  || status === 'Ongoing'
   || status === 'Completed';
 
 const getEditableTournamentStatuses = (selectedTournament: Tournament | null): TournamentStatus[] => {
@@ -463,7 +461,7 @@ const getEditableTournamentStatuses = (selectedTournament: Tournament | null): T
   }
 
   if (selectedTournament.status === 'Registration Closed') {
-    return ['Registration Closed', 'Ongoing'];
+    return ['Registration Closed'];
   }
 
   if (selectedTournament.status === 'Ongoing') {
@@ -552,6 +550,10 @@ const TournamentManagementPage = () => {
     const query = searchTerm.toLowerCase().trim();
 
     return tournaments.filter((tournament) => {
+      if (tournament.status === 'Ongoing') {
+        return false;
+      }
+
       const searchableValues = [
         tournament.id,
         tournament.tournamentName,
@@ -567,7 +569,6 @@ const TournamentManagementPage = () => {
     });
   }, [dateFrom, dateTo, searchTerm, statusFilter, tournaments]);
 
-  const ongoingCount = tournaments.filter((tournament) => tournament.status === 'Ongoing').length;
   const upcomingCount = tournaments.filter((tournament) => tournament.status === 'Upcoming').length;
   const totalParticipants = tournaments.reduce((total, tournament) => total + tournament.currentParticipants, 0);
   const totalTournamentCount = globalTournamentCount ?? tournaments.length;
@@ -698,8 +699,6 @@ const TournamentManagementPage = () => {
           });
         } else if (shouldUseWorkflow && formData.status === 'Registration Closed') {
           finalTournament = await tournamentService.closeRegistration(selectedTournament.tournamentId);
-        } else if (shouldUseWorkflow && formData.status === 'Ongoing') {
-          finalTournament = await tournamentService.startTournament(selectedTournament.tournamentId);
         } else if (shouldUseWorkflow && formData.status === 'Completed') {
           finalTournament = await tournamentService.completeTournament(selectedTournament.tournamentId);
         }
@@ -796,7 +795,7 @@ const TournamentManagementPage = () => {
             </motion.div>
 
             <motion.div 
-              className="grid min-w-full gap-3 sm:grid-cols-2 xl:min-w-[560px] xl:grid-cols-4"
+              className="grid min-w-full gap-3 sm:grid-cols-2 xl:min-w-[420px] xl:grid-cols-3"
               variants={revealContainer}
             >
               <motion.div variants={revealUp}>
@@ -804,9 +803,6 @@ const TournamentManagementPage = () => {
               </motion.div>
               <motion.div variants={revealUp}>
                 <MetricCard icon={<CalendarDays className="h-4 w-4" />} label="Upcoming" value={String(upcomingCount).padStart(2, '0')} />
-              </motion.div>
-              <motion.div variants={revealUp}>
-                <MetricCard icon={<ListChecks className="h-4 w-4" />} label="Ongoing" value={String(ongoingCount).padStart(2, '0')} />
               </motion.div>
               <motion.div variants={revealUp}>
                 <MetricCard icon={<Users className="h-4 w-4" />} label="Participants" value={String(totalParticipants)} />

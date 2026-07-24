@@ -20,7 +20,7 @@ import {
   XCircle,
 } from 'lucide-react';
 import ImageUploadField from '../../components/forms/ImageUploadField';
-import { apiClient, getApiErrorMessage, getApiResponseMessage, unwrapApiList } from '../../services/apiClient';
+import { apiClient, getApiErrorMessage, getApiResponseMessage, unwrapApiData, unwrapApiList } from '../../services/apiClient';
 import { HorseService } from '../../services/HorseService';
 import { getUploadedImageUrl, uploadService } from '../../services/uploadService';
 import { useToastNotifications } from '../../hooks/useToastNotifications';
@@ -40,6 +40,10 @@ type RankedHorse = Horse & {
 };
 type RawRankedHorse = Record<string, unknown>;
 type RawHorseOwner = Record<string, unknown>;
+type CreatedAdminHorse = {
+  horseId?: number;
+  message: string;
+};
 type HorseOwner = {
   userId: number;
   username: string;
@@ -311,7 +315,7 @@ const getHorseOwners = async () => {
   return normalizedOwners.map(mapHorseOwner).filter((owner) => owner.userId > 0);
 };
 
-const createAdminHorse = async (data: AdminHorseFormData) => {
+const createAdminHorse = async (data: AdminHorseFormData): Promise<CreatedAdminHorse> => {
   const response = await apiClient.post(`/api/horses/admin/owners/${Number(data.ownerId)}/create`, {
     name: data.name.trim(),
     breed: data.breed.trim(),
@@ -321,7 +325,16 @@ const createAdminHorse = async (data: AdminHorseFormData) => {
     avatarUrl: data.avatarUrl.trim() || fallbackHorseImage,
   });
 
-  return getApiResponseMessage(response, 'Horse created successfully.');
+  const createdHorse = unwrapApiData<unknown>(response);
+  const rawCreatedHorse = createdHorse && typeof createdHorse === 'object'
+    ? createdHorse as RawRankedHorse
+    : undefined;
+  const horseId = rawCreatedHorse ? asNumber(rawCreatedHorse.horseId ?? rawCreatedHorse.id) : 0;
+
+  return {
+    horseId: horseId > 0 ? horseId : undefined,
+    message: getApiResponseMessage(response, 'Horse created successfully.'),
+  };
 };
 
 const updateAdminHorse = async (horseId: number, data: AdminHorseFormData) => {
@@ -551,14 +564,12 @@ const AdminHorseManagementPage = () => {
     try {
       let avatarUrl = formData.avatarUrl.trim() || fallbackHorseImage;
 
-      if (selectedImageFile) {
-        const uploadResponse = selectedHorse
-          ? await uploadService.uploadHorseImage(getHorseKey(selectedHorse), selectedImageFile)
-          : await uploadService.uploadNewHorseImage(selectedImageFile);
+      if (selectedHorse && selectedImageFile) {
+        const uploadResponse = await uploadService.uploadHorseImage(getHorseKey(selectedHorse), selectedImageFile);
         const uploadedImageUrl = getUploadedImageUrl(uploadResponse);
 
         if (!uploadedImageUrl) {
-          throw new Error('The image upload did not return an image URL.');
+          throw new Error('Cloudinary did not return an image URL.');
         }
 
         avatarUrl = uploadedImageUrl;
@@ -577,8 +588,31 @@ const AdminHorseManagementPage = () => {
         const message = await updateAdminHorse(getHorseKey(selectedHorse), payload);
         setNotice({ tone: 'success', text: message });
       } else {
-        const message = await createAdminHorse(payload);
-        setNotice({ tone: 'success', text: message });
+        const createdHorse = await createAdminHorse(payload);
+
+        if (selectedImageFile) {
+          try {
+            if (!createdHorse.horseId) {
+              throw new Error('The server did not return the horse ID required for the Cloudinary image upload.');
+            }
+
+            const uploadResponse = await uploadService.uploadHorseImage(createdHorse.horseId, selectedImageFile);
+
+            if (!getUploadedImageUrl(uploadResponse)) {
+              throw new Error('Cloudinary did not return an image URL.');
+            }
+          } catch (uploadError) {
+            closeFormModal();
+            await refreshAfterMutation();
+            setNotice({
+              tone: 'error',
+              text: `${createdHorse.message}\nHorse was created, but its image could not be uploaded. ${getApiErrorMessage(uploadError, 'Please edit the horse and try the image upload again.')}`,
+            });
+            return;
+          }
+        }
+
+        setNotice({ tone: 'success', text: createdHorse.message });
       }
 
       closeFormModal();
@@ -1143,7 +1177,7 @@ const HorseFormModal = ({
           onFileChange={onImageFileChange}
           disabled={isSaving}
           label="Horse image"
-          helpText="JPG, PNG or WebP, up to 5 MB. The image is uploaded when you save."
+          helpText="JPG, PNG or WebP, up to 5 MB. The image is uploaded to Cloudinary when you save."
         />
       </div>
 
