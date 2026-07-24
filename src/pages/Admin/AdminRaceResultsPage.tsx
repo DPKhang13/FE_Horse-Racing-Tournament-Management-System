@@ -1,4 +1,4 @@
-import { useMemo, useState, type FormEvent } from 'react';
+import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import {
   CheckCircle2,
   Edit3,
@@ -12,9 +12,11 @@ import {
   X,
 } from 'lucide-react';
 import { useAdminRaceResults } from '../../hooks/useAdminRaceResults';
+import { adminScheduleRaceApi, type AdminRaceItem, type AdminTournamentOption } from './adminScheduleRaceApi';
 import type {
   AdminRaceResult,
   AdminRaceResultCreatePayload,
+  AdminRaceResultDraftItem,
   AdminRaceResultUpdatePayload,
   RaceResultId,
 } from '../../services/adminRaceResultService';
@@ -102,6 +104,23 @@ const toUpdatePayload = (form: ResultFormState): AdminRaceResultUpdatePayload =>
   isDisqualified: form.isDisqualified,
   disqualifyReason: form.isDisqualified ? form.disqualifyReason.trim() || undefined : undefined,
 });
+
+/** Maps a displayed result to the race-level draft update contract. */
+const toDraftItem = (result: AdminRaceResult): AdminRaceResultDraftItem | null => {
+  if (result.assignmentId === undefined) {
+    return null;
+  }
+
+  return {
+    assignmentId: result.assignmentId,
+    finishPosition: result.finishPosition ?? undefined,
+    finishTimeSec: result.finishTimeSec ?? undefined,
+    isDisqualified: Boolean(result.isDisqualified),
+    disqualifyReason: result.isDisqualified
+      ? result.disqualifyReason?.trim() || undefined
+      : undefined,
+  };
+};
 
 /** Formats finish seconds for quick comparison in the Admin table. */
 const formatFinishTime = (seconds?: number | null) => {
@@ -203,9 +222,15 @@ const AdminRaceResultsPage = () => {
     error,
     fetchRaceResults,
     handleCreate,
-    handlePublishResult,
-    handleUpdate,
+    handlePublish,
+    handleUpdateDraft,
   } = useAdminRaceResults();
+  const [tournaments, setTournaments] = useState<AdminTournamentOption[]>([]);
+  const [tournamentRaces, setTournamentRaces] = useState<AdminRaceItem[]>([]);
+  const [isTournamentLoading, setIsTournamentLoading] = useState(true);
+  const [isTournamentRaceLoading, setIsTournamentRaceLoading] = useState(false);
+  const [tournamentError, setTournamentError] = useState('');
+  const [tournamentIdFilter, setTournamentIdFilter] = useState('');
   const [raceIdFilter, setRaceIdFilter] = useState('');
   const [appliedRaceIdFilter, setAppliedRaceIdFilter] = useState('');
   const [form, setForm] = useState<ResultFormState>(initialForm);
@@ -213,15 +238,85 @@ const AdminRaceResultsPage = () => {
   const [editingResult, setEditingResult] = useState<AdminRaceResult | null>(null);
   const [editorError, setEditorError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [publishTarget, setPublishTarget] = useState<AdminRaceResult | null>(null);
+  const [publishTarget, setPublishTarget] = useState<RaceResultGroup | null>(null);
+
+  useEffect(() => {
+    let isActive = true;
+
+    queueMicrotask(() => {
+      void adminScheduleRaceApi.getTournaments()
+        .then((items) => {
+          if (isActive) {
+            setTournaments(items);
+          }
+        })
+        .catch(() => {
+          if (isActive) {
+            setTournamentError('Unable to load tournaments.');
+          }
+        })
+        .finally(() => {
+          if (isActive) {
+            setIsTournamentLoading(false);
+          }
+        });
+    });
+
+    return () => {
+      isActive = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!tournamentIdFilter) {
+      return undefined;
+    }
+
+    let isActive = true;
+
+    queueMicrotask(() => {
+      void adminScheduleRaceApi.getRacesByTournament(tournamentIdFilter)
+        .then((items) => {
+          if (isActive) {
+            setTournamentRaces(items);
+          }
+        })
+        .catch(() => {
+          if (isActive) {
+            setTournamentRaces([]);
+          }
+        })
+        .finally(() => {
+          if (isActive) {
+            setIsTournamentRaceLoading(false);
+          }
+        });
+    });
+
+    return () => {
+      isActive = false;
+    };
+  }, [tournamentIdFilter]);
+
+  const selectedTournamentRaceIds = useMemo(
+    () => new Set(tournamentRaces.map((race) => String(race.raceId))),
+    [tournamentRaces],
+  );
 
   const filteredResults = useMemo(() => {
+    const tournamentId = tournamentIdFilter.trim();
     const raceId = appliedRaceIdFilter.trim();
 
-    return raceId
-      ? resultList.filter((result) => String(result.raceId ?? '') === raceId)
-      : resultList;
-  }, [appliedRaceIdFilter, resultList]);
+    return resultList.filter((result) => {
+      const belongsToTournament = !tournamentId
+        || (result.tournamentId !== undefined
+          ? String(result.tournamentId) === tournamentId
+          : selectedTournamentRaceIds.has(String(result.raceId ?? '')));
+      const belongsToRace = !raceId || String(result.raceId ?? '') === raceId;
+
+      return belongsToTournament && belongsToRace;
+    });
+  }, [appliedRaceIdFilter, resultList, selectedTournamentRaceIds, tournamentIdFilter]);
 
   const groupedResults = useMemo(() => groupResultsByRace(filteredResults), [filteredResults]);
 
@@ -229,7 +324,14 @@ const AdminRaceResultsPage = () => {
     const options = new Map<string, string>();
 
     resultList.forEach((result) => {
-      if (result.raceId === undefined) {
+      if (
+        result.raceId === undefined
+        || (tournamentIdFilter && (
+          result.tournamentId !== undefined
+            ? String(result.tournamentId) !== tournamentIdFilter
+            : !selectedTournamentRaceIds.has(String(result.raceId))
+        ))
+      ) {
         return;
       }
 
@@ -240,7 +342,12 @@ const AdminRaceResultsPage = () => {
 
     return Array.from(options, ([value, label]) => ({ value, label }))
       .sort((first, second) => first.label.localeCompare(second.label, undefined, { numeric: true }));
-  }, [resultList]);
+  }, [resultList, selectedTournamentRaceIds, tournamentIdFilter]);
+
+  const selectedTournamentLabel = useMemo(
+    () => tournaments.find((tournament) => String(tournament.tournamentId) === tournamentIdFilter)?.tournamentName,
+    [tournamentIdFilter, tournaments],
+  );
 
   const metrics = useMemo(() => ({
     total: resultList.length,
@@ -256,7 +363,18 @@ const AdminRaceResultsPage = () => {
   };
 
   /** Restores the unfiltered Admin result list. */
-  const handleClearRaceFilter = () => {
+  const handleClearFilters = () => {
+    setTournamentIdFilter('');
+    setTournamentRaces([]);
+    setIsTournamentRaceLoading(false);
+    setRaceIdFilter('');
+    setAppliedRaceIdFilter('');
+  };
+
+  const handleTournamentChange = (tournamentId: string) => {
+    setTournamentIdFilter(tournamentId);
+    setTournamentRaces([]);
+    setIsTournamentRaceLoading(Boolean(tournamentId));
     setRaceIdFilter('');
     setAppliedRaceIdFilter('');
   };
@@ -312,14 +430,33 @@ const AdminRaceResultsPage = () => {
         };
         succeeded = await handleCreate(createPayload, null);
       } else if (editingResult) {
-        const resultId = getResultId(editingResult);
+        const raceId = editingResult.raceId;
 
-        if (resultId === undefined) {
-          setEditorError('This record does not contain a result ID.');
+        if (raceId === undefined) {
+          setEditorError('This record does not contain a race ID.');
           return;
         }
 
-        succeeded = await handleUpdate(resultId, payload, null);
+        const editingResultId = getResultId(editingResult);
+        const draftItems = resultList
+          .filter((result) => String(result.raceId) === String(raceId))
+          .map((result) => {
+            const isEditedResult = editingResultId !== undefined
+              ? String(getResultId(result)) === String(editingResultId)
+              : String(result.assignmentId) === String(editingResult.assignmentId);
+
+            return toDraftItem(isEditedResult ? { ...result, ...payload } : result);
+          });
+
+        if (draftItems.length === 0 || draftItems.some((item) => item === null)) {
+          setEditorError('Every result in this race must contain an assignment ID.');
+          return;
+        }
+
+        succeeded = await handleUpdateDraft(raceId, {
+          reportId: form.reportId.trim() ? toResultId(form.reportId) : undefined,
+          results: draftItems.filter((item): item is AdminRaceResultDraftItem => item !== null),
+        }, null);
       }
 
       if (succeeded) {
@@ -332,22 +469,22 @@ const AdminRaceResultsPage = () => {
     }
   };
 
-  /** Publishes the selected result after confirmation. */
+  /** Publishes every draft result in the selected race after confirmation. */
   const handlePublishConfirmed = async () => {
     if (!publishTarget || isSubmitting) {
       return;
     }
 
-    const resultId = getResultId(publishTarget);
+    const raceId = publishTarget.raceId;
 
-    if (resultId === undefined) {
+    if (raceId === undefined) {
       return;
     }
 
     setIsSubmitting(true);
 
     try {
-      const succeeded = await handlePublishResult(resultId, null);
+      const succeeded = await handlePublish(raceId, null);
 
       if (succeeded) {
         setPublishTarget(null);
@@ -384,6 +521,11 @@ const AdminRaceResultsPage = () => {
             {error}
           </div>
         )}
+        {tournamentError && (
+          <div className="mb-5 rounded-lg border border-error/40 bg-error-container/25 px-4 py-3 text-sm font-semibold text-error" role="alert">
+            {tournamentError}
+          </div>
+        )}
 
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
           <Metric icon={<Trophy className="h-4 w-4" />} label="Result records" value={metrics.total} />
@@ -394,7 +536,7 @@ const AdminRaceResultsPage = () => {
 
         <section className="mt-6 border-y border-outline-variant/40 bg-surface-container-low/45 py-5">
           <div>
-            <form onSubmit={handleFilterSubmit} className="flex w-full flex-col gap-3 sm:flex-row sm:items-end">
+            <form onSubmit={handleFilterSubmit} className="flex w-full flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end">
               <Field label="Race ID">
                 <input
                   value={raceIdFilter}
@@ -405,6 +547,25 @@ const AdminRaceResultsPage = () => {
               </Field>
 
               <label className="relative block w-full sm:w-72">
+                <Trophy className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-outline" />
+                <select
+                  value={tournamentIdFilter}
+                  onChange={(event) => handleTournamentChange(event.target.value)}
+                  disabled={isTournamentLoading}
+                  className="w-full appearance-none rounded-lg border border-outline-variant/60 bg-surface-container-lowest py-2.5 pl-10 pr-8 text-sm focus:border-primary focus:outline-none"
+                  aria-label="Select tournament"
+                >
+                  <option value="">{isTournamentLoading ? 'Loading tournaments...' : 'All tournaments'}</option>
+                  {tournamentIdFilter && !tournaments.some((tournament) => String(tournament.tournamentId) === tournamentIdFilter) && (
+                    <option value={tournamentIdFilter}>Tournament #{tournamentIdFilter}</option>
+                  )}
+                  {tournaments.map((tournament) => (
+                    <option key={tournament.tournamentId} value={tournament.tournamentId}>{tournament.tournamentName}</option>
+                  ))}
+                </select>
+              </label>
+
+              <label className="relative block w-full sm:w-72">
                 <Flag className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-outline" />
                 <select
                   value={appliedRaceIdFilter}
@@ -412,7 +573,8 @@ const AdminRaceResultsPage = () => {
                     setRaceIdFilter(event.target.value);
                     setAppliedRaceIdFilter(event.target.value);
                   }}
-                  className="w-full appearance-none rounded-lg border border-outline-variant/60 bg-surface-container-lowest py-2.5 pl-10 pr-8 text-sm focus:border-primary focus:outline-none"
+                  disabled={isTournamentRaceLoading}
+                  className="w-full appearance-none rounded-lg border border-outline-variant/60 bg-surface-container-lowest py-2.5 pl-10 pr-8 text-sm focus:border-primary focus:outline-none disabled:cursor-not-allowed disabled:opacity-60"
                   aria-label="Select race"
                 >
                   <option value="">All races</option>
@@ -429,8 +591,8 @@ const AdminRaceResultsPage = () => {
                 <Search className="h-4 w-4" />
                 Filter
               </button>
-              {appliedRaceIdFilter && (
-                <button type="button" onClick={() => void handleClearRaceFilter()} disabled={isLoading} className="rounded-lg border border-outline-variant/60 px-4 py-2.5 text-sm font-bold text-on-surface-variant disabled:opacity-60">
+              {(tournamentIdFilter || appliedRaceIdFilter) && (
+                <button type="button" onClick={handleClearFilters} disabled={isLoading} className="rounded-lg border border-outline-variant/60 px-4 py-2.5 text-sm font-bold text-on-surface-variant disabled:opacity-60">
                   Show all
                 </button>
               )}
@@ -445,6 +607,8 @@ const AdminRaceResultsPage = () => {
               <p className="mt-1 text-xs font-semibold uppercase tracking-[0.12em] text-on-surface-variant">
                 {appliedRaceIdFilter
                   ? `Race #${appliedRaceIdFilter}`
+                  : selectedTournamentLabel
+                    ? selectedTournamentLabel
                   : `${groupedResults.length} race${groupedResults.length === 1 ? '' : 's'}`}
               </p>
             </div>
@@ -489,9 +653,9 @@ const AdminRaceResultsPage = () => {
           if (event.target === event.currentTarget && !isSubmitting) setPublishTarget(null);
         }}>
           <section className="w-full max-w-md rounded-lg border border-outline-variant/60 bg-surface-container-low p-6 shadow-2xl" role="dialog" aria-modal="true" aria-labelledby="publish-result-title">
-            <h2 id="publish-result-title" className="font-display text-xl font-bold text-on-surface">Publish race result?</h2>
+            <h2 id="publish-result-title" className="font-display text-xl font-bold text-on-surface">Publish race results?</h2>
             <p className="mt-2 text-sm leading-6 text-on-surface-variant">
-              Result #{String(getResultId(publishTarget) ?? '-')} for {publishTarget.horseName ?? 'this assignment'} will become publicly available.
+              All {publishTarget.results.length} results for Race #{String(publishTarget.raceId ?? publishTarget.raceNumber ?? '-')} will become publicly available.
             </p>
             <div className="mt-6 flex justify-end gap-3">
               <button type="button" onClick={() => setPublishTarget(null)} disabled={isSubmitting} className="rounded-lg border border-outline-variant/60 px-4 py-2.5 text-sm font-bold text-on-surface-variant disabled:opacity-60">Cancel</button>
@@ -514,9 +678,10 @@ const RaceResultGroupTable = ({
 }: {
   group: RaceResultGroup;
   onEdit: (result: AdminRaceResult) => void;
-  onPublish: (result: AdminRaceResult) => void;
+  onPublish: (group: RaceResultGroup) => void;
 }) => {
   const publishedCount = group.results.filter((result) => String(result.status).toLowerCase() === 'published').length;
+  const isPublished = group.results.length > 0 && publishedCount === group.results.length;
 
   return (
     <section className="min-w-0 overflow-hidden rounded-lg border border-outline-variant/50 bg-surface-container-lowest/40">
@@ -537,10 +702,16 @@ const RaceResultGroupTable = ({
             </p>
           </div>
         </div>
-        <div className="flex flex-none items-center gap-3 text-xs font-bold text-on-surface-variant">
-          <span>{group.results.length} result{group.results.length === 1 ? '' : 's'}</span>
-          <span className="h-4 w-px bg-outline-variant" />
-          <span className="text-secondary">{publishedCount} published</span>
+        <div className="flex flex-none items-center gap-3">
+          <div className="flex items-center gap-3 text-xs font-bold text-on-surface-variant">
+            <span>{group.results.length} result{group.results.length === 1 ? '' : 's'}</span>
+            <span className="h-4 w-px bg-outline-variant" />
+            <span className="text-secondary">{publishedCount} published</span>
+          </div>
+          <button type="button" onClick={() => onPublish(group)} disabled={group.raceId === undefined || isPublished} className="inline-flex items-center gap-2 rounded-lg border border-secondary/50 px-3 py-2 text-xs font-bold text-secondary hover:bg-secondary-container/20 disabled:opacity-40" title={isPublished ? 'Already published' : 'Publish race results'}>
+            <Send className="h-4 w-4" />
+            Publish
+          </button>
         </div>
       </div>
 
@@ -560,7 +731,7 @@ const RaceResultGroupTable = ({
           <tbody className="divide-y divide-outline-variant/30">
             {group.results.map((result, index) => {
               const resultId = getResultId(result);
-              const isPublished = String(result.status).toLowerCase() === 'published';
+              const isResultPublished = String(result.status).toLowerCase() === 'published';
 
               return (
                 <tr key={String(resultId ?? `${result.assignmentId}-${index}`)} className="hover:bg-surface-container-low/60">
@@ -589,11 +760,8 @@ const RaceResultGroupTable = ({
                   <td className="px-4 py-4 text-xs text-on-surface-variant">{formatDateTime(result.recordedAt)}</td>
                   <td className="px-4 py-4">
                     <div className="flex justify-end gap-2">
-                      <button type="button" onClick={() => onEdit(result)} disabled={resultId === undefined} className="rounded-lg border border-outline-variant/60 p-2 text-on-surface-variant hover:border-primary hover:text-primary disabled:opacity-40" aria-label="Edit race result" title="Edit">
+                      <button type="button" onClick={() => onEdit(result)} disabled={result.assignmentId === undefined || result.raceId === undefined || isResultPublished} className="rounded-lg border border-outline-variant/60 p-2 text-on-surface-variant hover:border-primary hover:text-primary disabled:opacity-40" aria-label="Edit draft race result" title={isResultPublished ? 'Published results cannot be edited' : 'Edit draft'}>
                         <Edit3 className="h-4 w-4" />
-                      </button>
-                      <button type="button" onClick={() => onPublish(result)} disabled={resultId === undefined || isPublished} className="rounded-lg border border-secondary/50 p-2 text-secondary hover:bg-secondary-container/20 disabled:opacity-40" aria-label="Publish race result" title={isPublished ? 'Already published' : 'Publish'}>
-                        <Send className="h-4 w-4" />
                       </button>
                     </div>
                   </td>
@@ -665,7 +833,7 @@ const ResultEditorModal = ({
       <div className="mb-5 flex items-start justify-between border-b border-outline-variant/40 pb-4">
         <div>
           <p className="text-xs font-bold uppercase tracking-[0.16em] text-secondary">Race result editor</p>
-          <h2 id="result-editor-title" className="font-display mt-1 text-xl font-bold text-on-surface">{mode === 'create' ? 'Create result' : 'Edit result'}</h2>
+          <h2 id="result-editor-title" className="font-display mt-1 text-xl font-bold text-on-surface">{mode === 'create' ? 'Create result' : 'Edit draft result'}</h2>
         </div>
         <button type="button" onClick={onClose} disabled={isSubmitting} className="rounded-lg border border-outline-variant/60 p-2 text-on-surface-variant hover:text-primary disabled:opacity-60" aria-label="Close result editor"><X className="h-5 w-5" /></button>
       </div>
@@ -673,19 +841,21 @@ const ResultEditorModal = ({
       {error && <div className="mb-4 rounded-lg border border-error/40 bg-error-container/25 px-4 py-3 text-sm font-semibold text-error">{error}</div>}
 
       <form onSubmit={onSubmit} className="grid gap-4 sm:grid-cols-2">
-        <TextField label="Assignment ID" value={form.assignmentId} onChange={(value) => onChange({ assignmentId: value })} required />
+        <TextField label="Assignment ID" value={form.assignmentId} onChange={(value) => onChange({ assignmentId: value })} required readOnly={mode === 'edit'} />
         <TextField label="Report ID" value={form.reportId} onChange={(value) => onChange({ reportId: value })} />
-        <TextField label="Final round" type="number" value={form.finalRound} onChange={(value) => onChange({ finalRound: value })} min="1" />
+        {mode === 'create' && <TextField label="Final round" type="number" value={form.finalRound} onChange={(value) => onChange({ finalRound: value })} min="1" />}
         <TextField label="Finish position" type="number" value={form.finishPosition} onChange={(value) => onChange({ finishPosition: value })} min="1" />
         <TextField label="Finish time (seconds)" type="number" value={form.finishTimeSec} onChange={(value) => onChange({ finishTimeSec: value })} min="0" step="0.001" />
-        <TextField label="Points awarded" type="number" value={form.pointsAwarded} onChange={(value) => onChange({ pointsAwarded: value })} min="0" />
-        <Field label="Status">
-          <select value={form.status} onChange={(event) => onChange({ status: event.target.value })} className="rounded-lg border border-outline-variant/60 bg-surface-container-lowest px-3 py-2.5 text-sm normal-case tracking-normal focus:border-primary focus:outline-none">
-            <option value="draft">Draft</option>
-            <option value="confirmed">Confirmed</option>
-            <option value="published">Published</option>
-          </select>
-        </Field>
+        {mode === 'create' && <TextField label="Points awarded" type="number" value={form.pointsAwarded} onChange={(value) => onChange({ pointsAwarded: value })} min="0" />}
+        {mode === 'create' && (
+          <Field label="Status">
+            <select value={form.status} onChange={(event) => onChange({ status: event.target.value })} className="rounded-lg border border-outline-variant/60 bg-surface-container-lowest px-3 py-2.5 text-sm normal-case tracking-normal focus:border-primary focus:outline-none">
+              <option value="draft">Draft</option>
+              <option value="confirmed">Confirmed</option>
+              <option value="published">Published</option>
+            </select>
+          </Field>
+        )}
         <label className="flex items-center gap-3 self-end rounded-lg border border-outline-variant/60 bg-surface-container-lowest px-3 py-2.5 text-sm font-semibold text-on-surface">
           <input type="checkbox" checked={form.isDisqualified} onChange={(event) => onChange({ isDisqualified: event.target.checked })} className="h-4 w-4 accent-error" />
           Disqualified
@@ -700,7 +870,7 @@ const ResultEditorModal = ({
           <button type="button" onClick={onClose} disabled={isSubmitting} className="rounded-lg border border-outline-variant/60 px-4 py-2.5 text-sm font-bold text-on-surface-variant disabled:opacity-60">Cancel</button>
           <button type="submit" disabled={isSubmitting} className="gold-gradient inline-flex items-center gap-2 rounded-lg px-4 py-2.5 text-sm font-bold text-on-primary disabled:opacity-60">
             {mode === 'create' ? <FilePlus2 className="h-4 w-4" /> : <Edit3 className="h-4 w-4" />}
-            {isSubmitting ? 'Saving...' : mode === 'create' ? 'Create result' : 'Save changes'}
+            {isSubmitting ? 'Saving...' : mode === 'create' ? 'Create result' : 'Save draft'}
           </button>
         </div>
       </form>
@@ -714,6 +884,7 @@ const TextField = ({
   onChange,
   type = 'text',
   required,
+  readOnly,
   min,
   step,
 }: {
@@ -722,11 +893,12 @@ const TextField = ({
   onChange: (value: string) => void;
   type?: string;
   required?: boolean;
+  readOnly?: boolean;
   min?: string;
   step?: string;
 }) => (
   <Field label={label}>
-    <input type={type} value={value} onChange={(event) => onChange(event.target.value)} required={required} min={min} step={step} className="rounded-lg border border-outline-variant/60 bg-surface-container-lowest px-3 py-2.5 text-sm font-normal normal-case tracking-normal focus:border-primary focus:outline-none" />
+    <input type={type} value={value} onChange={(event) => onChange(event.target.value)} required={required} readOnly={readOnly} min={min} step={step} className="rounded-lg border border-outline-variant/60 bg-surface-container-lowest px-3 py-2.5 text-sm font-normal normal-case tracking-normal focus:border-primary focus:outline-none read-only:cursor-not-allowed read-only:bg-surface-container" />
   </Field>
 );
 
