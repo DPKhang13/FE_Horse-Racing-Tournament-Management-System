@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Bell, LogIn, LogOut, Trophy, User } from 'lucide-react';
+import { motion } from 'motion/react';
 import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { getAccessToken } from '../services/apiClient';
 import { authService } from '../services/authService';
@@ -77,7 +78,12 @@ const MainLayout = ({ children }: { children: ReactNode }) => {
 
   return (
     <div className="min-h-screen bg-surface text-on-surface lg:grid lg:grid-cols-[256px_minmax(0,1fr)]">
-      <aside className="border-b border-outline-variant/30 bg-surface-container-low p-4 shadow-lg shadow-black/10 lg:sticky lg:top-0 lg:h-screen lg:border-b-0 lg:border-r">
+      <motion.aside
+        initial={{ opacity: 0, x: -14 }}
+        animate={{ opacity: 1, x: 0 }}
+        transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
+        className="border-b border-outline-variant/30 bg-surface-container-low p-4 shadow-lg shadow-black/10 lg:sticky lg:top-0 lg:h-screen lg:border-b-0 lg:border-r"
+      >
         <Link to="/" className="mb-6 flex items-center gap-3 px-2">
           <span className="gold-gradient flex h-10 w-10 items-center justify-center rounded-lg shadow-lg shadow-primary/10">
             <Trophy className="h-5 w-5 text-on-primary" />
@@ -127,10 +133,15 @@ const MainLayout = ({ children }: { children: ReactNode }) => {
             </button>
           </div>
         </div>
-      </aside>
+      </motion.aside>
 
       <main className="min-w-0">
-        <header className="sticky top-0 z-40 border-b border-outline-variant/40 bg-surface-container-low/90 px-4 py-3 shadow-lg shadow-black/10 backdrop-blur-xl md:px-8">
+        <motion.header
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.24, ease: [0.22, 1, 0.36, 1] }}
+          className="sticky top-0 z-40 border-b border-outline-variant/40 bg-surface-container-low/90 px-4 py-3 shadow-lg shadow-black/10 backdrop-blur-xl md:px-8"
+        >
           <div className="flex items-center justify-between gap-4">
             <h1 className="font-display text-xl font-extrabold text-primary">{currentPageLabel}</h1>
 
@@ -141,7 +152,7 @@ const MainLayout = ({ children }: { children: ReactNode }) => {
               </Link>
             </div>
           </div>
-        </header>
+        </motion.header>
 
         {children}
       </main>
@@ -189,7 +200,7 @@ const LandingTopBar = ({
 
   useEffect(() => {
     const handleScroll = () => {
-      setIsScrolled(window.scrollY > 80);
+      setIsScrolled(window.scrollY > 20);
     };
 
     handleScroll();
@@ -252,13 +263,15 @@ const LandingTopBar = ({
   }, []);
 
   return (
-    <div className="fixed left-0 top-0 z-[100] flex w-full pointer-events-none justify-center transition-all duration-400 ease-in-out">
+    <div className="navbar-motion-always navbar-transition fixed left-0 top-0 z-[100] flex w-full justify-center pointer-events-none">
       <header
+        id="home"
+        data-purpose="navigation-bar"
         className={`
-          pointer-events-auto flex w-full items-center justify-between transition-all duration-400 ease-in-out
+          navbar-transition pointer-events-auto flex w-full items-center justify-between
           ${isScrolled
-            ? 'mt-4 h-14 max-w-[95%] rounded-full border border-outline-variant/40 bg-surface-container-low/75 px-5 shadow-2xl shadow-black/30 backdrop-blur-2xl md:px-7 lg:max-w-5xl'
-            : 'mt-0 h-16 max-w-full rounded-[0px] border-b border-outline-variant/30 bg-surface-container-low/80 px-8 shadow-sm backdrop-blur-md md:px-32'
+            ? 'mt-4 max-w-[95%] rounded-[999px] border border-outline-variant/40 bg-surface-container-low/75 px-6 py-1.5 shadow-lg shadow-black/30 backdrop-blur-sm lg:max-w-5xl lg:px-8'
+            : 'mt-0 max-w-full rounded-[0px] border-b border-outline-variant/30 bg-surface-container-low/80 px-12 py-4 shadow-sm backdrop-blur-md'
           }
         `}
       >
@@ -269,12 +282,12 @@ const LandingTopBar = ({
             setActiveSection('#home');
             scrollToLandingSection('#home');
           }}
-          className={`font-display font-bold text-primary transition-all ${isScrolled ? 'text-lg' : 'text-xl'}`}
+          className={`navbar-transition-slow font-display font-bold text-primary ${isScrolled ? 'text-lg' : 'text-xl'}`}
         >
           HTMS
         </a>
 
-        <nav className={`hidden items-center transition-all md:flex ${isScrolled ? 'space-x-5' : 'space-x-8'}`}>
+        <nav className="hidden items-center gap-4 md:flex lg:gap-6 xl:gap-8">
           <button
             type="button"
             onClick={() => {
@@ -326,7 +339,7 @@ const LandingTopBar = ({
               <Link
                 to="/login"
                 state={{ mode: 'login' }}
-                className={`inline-flex items-center justify-center rounded-lg font-bold text-on-surface-variant transition-all hover:bg-surface-container-highest/50 hover:text-primary ${
+                className={`navbar-transition-slow inline-flex items-center justify-center rounded-lg font-bold text-on-surface-variant hover:bg-surface-container-highest/50 hover:text-primary ${
                   isScrolled ? 'h-10 w-10 rounded-full p-0' : 'px-5 py-2 text-sm'
                 }`}
                 aria-label="Login"
@@ -337,7 +350,7 @@ const LandingTopBar = ({
               <Link
                 to="/login"
                 state={{ mode: 'signup' }}
-                className={`gold-gradient rounded-lg text-label-md font-bold text-on-primary transition-all active:scale-95 ${
+                className={`navbar-transition-slow gold-gradient rounded-lg text-label-md font-bold text-on-primary active:scale-95 ${
                   isScrolled ? 'px-4 py-2' : 'px-6 py-2'
                 }`}
               >

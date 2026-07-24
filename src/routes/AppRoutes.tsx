@@ -1,46 +1,56 @@
 import { Navigate, Routes, Route } from 'react-router-dom';
-import type { ReactNode } from 'react';
-import LandingPage from '../pages/Home/LandingPage';
-import SchedulePage from '../pages/Race/SchedulePage';
-import RaceResultList from '../pages/Result/RaceResultList';
-import RaceResultDetail from '../pages/Result/RaceResultDetail';
-import RankingPage from '../pages/Result/RankingPage';
-import PredictionPage from '../pages/Prediction/PredictionPage';
-import ResultTrackingPage from '../pages/Prediction/ResultTrackingPage';
-import AuthPage from '../pages/Auth/AuthPage';
-import RegistrationPage from '../pages/Auth/RegistrationPage';
-import HorseManagementPage from '../pages/Horse/HorseManagementPage';
+import { lazy, Suspense, type ReactNode } from 'react';
 import MainLayout from '../components/MainLayout';
 import ProtectedRoute from '../components/ProtectedRoute';
-import SpectatorDashboard from '../pages/SpectatorDashboard/SpectatorDashboard';
-import UserProfilePage from '../pages/Profile/UserProfilePage';
+import { PageTransition, RouteLoadingState } from '../components/motion/MotionPrimitives';
 import { AUTHENTICATED_ROLES } from '../utils/permissions';
-import AdminHorseManagementPage from '../pages/Admin/AdminHorseManagementPage';
-import AdminOperationsPage from '../pages/Admin/AdminOperationsPage';
-import RegistrationManagementPage from '../pages/Admin/RegistrationManagementPage';
-import AdminRacesPage from '../pages/Admin/AdminRacesPage';
-import AdminSchedulePage from '../pages/Admin/AdminSchedulePage';
-import AdminBetManagementPage from '../pages/Admin/AdminBetManagementPage';
-import RaceRegistrationPage from '../pages/Race/RaceRegistrationPage';
-import OwnerInvitationsPage from '../pages/Owner/OwnerInvitationsPage';
-import JockeyInvitationsPage from '../pages/Jockey/JockeyInvitationsPage';
-import JockeyDashboardPage from '../pages/Jockey/JockeyDashboardPage';
-import JockeySchedulePage from '../pages/Jockey/JockeySchedulePage';
-import RaceControlPage from '../pages/Race/RaceControlPage';
-import NotificationsPage from '../pages/Notifications/NotificationsPage';
-import WalletPaymentPage from '../pages/Wallet/WalletPaymentPage';
-import PaymentResultPage from '../pages/Wallet/PaymentResultPage';
-import WalletHistoryPage from '../pages/Wallet/WalletHistoryPage';
-import WalletTransactionDetailPage from '../pages/Wallet/WalletTransactionDetailPage';
-import TournamentManagementPage from '../pages/Tournament/TournamentManagementPage';
-import TournamentSchedulePage from '../pages/Tournament/TournamentSchedulePage';
-import UserManagementPage from '../pages/Admin/UserManagementPage';
-import OwnerDashboardPage from '../pages/Owner/OwnerDashboardPage';
-import AdminRaceResultsPage from '../pages/Admin/AdminRaceResultsPage';
-import RefereeDashboardPage from '../pages/Referee/RefereeDashboardPage';
 import { authService } from '../services/authService';
 
-const withLayout = (page: ReactNode) => <MainLayout>{page}</MainLayout>;
+const LandingPage = lazy(() => import('../pages/Home/LandingPage'));
+const SchedulePage = lazy(() => import('../pages/Race/SchedulePage'));
+const RaceResultList = lazy(() => import('../pages/Result/RaceResultList'));
+const RaceResultDetail = lazy(() => import('../pages/Result/RaceResultDetail'));
+const RankingPage = lazy(() => import('../pages/Result/RankingPage'));
+const PredictionPage = lazy(() => import('../pages/Prediction/PredictionPage'));
+const ResultTrackingPage = lazy(() => import('../pages/Prediction/ResultTrackingPage'));
+const AuthPage = lazy(() => import('../pages/Auth/AuthPage'));
+const RegistrationPage = lazy(() => import('../pages/Auth/RegistrationPage'));
+const HorseManagementPage = lazy(() => import('../pages/Horse/HorseManagementPage'));
+const SpectatorDashboard = lazy(() => import('../pages/SpectatorDashboard/SpectatorDashboard'));
+const UserProfilePage = lazy(() => import('../pages/Profile/UserProfilePage'));
+const AdminHorseManagementPage = lazy(() => import('../pages/Admin/AdminHorseManagementPage'));
+const AdminOperationsPage = lazy(() => import('../pages/Admin/AdminOperationsPage'));
+const RegistrationManagementPage = lazy(() => import('../pages/Admin/RegistrationManagementPage'));
+const AdminRacesPage = lazy(() => import('../pages/Admin/AdminRacesPage'));
+const AdminSchedulePage = lazy(() => import('../pages/Admin/AdminSchedulePage'));
+const AdminBetManagementPage = lazy(() => import('../pages/Admin/AdminBetManagementPage'));
+const RaceRegistrationPage = lazy(() => import('../pages/Race/RaceRegistrationPage'));
+const OwnerInvitationsPage = lazy(() => import('../pages/Owner/OwnerInvitationsPage'));
+const JockeyInvitationsPage = lazy(() => import('../pages/Jockey/JockeyInvitationsPage'));
+const JockeyDashboardPage = lazy(() => import('../pages/Jockey/JockeyDashboardPage'));
+const JockeySchedulePage = lazy(() => import('../pages/Jockey/JockeySchedulePage'));
+const RaceControlPage = lazy(() => import('../pages/Race/RaceControlPage'));
+const NotificationsPage = lazy(() => import('../pages/Notifications/NotificationsPage'));
+const WalletPaymentPage = lazy(() => import('../pages/Wallet/WalletPaymentPage'));
+const PaymentResultPage = lazy(() => import('../pages/Wallet/PaymentResultPage'));
+const WalletHistoryPage = lazy(() => import('../pages/Wallet/WalletHistoryPage'));
+const WalletTransactionDetailPage = lazy(() => import('../pages/Wallet/WalletTransactionDetailPage'));
+const TournamentManagementPage = lazy(() => import('../pages/Tournament/TournamentManagementPage'));
+const TournamentSchedulePage = lazy(() => import('../pages/Tournament/TournamentSchedulePage'));
+const UserManagementPage = lazy(() => import('../pages/Admin/UserManagementPage'));
+const OwnerDashboardPage = lazy(() => import('../pages/Owner/OwnerDashboardPage'));
+const AdminRaceResultsPage = lazy(() => import('../pages/Admin/AdminRaceResultsPage'));
+const RefereeDashboardPage = lazy(() => import('../pages/Referee/RefereeDashboardPage'));
+
+const asyncPage = (page: ReactNode) => (
+  <Suspense fallback={<RouteLoadingState />}>
+    <PageTransition>{page}</PageTransition>
+  </Suspense>
+);
+
+const withLayout = (page: ReactNode) => <MainLayout>{asyncPage(page)}</MainLayout>;
+
+const standalonePage = (page: ReactNode) => asyncPage(page);
 
 const protectedPage = (page: ReactNode, allowedRoles = AUTHENTICATED_ROLES) => (
   withLayout(
@@ -59,8 +69,8 @@ const AppRoutes = () => {
   return (
     <Routes>
       {/* Trang Auth không có Header/Footer chung */}
-      <Route path="/login" element={<AuthPage />} />
-      <Route path="/registration" element={<RegistrationPage />} />
+      <Route path="/login" element={standalonePage(<AuthPage />)} />
+      <Route path="/registration" element={standalonePage(<RegistrationPage />)} />
 
       {/* Các trang khác có Header/Footer chung */}
       <Route path="/" element={withLayout(<LandingPage />)} />

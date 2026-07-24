@@ -89,6 +89,7 @@ export type AdminCreateUserRequest = {
   experienceYears?: number;
   stableName?: string;
   address?: string;
+  avatarUrl?: string;
 };
 
 export type AdminUpdateUserRequest = Omit<AdminCreateUserRequest, 'password' | 'roleType'>;
@@ -390,6 +391,7 @@ const cleanUserPayload = (data: AdminCreateUserRequest | AdminUpdateUserRequest)
     : Number(data.experienceYears),
   stableName: data.stableName?.trim() || undefined,
   address: data.address?.trim() || undefined,
+  avatarUrl: data.avatarUrl?.trim() || undefined,
 });
 
 export const adminUserService = {

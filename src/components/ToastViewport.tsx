@@ -67,7 +67,7 @@ const ToastViewport = () => {
         return (
           <div
             key={toast.id}
-            className={`pointer-events-auto flex items-start gap-3 rounded-xl border px-4 py-3 backdrop-blur-xl transition-all duration-300 ${toneStyles[toast.tone]}`}
+            className={`toast-motion-item pointer-events-auto flex items-start gap-3 rounded-xl border px-4 py-3 backdrop-blur-xl transition-all duration-300 ${toneStyles[toast.tone]}`}
             role={toast.tone === 'error' ? 'alert' : 'status'}
             aria-live={toast.tone === 'error' ? 'assertive' : 'polite'}
             aria-atomic="true"

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react';
-import { ArrowDown, ArrowUp, CheckCircle2, ClipboardList, Flag, Gauge, Layers, ShieldCheck, Trophy, Users } from 'lucide-react';
+import { ArrowDown, ArrowUp, CheckCircle2, ChevronDown, ClipboardList, Flag, Gauge, Layers, RefreshCw, ShieldCheck, Users } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
 import { getApiErrorMessage } from '../../services/apiClient';
 import { authService } from '../../services/authService';
@@ -40,6 +40,12 @@ type LapEntryDraft = {
   position: string;
   lapTimeSec: string;
   recordedAt: string;
+};
+
+type ParticipantLapStats = {
+  completedLaps: number;
+  bestLapSec?: number;
+  averageLapSec?: number;
 };
 
 const getLapDraftKey = (lapNumber: number, assignmentId: number) => `${lapNumber}:${assignmentId}`;
@@ -105,6 +111,7 @@ const RaceControlPage = () => {
   const isReferee = roleType === 'race_referee';
 
   const [selectedRaceId, setSelectedRaceId] = useState(() => searchParams.get('raceId') ?? '');
+  const [isAssignedRaceDropdownOpen, setIsAssignedRaceDropdownOpen] = useState(false);
   const [assignedRaces, setAssignedRaces] = useState<RefereeAssignedRaceItem[]>([]);
   const [participants, setParticipants] = useState<JockeyAssignmentItem[]>([]);
   const [reports, setReports] = useState<RefereeReportItem[]>([]);
@@ -166,7 +173,7 @@ const RaceControlPage = () => {
     [raceRounds, raceSnapshot?.lapCount],
   );
   const lapStatsByAssignment = useMemo(() => {
-    const stats = new Map<number, { completedLaps: number; bestLapSec?: number; averageLapSec?: number }>();
+    const stats = new Map<number, ParticipantLapStats>();
 
     lapParticipants.forEach((participant) => {
       const participantRounds = raceRounds.filter((round) => (
@@ -628,73 +635,96 @@ const RaceControlPage = () => {
           </div>
         </div>
 
-        <section className="mb-6 grid gap-6 xl:grid-cols-[340px_minmax(0,1fr)]">
-          <article className="glass-panel rounded-xl p-6">
-            <div className="mb-4 flex items-center gap-3">
+        <section className={`relative mb-6 grid items-stretch gap-4 xl:grid-cols-[320px_minmax(0,1fr)] ${isAssignedRaceDropdownOpen ? 'z-[80]' : 'z-10'}`}>
+          <article className="glass-panel h-full rounded-xl p-4">
+            <div className="mb-3 flex items-center gap-3">
               <Gauge className="h-5 w-5 text-secondary" />
-              <h2 className="font-display text-title-large font-bold text-primary">Race selector</h2>
+              <h2 className="font-display text-title-medium font-bold text-primary">Race selector</h2>
             </div>
 
-            <TextInput
-              label="Race ID"
-              value={selectedRaceId}
-              onChange={handleSelectRace}
-              placeholder="Enter race ID"
-            />
-
             {isReferee && (
-              <div className="mt-5">
-                <div className="mb-3 flex items-center justify-between">
-                  <p className="text-label-sm font-bold uppercase tracking-[0.16em] text-outline">Assigned races</p>
+              <div>
+                <div className="mb-2 flex items-center justify-between gap-3">
+                  <p className="text-label-sm font-bold uppercase tracking-[0.16em] text-outline">Assigned race</p>
                   <button
                     type="button"
                     onClick={() => void loadAssignedRaces()}
-                    className="text-label-sm font-semibold text-primary"
+                    className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-outline-variant text-primary transition-colors hover:bg-surface-container-high disabled:cursor-not-allowed disabled:opacity-60"
                     disabled={isBusy || isLoadingAssigned}
+                    aria-label="Refresh assigned races"
                   >
-                    Refresh
+                    <RefreshCw className={`h-4 w-4 ${isLoadingAssigned ? 'animate-spin' : ''}`} />
                   </button>
                 </div>
-                <div className="space-y-3">
-                  {isLoadingAssigned ? (
-                    <p className="text-body-sm text-on-surface-variant">Loading assigned races...</p>
-                  ) : assignedRaces.length === 0 ? (
-                    <p className="text-body-sm text-on-surface-variant">No assigned races found.</p>
-                  ) : assignedRaces.map((race) => (
-                    <button
-                      key={race.assignmentId ?? race.raceId}
-                      type="button"
-                      onClick={() => handleSelectRace(String(race.raceId))}
-                      className={`w-full rounded-lg border px-4 py-3 text-left transition-colors ${
-                        String(race.raceId) === normalizedRaceId
-                          ? 'border-primary bg-primary-container/10'
-                          : 'border-outline-variant bg-surface-container-low hover:bg-surface-container-high'
-                      }`}
-                    >
-                      <p className="font-semibold text-on-surface">{race.raceName}</p>
-                      <p className="mt-1 text-body-sm text-on-surface-variant">
-                        Race #{race.raceId} • {race.refereeRole ?? 'Referee'} • {race.status}
-                      </p>
-                    </button>
-                  ))}
+
+                <div className="relative">
+                  <button
+                    type="button"
+                    onClick={() => setIsAssignedRaceDropdownOpen((current) => !current)}
+                    disabled={isBusy || isLoadingAssigned || assignedRaces.length === 0}
+                    className="flex w-full items-center justify-between gap-3 rounded-lg border border-outline-variant bg-surface-container-low px-4 py-3 text-left transition-colors hover:bg-surface-container-high disabled:cursor-not-allowed disabled:opacity-70"
+                  >
+                    <span className="min-w-0">
+                      <span className="block truncate text-body-sm font-semibold text-on-surface">
+                        {isLoadingAssigned
+                          ? 'Loading assigned races...'
+                          : activeRaceSummary?.raceName ?? (assignedRaces.length > 0 ? 'Choose assigned race' : 'No assigned races found')}
+                      </span>
+                      <span className="mt-1 block truncate text-label-sm text-on-surface-variant">
+                        {activeRaceSummary
+                          ? `${getScheduleLabel(activeRaceSummary)} - ${activeRaceSummary.refereeRole ?? 'Referee'} - ${activeRaceSummary.status}`
+                          : 'Assign race'}
+                      </span>
+                    </span>
+                    <ChevronDown className={`h-4 w-4 shrink-0 text-primary transition-transform ${isAssignedRaceDropdownOpen ? 'rotate-180' : ''}`} />
+                  </button>
+
+                  {isAssignedRaceDropdownOpen && assignedRaces.length > 0 && (
+                    <div className="absolute left-0 right-0 z-[90] mt-2 max-h-72 overflow-y-auto rounded-lg border border-outline-variant bg-white p-2 shadow-xl">
+                      {assignedRaces.map((race) => (
+                        <button
+                          key={race.assignmentId ?? race.raceId}
+                          type="button"
+                          onClick={() => handleSelectRace(String(race.raceId))}
+                          className={`w-full rounded-md px-3 py-2 text-left transition-colors ${
+                            String(race.raceId) === normalizedRaceId
+                              ? 'bg-primary-container/15 text-primary'
+                              : 'hover:bg-surface-container-high'
+                          }`}
+                        >
+                          <p className="truncate text-body-sm font-semibold text-on-surface">{race.raceName}</p>
+                          <p className="mt-1 truncate text-label-sm text-on-surface-variant">
+                            {getScheduleLabel(race)} - {race.refereeRole ?? 'Referee'} - {race.status}
+                          </p>
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </div>
             )}
+
+            {!isReferee && (
+              <p className="text-body-sm text-on-surface-variant">
+                Open a race from the admin list to load workflow data.
+              </p>
+            )}
           </article>
 
-          <article className="glass-panel rounded-xl p-6">
-            <div className="mb-4 flex items-center gap-3">
+          <article className="glass-panel h-full rounded-xl p-4">
+            <div className="mb-3 flex items-center gap-3">
               <ShieldCheck className="h-5 w-5 text-secondary" />
-              <h2 className="font-display text-title-large font-bold text-primary">Current race snapshot</h2>
+              <h2 className="font-display text-title-medium font-bold text-primary">Current race snapshot</h2>
             </div>
             {!normalizedRaceId ? (
-              <p className="text-body-sm text-on-surface-variant">Select or enter a race to load workflow data.</p>
+              <p className="text-body-sm text-on-surface-variant">Choose an assigned race to load workflow data.</p>
             ) : isLoadingRaceData || isLoadingAdminResults ? (
               <p className="text-body-sm text-on-surface-variant">Loading workflow data...</p>
             ) : (
-              <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
+              <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
                 <InfoTile label="Race ID" value={normalizedRaceId} />
                 <InfoTile label="Race Name" value={activeRaceSummary?.raceName ?? raceSnapshot?.name ?? draft?.raceName ?? adminResults[0]?.raceName ?? '-'} />
+                <InfoTile label="Schedule" value={getScheduleLabel(activeRaceSummary ?? raceSnapshot ?? undefined)} />
                 <InfoTile label="Tournament" value={activeRaceSummary?.tournamentName ?? raceSnapshot?.tournamentName ?? adminResults[0]?.tournamentName ?? lapRanking[0]?.tournamentName ?? '-'} />
                 <InfoTile label="Status" value={activeRaceSummary?.status ?? raceSnapshot?.status ?? draft?.status ?? adminResults[0]?.status ?? '-'} />
                 <InfoTile label={isReferee ? "Participants" : "Result records"} value={String(isReferee ? participants.length : adminResults.length)} />
@@ -702,7 +732,6 @@ const RaceControlPage = () => {
             )}
           </article>
         </section>
-
         <div className="space-y-6">
           <section className="glass-panel rounded-xl p-6">
             <div className="mb-5 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
@@ -806,13 +835,97 @@ const RaceControlPage = () => {
             <div className="mt-8 border-t border-outline-variant pt-6">
               <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
                 <div>
-                  <h3 className="font-display text-title-medium font-bold text-primary">Provisional race ranking</h3>
-                  <p className="mt-1 text-body-sm text-on-surface-variant">Automatically recalculated from saved laps. Final ranking still follows the confirm and publish workflow.</p>
+                  <div className="flex flex-wrap items-center gap-3">
+                    <h3 className="font-display text-title-medium font-bold text-primary">Race ranking</h3>
+                    <span className="rounded-full border border-secondary/30 bg-secondary/10 px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-[0.14em] text-secondary">
+                      Live from laps
+                    </span>
+                  </div>
+                  <p className="mt-1 text-body-sm text-on-surface-variant">
+                    Ranking and lap statistics update after every saved lap. Chief and main referees can adjust this same list before saving the official draft.
+                  </p>
                 </div>
-                <span className="text-label-sm font-semibold text-on-surface-variant">{lapRanking.length} ranked participant(s)</span>
+                <div className="flex flex-wrap items-center gap-2">
+                  {isReferee && (
+                    <span className="rounded-full bg-surface-container px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-on-surface-variant">
+                      {formatRefereeRoleLabel(activeRaceSummary?.refereeRole)}
+                    </span>
+                  )}
+                  <span className="text-label-sm font-semibold text-on-surface-variant">
+                    {(isReferee ? draftItems.length : lapRanking.length)} ranked participant(s)
+                  </span>
+                </div>
               </div>
-              {lapRanking.length === 0 ? (
-                <p className="rounded-md bg-surface-container-low px-4 py-6 text-center text-body-sm text-on-surface-variant">Save a lap result to calculate the provisional ranking.</p>
+
+              {isReferee ? (
+                <form onSubmit={handleSubmitDraft} className="grid gap-4">
+                  {!canEditResults && (
+                    <p className="rounded-md border border-outline-variant bg-surface-container-low px-3 py-2 text-body-sm text-on-surface-variant">
+                      Ranking is read-only. Only a chief or main referee can save the official draft.
+                    </p>
+                  )}
+                  {canEditResults && !isRaceInProgress && (
+                    <p className="rounded-md border border-outline-variant bg-surface-container-low px-3 py-2 text-body-sm text-on-surface-variant">
+                      Ranking can be edited and saved when the race is in progress.
+                    </p>
+                  )}
+                  <p className="rounded-md border border-outline-variant bg-surface-container-low px-3 py-2 text-label-sm text-on-surface-variant">
+                    {automaticReportId
+                      ? 'Your report will be linked to this ranking automatically.'
+                      : 'No report from your account is available yet. You can still save the ranking without entering a report ID.'}
+                  </p>
+                  <p className="text-label-sm text-on-surface-variant">
+                    Lap data supplies the live order and statistics. Use the arrow buttons only when an official adjustment is required.
+                  </p>
+
+                  <div className="space-y-3">
+                    {draftItems.map((item, index) => {
+                      const rankingIndex = lapRanking.findIndex((result) => result.assignmentId === item.assignmentId);
+                      const rankingResult = rankingIndex >= 0 ? lapRanking[rankingIndex] : undefined;
+                      const stats = lapStatsByAssignment.get(item.assignmentId);
+                      const leader = lapRanking[0];
+                      const leaderStats = leader ? lapStatsByAssignment.get(leader.assignmentId) : undefined;
+                      const canCompareGap = rankingIndex > 0
+                        && stats?.completedLaps === leaderStats?.completedLaps
+                        && rankingResult?.finishTimeSec != null
+                        && leader?.finishTimeSec != null;
+                      const gap = canCompareGap && rankingResult && leader
+                        ? Number(rankingResult.finishTimeSec) - Number(leader.finishTimeSec)
+                        : undefined;
+
+                      return (
+                        <ParticipantResultRow
+                          key={item.assignmentId}
+                          item={item}
+                          participant={participantByAssignmentId.get(item.assignmentId)}
+                          index={index}
+                          total={draftItems.length}
+                          lapStats={stats}
+                          configuredLapCount={configuredLapCount}
+                          points={rankingResult?.pointsAwarded ?? 0}
+                          gapLabel={rankingIndex === 0 ? 'Leader' : gap === undefined ? '-' : `+${formatSeconds(gap)}`}
+                          isEditable={canEditResults && isRaceInProgress}
+                          onChange={(nextItem) => updateDraftItem(index, nextItem)}
+                          onMove={(direction) => moveDraftItem(index, direction)}
+                        />
+                      );
+                    })}
+                    {!isLoadingRaceData && draftItems.length === 0 && (
+                      <div className="rounded-lg border border-outline-variant bg-surface-container-low px-4 py-8 text-center text-body-sm text-on-surface-variant">
+                        No confirmed horse assignments found for this race.
+                      </div>
+                    )}
+                  </div>
+
+                  <button
+                    disabled={isBusy || !canEditResults || !isRaceInProgress || draftItems.length === 0}
+                    className="cursor-pointer rounded-md bg-secondary px-5 py-3 text-body-sm font-bold text-white hover:bg-opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {draft ? 'Update draft ranking' : 'Save draft ranking'}
+                  </button>
+                </form>
+              ) : lapRanking.length === 0 ? (
+                <p className="rounded-md bg-surface-container-low px-4 py-6 text-center text-body-sm text-on-surface-variant">Save a lap result to calculate the race ranking.</p>
               ) : (
                 <div className="overflow-x-auto">
                   <table className="w-full min-w-[920px] text-left">
@@ -838,7 +951,7 @@ const RaceControlPage = () => {
                         const gap = canCompareGap ? Number(result.finishTimeSec) - Number(leader.finishTimeSec) : undefined;
 
                         return (
-                          <tr key={result.resultId ?? result.assignmentId}>
+                          <tr key={result.resultId ?? result.assignmentId} className="transition-colors hover:bg-surface-container-low">
                             <td className="px-4 py-4 font-display text-title-medium font-extrabold text-secondary">#{result.finishPosition ?? index + 1}</td>
                             <td className="px-4 py-4"><p className="text-body-sm font-bold text-primary">{participant?.horseName ?? result.horseName ?? `Assignment #${result.assignmentId}`}</p><p className="mt-1 text-label-sm text-on-surface-variant">{participant?.jockeyName ?? result.jockeyFullName ?? '-'}</p></td>
                             <td className="px-4 py-4 text-body-sm text-on-surface-variant">{stats?.completedLaps ?? 0}{configuredLapCount ? `/${configuredLapCount}` : ''}</td>
@@ -858,7 +971,7 @@ const RaceControlPage = () => {
           </section>
 
           {isReferee && (
-            <section className="grid gap-6 xl:grid-cols-2">
+            <section>
               <article className="glass-panel rounded-xl p-6">
                 <div className="mb-5 flex items-center gap-3">
                   <ClipboardList className="h-5 w-5 text-secondary" />
@@ -884,49 +997,6 @@ const RaceControlPage = () => {
                 </form>
               </article>
 
-              <article className="glass-panel rounded-xl p-6">
-                <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
-                  <div className="flex items-center gap-3">
-                    <Trophy className="h-5 w-5 text-secondary" />
-                    <h2 className="font-display text-title-large font-bold text-primary">Race ranking</h2>
-                  </div>
-                  <span className="rounded-full bg-surface-container px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-on-surface-variant">{formatRefereeRoleLabel(activeRaceSummary?.refereeRole)}</span>
-                </div>
-                {!canEditResults && (
-                  <p className="mb-4 rounded-md border border-outline-variant bg-surface-container-low px-3 py-2 text-body-sm text-on-surface-variant">Only a chief or main referee can save the official draft ranking.</p>
-                )}
-                {canEditResults && !isRaceInProgress && (
-                  <p className="mb-4 rounded-md border border-outline-variant bg-surface-container-low px-3 py-2 text-body-sm text-on-surface-variant">Ranking can be saved when the race is in progress.</p>
-                )}
-                <form onSubmit={handleSubmitDraft} className="grid gap-4">
-                  <p className="rounded-md border border-outline-variant bg-surface-container-low px-3 py-2 text-label-sm text-on-surface-variant">
-                    {automaticReportId
-                      ? 'Your report will be linked to this ranking automatically.'
-                      : 'No report from your account is available yet. You can still save the ranking without entering a report ID.'}
-                  </p>
-                  <p className="text-label-sm text-on-surface-variant">Use the arrow buttons to reorder horses. Finish positions update automatically.</p>
-                  <div className="space-y-3">
-                    {draftItems.map((item, index) => (
-                      <ParticipantResultRow
-                        key={item.assignmentId}
-                        item={item}
-                        participant={participantByAssignmentId.get(item.assignmentId)}
-                        index={index}
-                        total={draftItems.length}
-                        onChange={(nextItem) => updateDraftItem(index, nextItem)}
-                        onMove={(direction) => moveDraftItem(index, direction)}
-                      />
-                    ))}
-                    {!isLoadingRaceData && draftItems.length === 0 && (
-                      <div className="rounded-lg border border-outline-variant bg-surface-container-low px-4 py-8 text-center text-body-sm text-on-surface-variant">No confirmed horse assignments found for this race.</div>
-                    )}
-                  </div>
-                  <button disabled={isBusy || !canEditResults || !isRaceInProgress || draftItems.length === 0}
-                    className="cursor-pointer rounded-md bg-secondary px-5 py-3 text-body-sm font-bold text-white hover:bg-opacity-90 disabled:cursor-not-allowed disabled:opacity-60">
-                    {draft ? 'Update draft ranking' : 'Save draft ranking'}
-                  </button>
-                </form>
-              </article>
             </section>
           )}
 
@@ -1093,6 +1163,11 @@ const ParticipantResultRow = ({
   participant,
   index,
   total,
+  lapStats,
+  configuredLapCount,
+  points,
+  gapLabel,
+  isEditable,
   onChange,
   onMove,
 }: {
@@ -1100,11 +1175,16 @@ const ParticipantResultRow = ({
   participant?: JockeyAssignmentItem;
   index: number;
   total: number;
+  lapStats?: ParticipantLapStats;
+  configuredLapCount?: number;
+  points: number;
+  gapLabel: string;
+  isEditable: boolean;
   onChange: (item: RaceDraftResultItemInput) => void;
   onMove: (direction: -1 | 1) => void;
 }) => (
-  <article className="rounded-lg border border-outline-variant bg-surface-container-low p-4">
-    <div className="grid gap-4 lg:grid-cols-[64px_minmax(0,1.2fr)_minmax(0,0.8fr)_120px_auto] lg:items-center">
+  <article className="rounded-lg border border-outline-variant bg-surface-container-low p-4 transition-colors hover:border-primary/40">
+    <div className="grid gap-4 lg:grid-cols-[64px_minmax(0,1.2fr)_minmax(0,0.8fr)_140px_auto] lg:items-center">
       <div className={`flex h-12 w-12 items-center justify-center rounded-lg font-display text-xl font-extrabold ${item.isDisqualified ? 'bg-error-container/40 text-error' : 'bg-secondary/15 text-secondary'}`}>
         {item.isDisqualified ? 'DQ' : item.finishPosition ?? index + 1}
       </div>
@@ -1116,7 +1196,7 @@ const ParticipantResultRow = ({
         )}
         <div className="min-w-0">
           <p className="break-words text-body-sm font-bold text-primary">{participant?.horseName ?? `Assignment #${item.assignmentId}`}</p>
-          <p className="mt-1 text-label-sm text-on-surface-variant">Gate {participant?.gateNumber ?? '-'} ? Assignment #{item.assignmentId}</p>
+          <p className="mt-1 text-label-sm text-on-surface-variant">Gate {participant?.gateNumber ?? '-'} | Assignment #{item.assignmentId}</p>
         </div>
       </div>
       <div className="min-w-0">
@@ -1124,32 +1204,86 @@ const ParticipantResultRow = ({
         <p className="mt-1 break-words text-body-sm font-semibold text-on-surface-variant">{participant?.jockeyFullName ?? `Jockey ${participant?.jockeyId ?? '-'}`}</p>
       </div>
       <label className="grid gap-1">
-        <span className="text-[10px] font-bold uppercase tracking-wider text-outline">Time (sec)</span>
-        <input type="number" min="0" step="0.01" disabled={item.isDisqualified} value={item.finishTimeSec ?? ''}
+        <span className="text-[10px] font-bold uppercase tracking-wider text-outline">Total time (sec)</span>
+        <input
+          type="number"
+          min="0"
+          step="0.01"
+          disabled={!isEditable || item.isDisqualified}
+          value={item.finishTimeSec ?? ''}
           onChange={(event) => onChange({ ...item, finishTimeSec: event.target.value ? Number(event.target.value) : undefined })}
-          className="w-full rounded-md border border-outline-variant bg-white px-3 py-2 text-body-sm focus:border-primary focus:outline-none disabled:opacity-50" />
+          className="w-full rounded-md border border-outline-variant bg-white px-3 py-2 text-body-sm focus:border-primary focus:outline-none disabled:cursor-not-allowed disabled:bg-surface-container disabled:opacity-70"
+          aria-label={`Total time for ${participant?.horseName ?? `assignment ${item.assignmentId}`}`}
+        />
       </label>
       <div className="flex items-center justify-end gap-2">
-        <button type="button" onClick={() => onMove(-1)} disabled={index === 0} aria-label={`Move ${participant?.horseName ?? 'horse'} up`}
-          className="flex h-9 w-9 cursor-pointer items-center justify-center rounded-md border border-outline-variant bg-white text-primary transition-colors hover:border-primary disabled:cursor-not-allowed disabled:opacity-40"><ArrowUp className="h-4 w-4" /></button>
-        <button type="button" onClick={() => onMove(1)} disabled={index === total - 1} aria-label={`Move ${participant?.horseName ?? 'horse'} down`}
-          className="flex h-9 w-9 cursor-pointer items-center justify-center rounded-md border border-outline-variant bg-white text-primary transition-colors hover:border-primary disabled:cursor-not-allowed disabled:opacity-40"><ArrowDown className="h-4 w-4" /></button>
+        <button
+          type="button"
+          onClick={() => onMove(-1)}
+          disabled={!isEditable || index === 0}
+          aria-label={`Move ${participant?.horseName ?? 'horse'} up`}
+          className="flex h-9 w-9 cursor-pointer items-center justify-center rounded-md border border-outline-variant bg-white text-primary transition-colors hover:border-primary disabled:cursor-not-allowed disabled:opacity-40"
+        >
+          <ArrowUp className="h-4 w-4" />
+        </button>
+        <button
+          type="button"
+          onClick={() => onMove(1)}
+          disabled={!isEditable || index === total - 1}
+          aria-label={`Move ${participant?.horseName ?? 'horse'} down`}
+          className="flex h-9 w-9 cursor-pointer items-center justify-center rounded-md border border-outline-variant bg-white text-primary transition-colors hover:border-primary disabled:cursor-not-allowed disabled:opacity-40"
+        >
+          <ArrowDown className="h-4 w-4" />
+        </button>
       </div>
     </div>
+
+    <div className="mt-3 grid gap-2 border-t border-outline-variant pt-3 sm:grid-cols-2 lg:grid-cols-5">
+      <RankingStat label="Completed" value={`${lapStats?.completedLaps ?? 0}${configuredLapCount ? `/${configuredLapCount}` : ''}`} />
+      <RankingStat label="Best lap" value={formatSeconds(lapStats?.bestLapSec)} />
+      <RankingStat label="Average" value={formatSeconds(lapStats?.averageLapSec)} />
+      <RankingStat label="Gap" value={gapLabel} />
+      <RankingStat label="Points" value={String(points)} emphasis />
+    </div>
+
     <div className="mt-3 grid gap-3 border-t border-outline-variant pt-3 sm:grid-cols-[auto_minmax(0,1fr)] sm:items-center">
-      <label className="flex cursor-pointer items-center gap-2 text-body-sm font-semibold text-primary">
-        <input type="checkbox" checked={item.isDisqualified} onChange={(event) => onChange({ ...item, isDisqualified: event.target.checked })} />
+      <label className={`flex items-center gap-2 text-body-sm font-semibold text-primary ${isEditable ? 'cursor-pointer' : 'cursor-not-allowed opacity-70'}`}>
+        <input
+          type="checkbox"
+          checked={item.isDisqualified}
+          disabled={!isEditable}
+          onChange={(event) => onChange({ ...item, isDisqualified: event.target.checked })}
+        />
         Disqualified
       </label>
       {item.isDisqualified && (
         <label className="grid gap-1">
           <span className="text-[10px] font-bold uppercase tracking-wider text-outline">Disqualification reason</span>
-          <input value={item.disqualifyReason ?? ''} onChange={(event) => onChange({ ...item, disqualifyReason: event.target.value })}
-            className="w-full rounded-md border border-outline-variant bg-white px-3 py-2 text-body-sm focus:border-primary focus:outline-none" />
+          <input
+            value={item.disqualifyReason ?? ''}
+            disabled={!isEditable}
+            onChange={(event) => onChange({ ...item, disqualifyReason: event.target.value })}
+            className="w-full rounded-md border border-outline-variant bg-white px-3 py-2 text-body-sm focus:border-primary focus:outline-none disabled:cursor-not-allowed disabled:bg-surface-container disabled:opacity-70"
+          />
         </label>
       )}
     </div>
   </article>
+);
+
+const RankingStat = ({
+  label,
+  value,
+  emphasis = false,
+}: {
+  label: string;
+  value: string;
+  emphasis?: boolean;
+}) => (
+  <div className="rounded-md border border-outline-variant/70 bg-white px-3 py-2">
+    <p className="text-[10px] font-bold uppercase tracking-wider text-outline">{label}</p>
+    <p className={`mt-1 text-body-sm font-bold ${emphasis ? 'text-secondary' : 'text-on-surface'}`}>{value}</p>
+  </div>
 );
 const MetricCard = ({ icon, label, value }: { icon: ReactNode; label: string; value: string }) => (
   <div className="rounded-xl border border-outline-variant/40 bg-surface-container-lowest/70 p-4">
@@ -1162,9 +1296,9 @@ const MetricCard = ({ icon, label, value }: { icon: ReactNode; label: string; va
 );
 
 const InfoTile = ({ label, value }: { label: string; value: string }) => (
-  <div className="rounded-xl border border-outline-variant/30 bg-surface-container-low px-4 py-3">
-    <p className="text-label-sm font-bold uppercase tracking-[0.12em] text-outline">{label}</p>
-    <p className="mt-2 font-semibold text-on-surface">{value}</p>
+  <div className="min-w-0 rounded-lg border border-outline-variant/30 bg-surface-container-low px-3 py-2">
+    <p className="truncate text-[10px] font-bold uppercase tracking-[0.12em] text-outline">{label}</p>
+    <p className="mt-1 truncate text-body-sm font-semibold text-on-surface" title={value}>{value}</p>
   </div>
 );
 
@@ -1255,6 +1389,30 @@ const formatDateTime = (value?: string) => {
     hour: '2-digit',
     minute: '2-digit',
   });
+};
+
+type RaceScheduleSummary = {
+  scheduleId?: number;
+  scheduleTitle?: string;
+  dayNumber?: number;
+  scheduledAt?: string;
+};
+
+const getScheduleLabel = (race?: RaceScheduleSummary) => {
+  const title = race?.scheduleTitle?.trim();
+  if (title) {
+    return title;
+  }
+
+  if (race?.dayNumber) {
+    return `Day ${race.dayNumber}`;
+  }
+
+  if (race?.scheduleId) {
+    return `Schedule #${race.scheduleId}`;
+  }
+
+  return formatDateTime(race?.scheduledAt);
 };
 
 export default RaceControlPage;

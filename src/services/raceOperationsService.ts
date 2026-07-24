@@ -15,6 +15,9 @@ export type RefereeAssignedRaceItem = {
   raceId: number;
   raceName: string;
   tournamentName?: string;
+  scheduleId?: number;
+  scheduleTitle?: string;
+  dayNumber?: number;
   status: string;
   scheduledAt?: string;
   predictionClosesAt?: string;
@@ -171,6 +174,9 @@ const mapPointRule = (raw: RawObject): RacePointRuleItem => ({
 const mapAssignedRace = (raw: RawObject): RefereeAssignedRaceItem => ({
   raceId: asNumber(raw.raceId),
   tournamentName: asString(raw.tournamentName) || undefined,
+  scheduleId: asOptionalNumber(raw.scheduleId),
+  scheduleTitle: asString(raw.scheduleTitle ?? raw.scheduleName) || undefined,
+  dayNumber: asOptionalNumber(raw.dayNumber ?? raw.day),
   raceName: asString(raw.raceName, 'Race'),
   status: asString(raw.status, 'scheduled'),
   scheduledAt: asString(raw.scheduledAt) || undefined,

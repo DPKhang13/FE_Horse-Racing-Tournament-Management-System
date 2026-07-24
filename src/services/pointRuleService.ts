@@ -93,7 +93,7 @@ export const pointRuleService = {
     };
   },
 
-  async updatePointRules(raceId: number | string, rules: PointRuleRequest[]): Promise<PointRuleMutationResult> {
+  async replacePointRules(raceId: number | string, rules: PointRuleRequest[]): Promise<PointRuleMutationResult> {
     const response = await apiClient.put(`${getPointRuleEndpoint(raceId)}/update`, toPointRulePayload(rules));
 
     return {

@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { CalendarDays, Clock3, MapPin, Trophy, X } from 'lucide-react';
+import { CalendarDays, Clock3, Eye, MapPin, Trophy, X } from 'lucide-react';
 import type { JockeyAssignmentItem } from '../../services/jockeyAssignmentService';
 import { formatInvitationDateTime, getEffectiveInvitationStatus } from './invitationUtils';
 const statusClasses: Record<string, string> = {
@@ -44,12 +44,14 @@ export const InvitationCard = ({
   counterpartLabel,
   counterpartName,
   counterpartAvatarUrl,
+  onViewDetails,
   actions,
 }: {
   assignment: JockeyAssignmentItem;
   counterpartLabel: string;
   counterpartName: string;
   counterpartAvatarUrl?: string;
+  onViewDetails?: () => void;
   actions?: ReactNode;
 }) => {
   const status = getEffectiveInvitationStatus(assignment);
@@ -68,7 +70,20 @@ export const InvitationCard = ({
             <Trophy className="h-4 w-4 shrink-0 text-secondary" /> {assignment.tournamentName ?? 'Tournament information unavailable'}
           </p>
         </div>
-        <InvitationStatusBadge status={status} />
+        <div className="flex shrink-0 items-center gap-2">
+          {onViewDetails && (
+            <button
+              type="button"
+              onClick={onViewDetails}
+              className="flex h-9 w-9 cursor-pointer items-center justify-center rounded-md border border-outline-variant text-on-surface-variant transition-colors hover:border-primary hover:text-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+              aria-label={`View invitation details for ${assignment.horseName ?? assignment.raceName ?? 'invitation'}`}
+              title="View invitation details"
+            >
+              <Eye className="h-4 w-4" />
+            </button>
+          )}
+          <InvitationStatusBadge status={status} />
+        </div>
       </div>
 
       <div className="mt-4 grid min-w-0 gap-3 sm:grid-cols-2">
@@ -147,5 +162,85 @@ export const InvitationModal = ({
       </div>
       <div className="max-h-[calc(100vh-11rem)] overflow-y-auto overflow-x-hidden">{children}</div>
     </div>
+  </div>
+);
+
+export const InvitationDetailModal = ({
+  assignment,
+  counterpartLabel,
+  counterpartName,
+  onClose,
+}: {
+  assignment: JockeyAssignmentItem;
+  counterpartLabel: string;
+  counterpartName: string;
+  onClose: () => void;
+}) => {
+  const status = getEffectiveInvitationStatus(assignment);
+  const invitationId = assignment.assignmentId ?? assignment.id;
+  const registrationId = assignment.regId ?? assignment.registrationId;
+
+  return (
+    <InvitationModal
+      title={assignment.horseName ?? assignment.raceName ?? 'Invitation details'}
+      subtitle={`Invitation ${invitationId != null ? `#${invitationId}` : 'details'}`}
+      onClose={onClose}
+    >
+      <div className="space-y-6 p-5 sm:p-6">
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-outline-variant bg-surface-container-low p-4">
+          <div>
+            <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-outline">Current status</p>
+            <p className="mt-1 text-body-sm font-semibold text-on-surface">Invitation lifecycle status</p>
+          </div>
+          <InvitationStatusBadge status={status} />
+        </div>
+
+        <DetailSection title="Race information">
+          <DetailItem label="Tournament" value={assignment.tournamentName ?? 'Tournament information unavailable'} />
+          <DetailItem label="Race" value={assignment.raceName ?? `Race ${assignment.raceId ?? '-'}`} />
+          <DetailItem label="Race number" value={assignment.raceNumber ?? assignment.raceId ?? '-'} />
+          <DetailItem label="Scheduled at" value={formatInvitationDateTime(assignment.scheduledAt)} />
+          <DetailItem label="Gate" value={assignment.gateNumber ?? '-'} />
+        </DetailSection>
+
+        <DetailSection title="Participants">
+          <DetailItem label="Horse" value={assignment.horseName ?? `Horse ${assignment.horseId ?? '-'}`} />
+          <DetailItem label={counterpartLabel} value={counterpartName} />
+          {assignment.ownerFullName && <DetailItem label="Owner" value={assignment.ownerFullName} />}
+          {assignment.ownerStableName && <DetailItem label="Stable" value={assignment.ownerStableName} />}
+          {assignment.jockeyFullName && <DetailItem label="Jockey" value={assignment.jockeyFullName} />}
+        </DetailSection>
+
+        <DetailSection title="Invitation timeline">
+          <DetailItem label="Invited at" value={formatInvitationDateTime(assignment.invitedAt)} />
+          <DetailItem label="Response deadline" value={formatInvitationDateTime(assignment.responseDeadline)} />
+          <DetailItem label="Responded at" value={formatInvitationDateTime(assignment.respondedAt)} />
+          <DetailItem label="Cancelled at" value={formatInvitationDateTime(assignment.cancelledAt)} />
+          <DetailItem label="Expired at" value={formatInvitationDateTime(assignment.expiredAt)} />
+        </DetailSection>
+
+        <DetailSection title="References">
+          <DetailItem label="Invitation ID" value={invitationId ?? '-'} />
+          <DetailItem label="Registration ID" value={registrationId ?? '-'} />
+          <DetailItem label="Race ID" value={assignment.raceId ?? '-'} />
+          <DetailItem label="Horse ID" value={assignment.horseId ?? '-'} />
+          <DetailItem label="Jockey ID" value={assignment.jockeyId ?? '-'} />
+        </DetailSection>
+      </div>
+    </InvitationModal>
+  );
+};
+
+const DetailSection = ({ title, children }: { title: string; children: ReactNode }) => (
+  <section>
+    <h3 className="mb-3 text-label-md font-extrabold uppercase tracking-[0.14em] text-primary">{title}</h3>
+    <div className="grid gap-3 sm:grid-cols-2">{children}</div>
+  </section>
+);
+
+const DetailItem = ({ label, value }: { label: string; value: ReactNode }) => (
+  <div className="min-w-0 rounded-lg border border-outline-variant bg-white p-3">
+    <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-outline">{label}</p>
+    <p className="mt-1 break-words text-body-sm font-semibold text-on-surface">{value}</p>
   </div>
 );

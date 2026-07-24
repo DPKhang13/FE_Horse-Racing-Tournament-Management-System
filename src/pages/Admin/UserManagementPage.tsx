@@ -12,6 +12,7 @@ import {
   Users,
   X,
 } from 'lucide-react';
+import ImageUploadField from '../../components/forms/ImageUploadField';
 import { getApiErrorMessage } from '../../services/apiClient';
 import {
   adminUserService,
@@ -20,6 +21,7 @@ import {
   type AdminUserStatus,
   type AdminUpdateUserRequest,
 } from '../../services/adminUserService';
+import { getUploadedImageUrl, uploadService } from '../../services/uploadService';
 import type { UserRoleType } from '../../types/user';
 import { roleLabels } from '../../utils/permissions';
 
@@ -49,6 +51,7 @@ const emptyUserForm: UserFormData = {
   experienceYears: undefined,
   stableName: '',
   address: '',
+  avatarUrl: '',
 };
 
 const formatStatusLabel = (status: AdminUserStatus | string) => {
@@ -96,6 +99,7 @@ const toFormData = (user: AdminUser): UserFormData => {
     licenseNumber: ownerProfile?.licenseNumber ?? user.jockeyProfile?.licenseNumber ?? user.refereeProfile?.licenseNumber ?? '',
     experienceYears: user.jockeyProfile?.experienceYears,
     address: ownerProfile?.address ?? user.refereeProfile?.address ?? '',
+    avatarUrl: user.avatarUrl ?? '',
   };
 };
 
@@ -170,6 +174,7 @@ const UserManagementPage = () => {
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [formData, setFormData] = useState<UserFormData>(emptyUserForm);
   const [formErrors, setFormErrors] = useState<UserFormErrors>({});
+  const [selectedImageFile, setSelectedImageFile] = useState<File | null>(null);
   const [resetUser, setResetUser] = useState<AdminUser | null>(null);
   const [newPassword, setNewPassword] = useState('');
 
@@ -291,6 +296,7 @@ const UserManagementPage = () => {
     setSelectedUser(null);
     setFormData(emptyUserForm);
     setFormErrors({});
+    setSelectedImageFile(null);
     setMessage('');
     setIsFormOpen(true);
   };
@@ -305,6 +311,7 @@ const UserManagementPage = () => {
       setSelectedUser(detail);
       setFormData(toFormData(detail));
       setFormErrors({});
+      setSelectedImageFile(null);
       setIsFormOpen(true);
     } catch (error) {
       setErrorMessage(getApiErrorMessage(error, 'Unable to load user details.'));
@@ -317,6 +324,7 @@ const UserManagementPage = () => {
     setIsFormOpen(false);
     setSelectedUser(null);
     setFormErrors({});
+    setSelectedImageFile(null);
   };
 
   const handleFilterRoleChange = (value: RoleFilter) => {
@@ -361,11 +369,26 @@ const UserManagementPage = () => {
     setErrorMessage('');
 
     try {
+      let nextFormData = formData;
+
+      if (selectedImageFile) {
+        const uploadResponse = selectedUser
+          ? await uploadService.uploadUserImage(selectedUser.userId, selectedImageFile)
+          : await uploadService.uploadNewUserImage(selectedImageFile);
+        const avatarUrl = getUploadedImageUrl(uploadResponse);
+
+        if (!avatarUrl) {
+          throw new Error('The image upload did not return an image URL.');
+        }
+
+        nextFormData = { ...formData, avatarUrl };
+      }
+
       if (selectedUser) {
-        await adminUserService.updateUser(selectedUser.userId, toUpdatePayload(formData));
+        await adminUserService.updateUser(selectedUser.userId, toUpdatePayload(nextFormData));
         setMessage('User updated.');
       } else {
-        await adminUserService.createUser(formData);
+        await adminUserService.createUser(nextFormData);
         setMessage('User created.');
       }
 
@@ -609,6 +632,8 @@ const UserManagementPage = () => {
             formErrors={formErrors}
             isSaving={isSaving}
             isEditing={Boolean(selectedUser)}
+            selectedImageFile={selectedImageFile}
+            onImageFileChange={setSelectedImageFile}
             onChange={handleFieldChange}
             onSubmit={handleSubmit}
             onCancel={closeFormModal}
@@ -847,6 +872,8 @@ const UserForm = ({
   formErrors,
   isSaving,
   isEditing,
+  selectedImageFile,
+  onImageFileChange,
   onChange,
   onSubmit,
   onCancel,
@@ -855,11 +882,23 @@ const UserForm = ({
   formErrors: UserFormErrors;
   isSaving: boolean;
   isEditing: boolean;
+  selectedImageFile: File | null;
+  onImageFileChange: (file: File | null) => void;
   onChange: <K extends keyof UserFormData>(field: K, value: UserFormData[K]) => void;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
   onCancel: () => void;
 }) => (
   <form onSubmit={onSubmit} className="space-y-8 p-6">
+    <ImageUploadField
+      currentImageUrl={formData.avatarUrl}
+      alt={formData.fullName || formData.username || 'User avatar preview'}
+      file={selectedImageFile}
+      onFileChange={onImageFileChange}
+      disabled={isSaving}
+      shape="circle"
+      label="User avatar"
+      tone="dark"
+    />
     <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
       <Field label="Username" error={formErrors.username}>
         <input type="text" value={formData.username} onChange={(event) => onChange('username', event.target.value)} className={inputClassName} />

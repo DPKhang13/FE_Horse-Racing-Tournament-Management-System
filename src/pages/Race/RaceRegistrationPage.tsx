@@ -25,6 +25,8 @@ const normalizeStatus = (value?: string) => value?.trim().toLowerCase().replace(
 
 const tournamentIdOf = (tournament: TournamentApiItem) => tournament.tournamentId ?? tournament.id ?? 0;
 const getTournamentName = (tournament: TournamentApiItem) => tournament.name ?? `Tournament ${tournamentIdOf(tournament)}`;
+const getScheduleName = (race: RaceScheduleItem) =>
+  race.scheduleTitle?.trim() || (race.dayNumber ? `Day ${race.dayNumber}` : '-');
 
 const isFutureDate = (value?: string) => {
   if (!value) { return false; }
@@ -415,14 +417,20 @@ const RaceRegistrationPage = () => {
                 <button key={race.raceId} type="button" onClick={() => handleRaceSelect(race)}
                   className="grid w-full gap-3 rounded-lg border border-outline-variant bg-surface-container-low px-5 py-4 text-left transition-colors hover:border-primary hover:bg-white">
                   <div className="flex items-start justify-between gap-4">
-                    <div>
-                      <h3 className="text-body-lg font-bold text-primary">{race.raceName}</h3>
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <h3 className="text-body-lg font-bold text-primary">{race.raceName}</h3>
+                        <span className="rounded-full bg-secondary/15 px-2.5 py-1 text-label-sm font-bold text-secondary">
+                          {getScheduleName(race)}
+                        </span>
+                      </div>
                       <p className="mt-1 text-body-sm text-on-surface-variant">Race #{race.raceNumber || race.raceId} • Group {race.rankGroup}</p>
                     </div>
                     <ChevronRight className="h-5 w-5 text-outline" />
                   </div>
-                  <div className="grid gap-3 sm:grid-cols-3">
-                    <InfoPill label="Schedule" value={formatDateTime(race.scheduledAt)} />
+                  <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                    <InfoPill label="Schedule" value={getScheduleName(race)} />
+                    <InfoPill label="Race time" value={formatDateTime(race.scheduledAt)} />
                     <InfoPill label="Track" value={race.trackType} />
                     <InfoPill label="Slots" value={`${race.registeredHorseCount}/${race.maxHorses || '-'}`} />
                   </div>
@@ -438,10 +446,11 @@ const RaceRegistrationPage = () => {
         <Modal title={`Choose horse for ${selectedRace.raceName}`} subtitle={getTournamentName(selectedTournament)}
           onClose={() => { setIsHorsePickerOpen(false); setSelectedRace(null); }}>
           <div className="space-y-4 p-6">
-            <div className="grid gap-3 rounded-lg border border-outline-variant bg-surface-container-low p-4 sm:grid-cols-3">
+            <div className="grid gap-3 rounded-lg border border-outline-variant bg-surface-container-low p-4 sm:grid-cols-2 lg:grid-cols-4">
+              <InfoPill label="Schedule" value={getScheduleName(selectedRace)} />
               <InfoPill label="Rank group" value={selectedRace.rankGroup} />
               <InfoPill label="Distance" value={`${selectedRace.distanceM} m`} />
-              <InfoPill label="Schedule" value={formatDateTime(selectedRace.scheduledAt)} />
+              <InfoPill label="Race time" value={formatDateTime(selectedRace.scheduledAt)} />
             </div>
             {availableHorses.length === 0 ? (
               <EmptyState title="No horse available" description="All matching horses are already registered or there is no horse in the same rank group." icon={<Trophy className="h-5 w-5" />} />

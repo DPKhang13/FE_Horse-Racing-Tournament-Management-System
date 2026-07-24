@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react';
 import {
   Activity,
+  BadgeDollarSign,
   Ban,
   CalendarDays,
   CheckCircle2,
@@ -45,7 +46,7 @@ type PointRuleFormData = PointRuleRequest & {
   raceId?: number;
 };
 type PointRuleFormErrors = Partial<Record<keyof PointRuleRequest, string>>;
-type RaceAction = 'start' | 'complete' | 'cancel';
+type RaceAction = 'start' | 'openBetting' | 'complete' | 'cancel';
 type RaceStatusFilter = 'All' | 'scheduled' | 'ongoing' | 'completed' | 'cancelled';
 type RefereeAssignmentFormData = {
   refereeId: number | '';
@@ -144,6 +145,8 @@ const canStartRace = (status: string) => {
   return value === 'scheduled' || value === 'ready' || value === 'pending';
 };
 
+const canOpenBetting = (status: string) => normalizeStatus(status) === 'ready';
+
 const validateRaceForm = (data: AdminRaceFormData, existingRace?: AdminRaceItem | null) => {
   const errors: RaceFormErrors = {};
 
@@ -218,8 +221,8 @@ const validatePointRules = (rules: PointRuleFormData[]) => {
       errors[index].finishPosition = 'Position must be unique.';
     }
 
-    if (!Number.isFinite(points) || points <= 0) {
-      errors[index].points = 'Points must be greater than 0.';
+    if (!Number.isFinite(points) || points < 0) {
+      errors[index].points = 'Points must be 0 or greater.';
     }
   });
 
@@ -299,7 +302,6 @@ const AdminRacesPage = () => {
   const [isSaving, setIsSaving] = useState(false);
   const [isPointRulesLoading, setIsPointRulesLoading] = useState(false);
   const [actionRaceId, setActionRaceId] = useState<number | null>(null);
-  const [deletingPointRuleId, setDeletingPointRuleId] = useState<number | null>(null);
   const [editingRace, setEditingRace] = useState<AdminRaceItem | null>(null);
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [formData, setFormData] = useState<AdminRaceFormData>(emptyRaceForm);
@@ -568,7 +570,6 @@ const AdminRacesPage = () => {
     setPointRuleErrors([]);
     setPointRuleListError('');
     setIsPointRulesLoading(false);
-    setDeletingPointRuleId(null);
   };
 
   const openRefereeModal = (race: AdminRaceItem) => {
@@ -692,10 +693,8 @@ const AdminRacesPage = () => {
     setPointRuleListError('');
   };
 
-  const handleRemovePointRule = async (index: number) => {
-    const rule = pointRules[index];
-
-    if (!rule) {
+  const handleRemovePointRule = (index: number) => {
+    if (!pointRules[index]) {
       return;
     }
 
@@ -704,25 +703,9 @@ const AdminRacesPage = () => {
       return;
     }
 
-    if (!editingRace || !rule.id) {
-      setPointRules((current) => current.filter((_, ruleIndex) => ruleIndex !== index));
-      setPointRuleErrors((current) => current.filter((_, errorIndex) => errorIndex !== index));
-      setPointRuleListError('');
-      return;
-    }
-
-    setDeletingPointRuleId(rule.id);
+    setPointRules((current) => current.filter((_, ruleIndex) => ruleIndex !== index));
+    setPointRuleErrors((current) => current.filter((_, errorIndex) => errorIndex !== index));
     setPointRuleListError('');
-
-    try {
-      await pointRuleService.deletePointRule(editingRace.raceId, rule.id);
-      setPointRules((current) => current.filter((_, ruleIndex) => ruleIndex !== index));
-      setPointRuleErrors((current) => current.filter((_, errorIndex) => errorIndex !== index));
-    } catch (error) {
-      setPointRuleListError(getApiErrorMessage(error, 'Unable to delete point rule.'));
-    } finally {
-      setDeletingPointRuleId(null);
-    }
   };
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
@@ -753,7 +736,20 @@ const AdminRacesPage = () => {
 
       if (editingRace) {
         const updatedRace = await adminScheduleRaceApi.updateRace(editingRace.raceId, formData);
-        const pointRuleResult = await pointRuleService.updatePointRules(updatedRace.raceId || editingRace.raceId, pointRulePayload);
+        let pointRuleResult;
+
+        try {
+          pointRuleResult = await pointRuleService.replacePointRules(
+            updatedRace.raceId || editingRace.raceId,
+            pointRulePayload,
+          );
+        } catch (pointRuleError) {
+          const pointRuleErrorText = getApiErrorMessage(pointRuleError, 'Unable to replace point rules.');
+          setPointRuleListError(pointRuleErrorText);
+          await loadRaces();
+          setNotice({ tone: 'error', text: `Race details were updated, but point rules were not replaced. ${pointRuleErrorText}` });
+          return;
+        }
         successText = [updatedRace.responseMessage, pointRuleResult.responseMessage].filter(Boolean).join('\n') || 'Race updated successfully.';
       } else {
         const createdRace = await adminScheduleRaceApi.createRace(selectedScheduleId, formData);
@@ -774,13 +770,16 @@ const AdminRacesPage = () => {
   const handleRaceAction = async (race: AdminRaceItem, action: RaceAction) => {
     const labels: Record<RaceAction, string> = {
       start: 'start',
+      openBetting: 'open betting for',
       complete: 'complete',
       cancel: 'cancel',
     };
 
     const confirmationMessage = action === 'start'
       ? `Start "${race.name}" as an Admin?\n\nThis will move the race to ongoing and close betting for this race.`
-      : `Are you sure you want to ${labels[action]} "${race.name}"?`;
+      : action === 'openBetting'
+        ? `Open betting for "${race.name}"?\n\nThis will move the race from ready to open_for_betting and generate bet options.`
+        : `Are you sure you want to ${labels[action]} "${race.name}"?`;
     const confirmed = window.confirm(confirmationMessage);
 
     if (!confirmed) {
@@ -801,6 +800,8 @@ const AdminRacesPage = () => {
         successText = responseMessage
           ? `Admin action completed for "${race.name}".\n${responseMessage}`
           : `Race "${race.name}" is now in progress. Betting has been closed for this race.`;
+      } else if (action === 'openBetting') {
+        successText = await adminScheduleRaceApi.openBetting(race.raceId) || `Race "${race.name}" is now open for betting.`;
       } else if (action === 'complete') {
         successText = await adminScheduleRaceApi.completeRace(race.raceId) || `Race "${race.name}" completed successfully.`;
       } else {
@@ -813,7 +814,11 @@ const AdminRacesPage = () => {
       const detail = getApiErrorMessage(error, `Unable to ${labels[action]} race.`);
       setNotice({
         tone: 'error',
-        text: action === 'start' ? `Could not start race "${race.name}" as Admin.\n${detail}` : detail,
+        text: action === 'start'
+          ? `Could not start race "${race.name}" as Admin.\n${detail}`
+          : action === 'openBetting'
+            ? `Could not open betting for "${race.name}".\n${detail}`
+            : detail,
       });
     } finally {
       setActionRaceId(null);
@@ -983,6 +988,13 @@ const AdminRacesPage = () => {
                           <Users className="h-4 w-4" />
                         </IconButton>
                         <IconButton
+                          label={canOpenBetting(race.status) ? `Open betting for ${race.name}` : `${race.name} cannot open betting from ${race.status}`}
+                          onClick={() => void handleRaceAction(race, 'openBetting')}
+                          disabled={actionRaceId === race.raceId || !canOpenBetting(race.status)}
+                        >
+                          <BadgeDollarSign className="h-4 w-4" />
+                        </IconButton>
+                        <IconButton
                           label={canStartRace(race.status) ? `Start ${race.name}` : `${race.name} cannot be started from ${race.status}`}
                           onClick={() => void handleRaceAction(race, 'start')}
                           disabled={actionRaceId === race.raceId || !canStartRace(race.status)}
@@ -1033,12 +1045,11 @@ const AdminRacesPage = () => {
               isSaving={isSaving}
               isPointRulesLoading={isPointRulesLoading}
               isEditing={Boolean(editingRace)}
-              deletingPointRuleId={deletingPointRuleId}
               onSubmit={handleSubmit}
               onChange={handleFieldChange}
               onPointRuleChange={handlePointRuleChange}
               onAddPointRule={handleAddPointRule}
-              onRemovePointRule={(index) => void handleRemovePointRule(index)}
+              onRemovePointRule={handleRemovePointRule}
               onCancel={closeFormModal}
             />
           </Modal>
@@ -1180,7 +1191,6 @@ const RaceForm = ({
   isSaving,
   isPointRulesLoading,
   isEditing,
-  deletingPointRuleId,
   onSubmit,
   onChange,
   onPointRuleChange,
@@ -1197,7 +1207,6 @@ const RaceForm = ({
   isSaving: boolean;
   isPointRulesLoading: boolean;
   isEditing: boolean;
-  deletingPointRuleId: number | null;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
   onChange: <K extends keyof AdminRaceFormData>(field: K, value: AdminRaceFormData[K]) => void;
   onPointRuleChange: <K extends keyof PointRuleRequest>(index: number, field: K, value: PointRuleRequest[K]) => void;
@@ -1266,7 +1275,6 @@ const RaceForm = ({
       listError={pointRuleListError}
       isLoading={isPointRulesLoading}
       isSaving={isSaving}
-      deletingRuleId={deletingPointRuleId}
       onChange={onPointRuleChange}
       onAdd={onAddPointRule}
       onRemove={onRemovePointRule}
@@ -1465,7 +1473,6 @@ const PointRulesEditor = ({
   listError,
   isLoading,
   isSaving,
-  deletingRuleId,
   onChange,
   onAdd,
   onRemove,
@@ -1475,7 +1482,6 @@ const PointRulesEditor = ({
   listError: string;
   isLoading: boolean;
   isSaving: boolean;
-  deletingRuleId: number | null;
   onChange: <K extends keyof PointRuleRequest>(index: number, field: K, value: PointRuleRequest[K]) => void;
   onAdd: () => void;
   onRemove: (index: number) => void;
@@ -1518,8 +1524,6 @@ const PointRulesEditor = ({
           <tbody className="divide-y divide-outline-variant bg-surface-container-lowest">
             {rules.map((rule, index) => {
               const rowErrors = errors[index] ?? {};
-              const isDeleting = Boolean(rule.id && deletingRuleId === rule.id);
-
               return (
                 <tr key={rule.id ?? `${rule.finishPosition}-${index}`}>
                   <td className="px-4 py-3 align-top">
@@ -1535,8 +1539,8 @@ const PointRulesEditor = ({
                   <td className="px-4 py-3 align-top">
                     <input
                       type="number"
-                      min="1"
-                      value={rule.points || ''}
+                      min="0"
+                      value={rule.points}
                       onChange={(event) => onChange(index, 'points', Number(event.target.value))}
                       className={inputClassName}
                     />
@@ -1554,7 +1558,7 @@ const PointRulesEditor = ({
                     <button
                       type="button"
                       onClick={() => onRemove(index)}
-                      disabled={isSaving || isDeleting || rules.length === 1}
+                      disabled={isSaving || rules.length === 1}
                       className="inline-flex h-11 w-11 items-center justify-center rounded-md border border-error/30 text-error transition-colors hover:border-error hover:bg-error-container/20 disabled:cursor-not-allowed disabled:opacity-50"
                       aria-label={`Remove point rule for position ${rule.finishPosition || index + 1}`}
                       title="Remove rule"

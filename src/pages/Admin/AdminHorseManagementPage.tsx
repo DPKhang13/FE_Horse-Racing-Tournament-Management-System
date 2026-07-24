@@ -19,8 +19,10 @@ import {
   X,
   XCircle,
 } from 'lucide-react';
+import ImageUploadField from '../../components/forms/ImageUploadField';
 import { apiClient, getApiErrorMessage, getApiResponseMessage, unwrapApiList } from '../../services/apiClient';
 import { HorseService } from '../../services/HorseService';
+import { getUploadedImageUrl, uploadService } from '../../services/uploadService';
 import { useToastNotifications } from '../../hooks/useToastNotifications';
 import type { Horse, HorseFormData } from '../../types/horse';
 
@@ -375,6 +377,7 @@ const AdminHorseManagementPage = () => {
   const [deletingHorse, setDeletingHorse] = useState<Horse | null>(null);
   const [formData, setFormData] = useState<AdminHorseFormData>(emptyFormData);
   const [formErrors, setFormErrors] = useState<HorseFormErrors>({});
+  const [selectedImageFile, setSelectedImageFile] = useState<File | null>(null);
 
   useToastNotifications([
     notice ? { tone: notice.tone, text: notice.text } : null,
@@ -496,6 +499,7 @@ const AdminHorseManagementPage = () => {
     setSelectedHorse(null);
     setFormData(emptyFormData);
     setFormErrors({});
+    setSelectedImageFile(null);
     setNotice(null);
     setIsFormOpen(true);
 
@@ -508,6 +512,7 @@ const AdminHorseManagementPage = () => {
     setSelectedHorse(horse);
     setFormData(toFormData(horse));
     setFormErrors({});
+    setSelectedImageFile(null);
     setNotice(null);
     setIsFormOpen(true);
   };
@@ -516,6 +521,7 @@ const AdminHorseManagementPage = () => {
     setIsFormOpen(false);
     setSelectedHorse(null);
     setFormErrors({});
+    setSelectedImageFile(null);
   };
 
   const handleFieldChange = <K extends keyof AdminHorseFormData>(field: K, value: AdminHorseFormData[K]) => {
@@ -543,20 +549,35 @@ const AdminHorseManagementPage = () => {
     setNotice(null);
 
     try {
+      let avatarUrl = formData.avatarUrl.trim() || fallbackHorseImage;
+
+      if (selectedImageFile) {
+        const uploadResponse = selectedHorse
+          ? await uploadService.uploadHorseImage(getHorseKey(selectedHorse), selectedImageFile)
+          : await uploadService.uploadNewHorseImage(selectedImageFile);
+        const uploadedImageUrl = getUploadedImageUrl(uploadResponse);
+
+        if (!uploadedImageUrl) {
+          throw new Error('The image upload did not return an image URL.');
+        }
+
+        avatarUrl = uploadedImageUrl;
+      }
+
       const payload = {
         ...formData,
         age: Number(formData.age),
         weightKg: Number(formData.weightKg),
         rankingPoints: Number(formData.rankingPoints),
         totalWins: Number(formData.totalWins),
-        avatarUrl: formData.avatarUrl.trim() || fallbackHorseImage,
+        avatarUrl,
       };
 
       if (selectedHorse) {
         const message = await updateAdminHorse(getHorseKey(selectedHorse), payload);
         setNotice({ tone: 'success', text: message });
       } else {
-        const message = await createAdminHorse(formData);
+        const message = await createAdminHorse(payload);
         setNotice({ tone: 'success', text: message });
       }
 
@@ -751,6 +772,8 @@ const AdminHorseManagementPage = () => {
           isOwnersLoading={isOwnersLoading}
           ownerLoadError={ownerLoadError}
           isSaving={isSaving}
+          selectedImageFile={selectedImageFile}
+          onImageFileChange={setSelectedImageFile}
           onClose={closeFormModal}
           onSubmit={handleSubmit}
           onChange={handleFieldChange}
@@ -1088,6 +1111,8 @@ const HorseFormModal = ({
   isOwnersLoading,
   ownerLoadError,
   isSaving,
+  selectedImageFile,
+  onImageFileChange,
   onClose,
   onSubmit,
   onChange,
@@ -1100,6 +1125,8 @@ const HorseFormModal = ({
   isOwnersLoading: boolean;
   ownerLoadError: string;
   isSaving: boolean;
+  selectedImageFile: File | null;
+  onImageFileChange: (file: File | null) => void;
   onClose: () => void;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
   onChange: <K extends keyof AdminHorseFormData>(field: K, value: AdminHorseFormData[K]) => void;
@@ -1107,16 +1134,17 @@ const HorseFormModal = ({
 }) => (
   <Modal title={selectedHorse ? 'Edit horse' : 'Create horse'} subtitle={selectedHorse ? getDisplayId(selectedHorse) : 'New horse'} onClose={onClose}>
     <form onSubmit={onSubmit} className="grid gap-6 p-6 lg:grid-cols-[260px_1fr]">
-      <div className="rounded-lg border border-outline-variant bg-surface-container-low p-4">
-        <img
-          src={formData.avatarUrl.trim() || fallbackHorseImage}
+      <div>
+        <ImageUploadField
+          currentImageUrl={formData.avatarUrl}
+          fallbackImageUrl={fallbackHorseImage}
           alt={formData.name || 'Horse preview'}
-          onError={(event) => {
-            event.currentTarget.src = fallbackHorseImage;
-          }}
-          className="aspect-square w-full rounded-md border border-outline-variant object-cover"
+          file={selectedImageFile}
+          onFileChange={onImageFileChange}
+          disabled={isSaving}
+          label="Horse image"
+          helpText="JPG, PNG or WebP, up to 5 MB. The image is uploaded when you save."
         />
-        <p className="mt-3 text-label-sm font-semibold text-on-surface-variant">Preview updates as the avatar URL changes.</p>
       </div>
 
       <div className="space-y-6">
@@ -1186,11 +1214,6 @@ const HorseFormModal = ({
               </select>
             </Field>
           )}
-          <div className="md:col-span-2">
-            <Field label="Avatar URL" error={formErrors.avatarUrl}>
-              <input type="url" value={formData.avatarUrl} onChange={(event) => onChange('avatarUrl', event.target.value)} className={inputClassName} />
-            </Field>
-          </div>
         </div>
 
         <div className="flex flex-col-reverse gap-3 border-t border-outline-variant pt-5 sm:flex-row sm:justify-end">

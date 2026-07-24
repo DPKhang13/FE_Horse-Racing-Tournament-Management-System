@@ -1,10 +1,12 @@
 import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
 import { motion } from 'motion/react';
 import { Activity, Eye, Filter, Gauge, Pencil, Plus, Search, Trophy, X } from 'lucide-react';
+import ImageUploadField from '../../components/forms/ImageUploadField';
 import { getApiErrorMessage } from '../../services/apiClient';
 import { authService } from '../../services/authService';
 import { useToastNotifications } from '../../hooks/useToastNotifications';
 import { HorseService } from '../../services/HorseService';
+import { getUploadedImageUrl, uploadService } from '../../services/uploadService';
 import type { Horse, HorseFormData } from '../../types/horse';
 import type { UserProfile } from '../../types/user';
 
@@ -113,6 +115,7 @@ const HorseManagementPage = () => {
   const [viewingHorse, setViewingHorse] = useState<Horse | null>(null);
   const [formData, setFormData] = useState<HorseFormData>(emptyFormData);
   const [formErrors, setFormErrors] = useState<HorseFormErrors>({});
+  const [selectedImageFile, setSelectedImageFile] = useState<File | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
@@ -164,6 +167,7 @@ const HorseManagementPage = () => {
     setSelectedHorse(null);
     setFormData(emptyFormData);
     setFormErrors({});
+    setSelectedImageFile(null);
     setIsFormOpen(true);
   };
 
@@ -171,6 +175,7 @@ const HorseManagementPage = () => {
     setSelectedHorse(horse);
     setFormData(toFormData(horse));
     setFormErrors({});
+    setSelectedImageFile(null);
     setIsFormOpen(true);
   };
 
@@ -178,6 +183,7 @@ const HorseManagementPage = () => {
     setIsFormOpen(false);
     setSelectedHorse(null);
     setFormErrors({});
+    setSelectedImageFile(null);
   };
 
   const handleFieldChange = (field: keyof HorseFormData, value: string | number) => {
@@ -205,11 +211,26 @@ const HorseManagementPage = () => {
     setErrorMessage('');
 
     try {
+      let avatarUrl = formData.avatarUrl.trim() || fallbackHorseImage;
+
+      if (selectedImageFile) {
+        const uploadResponse = selectedHorse
+          ? await uploadService.uploadHorseImage(selectedHorse.horseId, selectedImageFile)
+          : await uploadService.uploadNewHorseImage(selectedImageFile);
+        const uploadedImageUrl = getUploadedImageUrl(uploadResponse);
+
+        if (!uploadedImageUrl) {
+          throw new Error('The image upload did not return an image URL.');
+        }
+
+        avatarUrl = uploadedImageUrl;
+      }
+
       const payload = {
         ...formData,
         rankGroup: 'D',
         status: 'inactive',
-        avatarUrl: formData.avatarUrl.trim() || fallbackHorseImage,
+        avatarUrl,
         age: Number(formData.age),
         weightKg: Number(formData.weightKg),
         rankingPoints: 0,
@@ -427,14 +448,16 @@ const HorseManagementPage = () => {
             animate="visible"
             variants={revealContainer}
           >
-            <motion.div className="rounded-lg border border-outline-variant bg-surface-container-low p-4" variants={revealUp}>
-              <img
-                src={formData.avatarUrl.trim() || fallbackHorseImage}
+            <motion.div variants={revealUp}>
+              <ImageUploadField
+                currentImageUrl={formData.avatarUrl}
+                fallbackImageUrl={fallbackHorseImage}
                 alt={formData.name || 'Horse preview'}
-                onError={(event) => {
-                  event.currentTarget.src = fallbackHorseImage;
-                }}
-                className="aspect-square w-full rounded-md border border-outline-variant object-cover"
+                file={selectedImageFile}
+                onFileChange={setSelectedImageFile}
+                disabled={isSaving}
+                label="Horse image"
+                helpText="JPG, PNG or WebP, up to 5 MB. The image is uploaded when you save."
               />
             </motion.div>
 
@@ -458,11 +481,6 @@ const HorseManagementPage = () => {
                 <motion.div variants={revealUp}>
                   <Field label="Weight (kg)" error={formErrors.weightKg}>
                     <input type="number" min="0" step="0.1" value={formData.weightKg || ''} onChange={(event) => handleFieldChange('weightKg', Number(event.target.value))} className={inputClassName} />
-                  </Field>
-                </motion.div>
-                <motion.div className="md:col-span-2" variants={revealUp}>
-                  <Field label="Avatar URL">
-                    <input type="url" value={formData.avatarUrl} onChange={(event) => handleFieldChange('avatarUrl', event.target.value)} className={inputClassName} />
                   </Field>
                 </motion.div>
               </motion.div>

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { CheckCircle2, Clock3, Search, ShieldCheck, UserCheck } from 'lucide-react';
-import { InvitationCard, InvitationEmptyState, InvitationMetric } from '../../components/invitations/InvitationComponents';
+import { InvitationCard, InvitationDetailModal, InvitationEmptyState, InvitationMetric } from '../../components/invitations/InvitationComponents';
 import { getAssignmentId, getEffectiveInvitationStatus } from '../../components/invitations/invitationUtils';
 import { useToastNotifications } from '../../hooks/useToastNotifications';
 import { getApiErrorMessage } from '../../services/apiClient';
@@ -10,6 +10,7 @@ const fetchMyJockeyInvitations = () => jockeyAssignmentService.getMine();
 
 const JockeyInvitationsPage = () => {
   const [assignments, setAssignments] = useState<JockeyAssignmentItem[]>([]);
+  const [selectedInvitation, setSelectedInvitation] = useState<JockeyAssignmentItem | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [busyAssignmentId, setBusyAssignmentId] = useState<number | string | null>(null);
   const [search, setSearch] = useState('');
@@ -153,6 +154,7 @@ const JockeyInvitationsPage = () => {
                     assignment={assignment}
                     counterpartLabel="Horse owner"
                     counterpartName={assignment.ownerStableName ?? assignment.ownerFullName ?? 'Horse owner'}
+                    onViewDetails={() => setSelectedInvitation(assignment)}
                     actions={assignmentId != null && status === 'pending' ? (
                       <div className="flex flex-wrap justify-end gap-2">
                         <button type="button" disabled={isBusy} onClick={() => void handleRespond(assignmentId, 'rejected')} className="cursor-pointer rounded-md border border-error/40 px-3 py-2 text-label-sm font-bold text-error transition-colors hover:border-error disabled:cursor-not-allowed disabled:opacity-50">
@@ -170,6 +172,15 @@ const JockeyInvitationsPage = () => {
           )}
         </section>
       </div>
+      {selectedInvitation && (
+        <InvitationDetailModal
+          assignment={selectedInvitation}
+          counterpartLabel="Horse owner"
+          counterpartName={selectedInvitation.ownerStableName ?? selectedInvitation.ownerFullName ?? 'Horse owner'}
+          onClose={() => setSelectedInvitation(null)}
+        />
+      )}
+
     </div>
   );
 };

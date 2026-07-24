@@ -7,6 +7,8 @@ export type RaceCrudItem = {
   tournamentId?: number;
   tournamentName?: string;
   scheduleId?: number;
+  scheduleTitle?: string;
+  dayNumber?: number;
   name: string;
   raceNumber: number;
   rankGroup: string;
@@ -17,7 +19,6 @@ export type RaceCrudItem = {
   trackType: string;
   maxHorses: number;
   maxReferees: number;
-  pointRuleNote?: string;
   status: string;
   location?: string;
   registeredHorseCount?: number;
@@ -37,7 +38,6 @@ export type RaceFormData = {
   trackType: string;
   maxHorses: number;
   maxReferees: number;
-  pointRuleNote?: string;
   status: string;
 };
 
@@ -133,6 +133,8 @@ const mapRace = (raw: RawRecord, index = 0): RaceCrudItem => ({
   tournamentId: raw.tournamentId === undefined ? undefined : asNumber(raw.tournamentId),
   tournamentName: raw.tournamentName ? asString(raw.tournamentName) : undefined,
   scheduleId: raw.scheduleId === undefined ? undefined : asNumber(raw.scheduleId),
+  scheduleTitle: raw.scheduleTitle || raw.scheduleName ? asString(raw.scheduleTitle ?? raw.scheduleName) : undefined,
+  dayNumber: raw.dayNumber === undefined && raw.day === undefined ? undefined : asNumber(raw.dayNumber ?? raw.day),
   name: asString(raw.name ?? raw.raceName ?? raw.matchName, `Race ${index + 1}`),
   raceNumber: asNumber(raw.raceNumber ?? raw.matchNumber, index + 1),
   rankGroup: asString(raw.rankGroup ?? raw.round, '-'),
@@ -143,7 +145,6 @@ const mapRace = (raw: RawRecord, index = 0): RaceCrudItem => ({
   trackType: asString(raw.trackType ?? raw.arenaLocation ?? raw.location, '-'),
   maxHorses: asNumber(raw.maxHorses, 8),
   maxReferees: asNumber(raw.maxReferees, 3),
-  pointRuleNote: raw.pointRuleNote ? asString(raw.pointRuleNote) : undefined,
   status: asString(raw.status ?? raw.matchStatus, 'scheduled'),
   location: raw.location ? asString(raw.location) : undefined,
   registeredHorseCount: raw.registeredHorseCount === undefined ? undefined : asNumber(raw.registeredHorseCount),
@@ -170,7 +171,6 @@ const toRacePayload = (data: RaceFormData) => ({
   trackType: data.trackType.trim(),
   maxHorses: Number(data.maxHorses),
   maxReferees: Number(data.maxReferees),
-  pointRuleNote: data.pointRuleNote?.trim() || undefined,
   status: data.status.trim(),
 });
 

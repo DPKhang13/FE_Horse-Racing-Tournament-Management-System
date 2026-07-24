@@ -2,12 +2,15 @@ import { BrowserRouter as Router } from 'react-router-dom';
 import AppRoutes from './routes/AppRoutes';
 import './App.css';
 import ToastViewport from './components/ToastViewport';
+import { AppMotionProvider } from './components/motion/MotionPrimitives';
 
 function App() {
   return (
     <Router>
-      <AppRoutes />
-      <ToastViewport />
+      <AppMotionProvider>
+        <AppRoutes />
+        <ToastViewport />
+      </AppMotionProvider>
     </Router>
   );
 }

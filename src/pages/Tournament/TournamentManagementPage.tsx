@@ -5,7 +5,9 @@ import { Link, useNavigate } from 'react-router-dom';
 import { getApiErrorMessage } from '../../services/apiClient';
 import { useToastNotifications } from '../../hooks/useToastNotifications';
 import { raceCrudService, type RaceCrudItem, type RaceFormData, type RaceScheduleOption } from '../../services/raceCrudService';
+import { pointRuleService } from '../../services/pointRuleService';
 import { tournamentService } from '../../services/tournamentService';
+import type { PointRuleRequest } from '../../types/pointRule';
 import type {
   CreatePrizeRequest,
   MatchStatus,
@@ -85,9 +87,52 @@ const emptyRaceFormData: RaceFormData = {
   trackType: 'Turf',
   maxHorses: 8,
   maxReferees: 3,
-  pointRuleNote: '',
   status: 'scheduled',
 };
+const createDefaultPointRules = (): PointRuleRequest[] =>
+  [1, 2, 3].map((finishPosition) => ({
+    finishPosition,
+    points: 0,
+    note: '',
+  }));
+
+const createNextPointRule = (rules: PointRuleRequest[]): PointRuleRequest => ({
+  finishPosition: Math.max(0, ...rules.map((rule) => Number(rule.finishPosition) || 0)) + 1,
+  points: 0,
+  note: '',
+});
+
+const validatePointRules = (rules: PointRuleRequest[]) => {
+  if (rules.length === 0) {
+    return 'At least one point rule is required.';
+  }
+
+  const positions = rules.map((rule) => Number(rule.finishPosition));
+
+  for (const [index, rule] of rules.entries()) {
+    const position = positions[index];
+    const points = Number(rule.points);
+
+    if (!Number.isInteger(position) || position <= 0) {
+      return `Point rule ${index + 1}: finish position must be greater than 0.`;
+    }
+
+    if (positions.filter((value) => value === position).length > 1) {
+      return `Point rule ${index + 1}: finish position must be unique.`;
+    }
+
+    if (!Number.isFinite(points) || points < 0) {
+      return `Point rule ${index + 1}: points must be 0 or greater.`;
+    }
+
+    if (rule.note.trim().length > 255) {
+      return `Point rule ${index + 1}: note must be 255 characters or fewer.`;
+    }
+  }
+
+  return '';
+};
+
 
 
 const prizePositionLabels: Record<number, string> = {
@@ -991,8 +1036,6 @@ const plainFilterInputClassName =
 const inputClassName =
   'w-full rounded-md border border-outline-variant bg-surface-container-low px-4 py-3 text-body-sm transition-colors focus:border-primary focus:outline-none';
 
-const textareaClassName =
-  'min-h-28 w-full resize-y rounded-md border border-outline-variant bg-surface-container-low px-4 py-3 text-body-sm transition-colors focus:border-primary focus:outline-none';
 
 const TournamentForm = ({
   formData,
@@ -1453,6 +1496,9 @@ const RaceCrudPanel = ({ tournament }: { tournament: Tournament }) => {
   const [scheduleOptions, setScheduleOptions] = useState<RaceScheduleOption[]>([]);
   const [raceForm, setRaceForm] = useState<RaceFormData>(emptyRaceFormData);
   const [editingRaceId, setEditingRaceId] = useState<number | null>(null);
+  const [pointRules, setPointRules] = useState<PointRuleRequest[]>(createDefaultPointRules);
+  const [pointRuleError, setPointRuleError] = useState('');
+  const [isLoadingPointRules, setIsLoadingPointRules] = useState(false);
   const [isLoadingRaces, setIsLoadingRaces] = useState(true);
   const [isLoadingSchedules, setIsLoadingSchedules] = useState(true);
   const [message, setMessage] = useState('');
@@ -1530,6 +1576,9 @@ const RaceCrudPanel = ({ tournament }: { tournament: Tournament }) => {
   const resetRaceForm = () => {
     const firstSchedule = scheduleOptions[0];
     setEditingRaceId(null);
+    setPointRules(createDefaultPointRules());
+    setPointRuleError('');
+    setIsLoadingPointRules(false);
     setRaceForm({
       ...emptyRaceFormData,
       raceNumber: races.length + 1,
@@ -1547,10 +1596,13 @@ const RaceCrudPanel = ({ tournament }: { tournament: Tournament }) => {
     }));
   };
 
-  const editRace = (race: RaceCrudItem) => {
+  const editRace = async (race: RaceCrudItem) => {
     const normalizedRankGroup = race.rankGroup.trim().toUpperCase().slice(-1);
     const normalizedTrackType = raceTrackTypeOptions.find((trackType) => trackType.toLowerCase() === race.trackType.trim().toLowerCase());
     setEditingRaceId(race.raceId);
+    setPointRules(createDefaultPointRules());
+    setPointRuleError('');
+    setIsLoadingPointRules(true);
     setRaceForm({
       scheduleId: race.scheduleId,
       name: race.name,
@@ -1563,9 +1615,42 @@ const RaceCrudPanel = ({ tournament }: { tournament: Tournament }) => {
       trackType: normalizedTrackType ?? 'Turf',
       maxHorses: race.maxHorses,
       maxReferees: race.maxReferees,
-      pointRuleNote: race.pointRuleNote ?? '',
       status: race.status,
     });
+
+    try {
+      const currentPointRules = await pointRuleService.getPointRules(race.raceId);
+      setPointRules(
+        currentPointRules.length > 0
+          ? currentPointRules.map(({ finishPosition, points, note }) => ({ finishPosition, points, note }))
+          : createDefaultPointRules(),
+      );
+    } catch (error) {
+      setPointRules([]);
+      setPointRuleError(getApiErrorMessage(error, 'Unable to load point rules. Open the race again to retry.'));
+    } finally {
+      setIsLoadingPointRules(false);
+    }
+  };
+
+  const handlePointRuleChange = <K extends keyof PointRuleRequest>(index: number, field: K, value: PointRuleRequest[K]) => {
+    setPointRules((current) => current.map((rule, ruleIndex) => (ruleIndex === index ? { ...rule, [field]: value } : rule)));
+    setPointRuleError('');
+  };
+
+  const addPointRule = () => {
+    setPointRules((current) => [...current, createNextPointRule(current)]);
+    setPointRuleError('');
+  };
+
+  const removePointRule = (index: number) => {
+    if (pointRules.length === 1) {
+      setPointRuleError('At least one point rule is required.');
+      return;
+    }
+
+    setPointRules((current) => current.filter((_, ruleIndex) => ruleIndex !== index));
+    setPointRuleError('');
   };
 
   const handleRaceSubmit = async (event: FormEvent<HTMLFormElement>) => {
@@ -1575,6 +1660,12 @@ const RaceCrudPanel = ({ tournament }: { tournament: Tournament }) => {
 
     if (!editingRaceId && !raceForm.scheduleId) {
       setErrorMessage('Select a schedule before saving a race.');
+      return;
+    }
+
+    const validationError = validatePointRules(pointRules);
+    if (validationError) {
+      setPointRuleError(validationError);
       return;
     }
 
@@ -1590,16 +1681,37 @@ const RaceCrudPanel = ({ tournament }: { tournament: Tournament }) => {
       return;
     }
 
+    const pointRulePayload = pointRules
+      .map((rule) => ({ ...rule, note: rule.note.trim() }))
+      .sort((first, second) => first.finishPosition - second.finishPosition);
+
     try {
       const savedRace = editingRaceId
         ? await raceCrudService.updateRace(editingRaceId, raceForm)
         : await raceCrudService.createRace(tournament.tournamentId, raceForm);
 
-      if (!editingRaceId) {
+      try {
+        if (editingRaceId) {
+          await pointRuleService.replacePointRules(editingRaceId, pointRulePayload);
+        } else {
+          await pointRuleService.createPointRules(savedRace.raceId, pointRulePayload);
+        }
+      } catch (error) {
+        const action = editingRaceId ? 'updated' : 'created';
+        if (!editingRaceId) {
+          setEditingRaceId(savedRace.raceId);
+        }
+        setPointRuleError(getApiErrorMessage(error, `Race was ${action}, but its point rules could not be saved.`));
+        setErrorMessage(`Race was ${action}, but point rules were not saved. Please retry.`);
+        await loadRaces();
+        return;
+      }
+
+      if (editingRaceId) {
+        setMessage('Race and point rules updated.');
+      } else {
         setLastCreatedRace(savedRace);
         setShowRaceSuccess(true);
-      } else {
-        setMessage('Race updated.');
       }
       resetRaceForm();
       await loadRaces();
@@ -1723,7 +1835,7 @@ const RaceCrudPanel = ({ tournament }: { tournament: Tournament }) => {
                       <h4 className="font-display text-xl font-bold text-primary">{race.name}</h4>
                     </div>
                     <div className="flex gap-2">
-                      <IconButton label={`Update ${race.name}`} onClick={(e) => { e.stopPropagation(); editRace(race); }}>
+                      <IconButton label={`Update ${race.name}`} onClick={(e) => { e.stopPropagation(); void editRace(race); }}>
                         <Pencil className="h-4 w-4" />
                       </IconButton>
                       <IconButton label={`Cancel ${race.name}`} onClick={(e) => { e.stopPropagation(); void deleteRace(race); }} danger>
@@ -1770,6 +1882,12 @@ const RaceCrudPanel = ({ tournament }: { tournament: Tournament }) => {
         >
           <RaceFormPanel
             form={raceForm}
+            pointRules={pointRules}
+            pointRuleError={pointRuleError}
+            isLoadingPointRules={isLoadingPointRules}
+            onPointRuleChange={handlePointRuleChange}
+            onAddPointRule={addPointRule}
+            onRemovePointRule={removePointRule}
             raceNumberOptions={availableRaceNumbers}
             scheduleOptions={scheduleOptions}
             isLoadingSchedules={isLoadingSchedules}
@@ -1794,6 +1912,12 @@ const RaceCrudPanel = ({ tournament }: { tournament: Tournament }) => {
 
 const RaceFormPanel = ({
   form,
+  pointRules,
+  pointRuleError,
+  isLoadingPointRules,
+  onPointRuleChange,
+  onAddPointRule,
+  onRemovePointRule,
   raceNumberOptions,
   scheduleOptions,
   isLoadingSchedules,
@@ -1807,6 +1931,12 @@ const RaceFormPanel = ({
   onDone,
 }: {
   form: RaceFormData;
+  pointRules: PointRuleRequest[];
+  pointRuleError: string;
+  isLoadingPointRules: boolean;
+  onPointRuleChange: <K extends keyof PointRuleRequest>(index: number, field: K, value: PointRuleRequest[K]) => void;
+  onAddPointRule: () => void;
+  onRemovePointRule: (index: number) => void;
   raceNumberOptions: number[];
   scheduleOptions: RaceScheduleOption[];
   isLoadingSchedules: boolean;
@@ -1968,16 +2098,81 @@ const RaceFormPanel = ({
           </Field>
         </motion.div>
 
-        <motion.div variants={revealUp}>
-          <Field label="Point rule note">
-            <textarea value={form.pointRuleNote ?? ''} onChange={(event) => onChange('pointRuleNote', event.target.value)} className={textareaClassName} placeholder="Additional rules or notes..." />
-          </Field>
+        <motion.div className="space-y-3" variants={revealUp}>
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <h5 className="text-label-lg font-extrabold text-primary">Point rules</h5>
+              <p className="text-body-sm text-on-surface-variant">Saved separately from the race details.</p>
+            </div>
+            <button
+              type="button"
+              onClick={onAddPointRule}
+              className="inline-flex items-center gap-1 rounded-xl border border-outline-variant px-3 py-2 text-label-sm font-bold text-primary transition-colors hover:border-primary"
+            >
+              <Plus className="h-4 w-4" />
+              Add rule
+            </button>
+          </div>
+
+          {isLoadingPointRules ? (
+            <p className="rounded-xl bg-surface-container-low p-4 text-body-sm text-on-surface-variant">Loading point rules...</p>
+          ) : (
+            <div className="space-y-3">
+              {pointRules.map((rule, index) => (
+                <div key={`${index}-${rule.finishPosition}`} className="grid gap-2 rounded-2xl border border-outline-variant p-3 sm:grid-cols-[90px_90px_minmax(0,1fr)_40px]">
+                  <label className="space-y-1">
+                    <span className="text-label-xs font-bold text-on-surface-variant">Position</span>
+                    <input
+                      type="number"
+                      min="1"
+                      value={rule.finishPosition}
+                      onChange={(event) => onPointRuleChange(index, 'finishPosition', Number(event.target.value))}
+                      className={inputClassName}
+                      required
+                    />
+                  </label>
+                  <label className="space-y-1">
+                    <span className="text-label-xs font-bold text-on-surface-variant">Points</span>
+                    <input
+                      type="number"
+                      min="0"
+                      value={rule.points}
+                      onChange={(event) => onPointRuleChange(index, 'points', Number(event.target.value))}
+                      className={inputClassName}
+                      required
+                    />
+                  </label>
+                  <label className="min-w-0 space-y-1">
+                    <span className="text-label-xs font-bold text-on-surface-variant">Note</span>
+                    <input
+                      value={rule.note}
+                      maxLength={255}
+                      onChange={(event) => onPointRuleChange(index, 'note', event.target.value)}
+                      className={inputClassName}
+                      placeholder="Optional"
+                    />
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => onRemovePointRule(index)}
+                    disabled={pointRules.length === 1}
+                    aria-label={`Remove point rule ${index + 1}`}
+                    className="mt-5 inline-flex h-10 w-10 items-center justify-center rounded-xl text-error transition-colors hover:bg-error/10 disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+          {pointRuleError ? <p className="text-body-sm font-semibold text-error">{pointRuleError}</p> : null}
         </motion.div>
       </div>
 
       <motion.button 
         type="submit" 
         className="mt-8 w-full gold-gradient rounded-2xl px-8 py-4 text-label-lg font-extrabold text-on-primary shadow-lg shadow-primary/20 hover:shadow-xl hover:shadow-primary/30 transition-all"
+        disabled={isLoadingPointRules}
         variants={revealUp}
         whileHover="hover"
         whileTap="tap"

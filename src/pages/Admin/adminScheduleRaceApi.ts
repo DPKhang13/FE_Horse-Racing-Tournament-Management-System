@@ -416,6 +416,11 @@ export const adminScheduleRaceApi = {
     return getApiResponseMessage(response);
   },
 
+  async openBetting(raceId: number | string): Promise<string> {
+    const response = await apiClient.patch(`/api/v1/admin/races/${raceId}/open-betting`);
+    return getApiResponseMessage(response);
+  },
+
   async completeRace(raceId: number | string): Promise<string> {
     const response = await apiClient.patch(`/api/v1/admin/races/${raceId}/complete`);
     return getApiResponseMessage(response);
