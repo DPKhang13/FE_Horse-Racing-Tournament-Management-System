@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react';
-import { Ban, CalendarDays, ClipboardList, Eye, Filter, Flag, Pencil, Plus, RefreshCw, Save, Search, Trash2, Trophy, Users, X } from 'lucide-react';
+import { Ban, CalendarDays, ClipboardList, Eye, Filter, Flag, Medal, Pencil, Plus, RefreshCw, Save, Search, Trash2, Trophy, Users, X } from 'lucide-react';
 import { motion } from 'motion/react';
 import { Link, useNavigate } from 'react-router-dom';
 import { getApiErrorMessage } from '../../services/apiClient';
@@ -965,6 +965,16 @@ const TournamentManagementPage = () => {
                         >
                           <CalendarDays className="h-4 w-4" />
                         </Link>
+                        {tournament.status === 'Completed' && (
+                          <Link
+                            to={`/tournaments/${tournament.tournamentId}/prize-awards`}
+                            className="flex h-9 w-9 items-center justify-center rounded-md border border-outline-variant text-on-surface-variant transition-colors hover:border-primary hover:text-primary"
+                            aria-label={`Manage prize awards for ${tournament.tournamentName}`}
+                            title={`Manage prize awards for ${tournament.tournamentName}`}
+                          >
+                            <Medal className="h-4 w-4" />
+                          </Link>
+                        )}
                       </div>
                     </td>
                   </motion.tr>

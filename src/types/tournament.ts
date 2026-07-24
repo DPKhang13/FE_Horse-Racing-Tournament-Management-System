@@ -98,3 +98,23 @@ export type UpdatePrizeRequest = {
   amount: number;
   note: string;
 };
+
+export type PrizeAwardStatus = 'announced' | 'awarded';
+
+export type PrizeAwardResponse = {
+  awardId: number;
+  prizeId: number;
+  tournamentId: number;
+  raceId: number;
+  resultId: number;
+  horseId: number;
+  ownerId: number;
+  finishPosition: number;
+  amount: number;
+  status: PrizeAwardStatus;
+  awardedAt?: string;
+  horseName: string;
+  ownerFullName: string;
+  tournamentName: string;
+  prizeName: string;
+};
