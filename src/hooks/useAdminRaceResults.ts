@@ -4,6 +4,7 @@ import {
   adminRaceResultService,
   type AdminRaceResultCancelPayload,
   type AdminRaceResultCreatePayload,
+  type AdminRaceResultDraftUpdatePayload,
   type AdminRaceResult,
   type AdminRaceResultUpdatePayload,
   type RaceResultId,
@@ -110,7 +111,10 @@ export const useAdminRaceResults = ({
   );
 
   const handlePublish = useCallback(
-    async (raceId: RaceResultId) => {
+    async (
+      raceId: RaceResultId,
+      refreshRaceId: RaceResultId | null = raceId,
+    ) => {
       setIsLoading(true);
       setError(null);
 
@@ -118,7 +122,7 @@ export const useAdminRaceResults = ({
         await adminRaceResultService.publishResults(raceId);
         console.log(`Race results published for race ${raceId}.`);
         showToast({ tone: 'success', text: 'Race results published.' });
-        await refreshCurrentResults(raceId);
+        await refreshCurrentResults(refreshRaceId);
         return true;
       } catch (caughtError) {
         handleError(caughtError, 'Unable to publish race results.');
@@ -131,7 +135,10 @@ export const useAdminRaceResults = ({
   );
 
   const handleConfirm = useCallback(
-    async (raceId: RaceResultId) => {
+    async (
+      raceId: RaceResultId,
+      refreshRaceId: RaceResultId | null = raceId,
+    ) => {
       setIsLoading(true);
       setError(null);
 
@@ -139,7 +146,7 @@ export const useAdminRaceResults = ({
         await adminRaceResultService.confirmResults(raceId);
         console.log(`Race results confirmed for race ${raceId}.`);
         showToast({ tone: 'success', text: 'Race results confirmed.' });
-        await refreshCurrentResults(raceId);
+        await refreshCurrentResults(refreshRaceId);
         return true;
       } catch (caughtError) {
         handleError(caughtError, 'Unable to confirm race results.');
@@ -192,6 +199,30 @@ export const useAdminRaceResults = ({
         return true;
       } catch (caughtError) {
         handleError(caughtError, 'Unable to update race result.');
+        return false;
+      } finally {
+        setIsLoading(false);
+      }
+    },
+    [handleError, refreshCurrentResults, selectedRaceId],
+  );
+
+  const handleUpdateDraft = useCallback(
+    async (
+      raceId: RaceResultId,
+      payload: AdminRaceResultDraftUpdatePayload,
+      refreshRaceId: RaceResultId | null = selectedRaceId,
+    ) => {
+      setIsLoading(true);
+      setError(null);
+
+      try {
+        await adminRaceResultService.updateDraft(raceId, payload);
+        showToast({ tone: 'success', text: 'Draft race results updated.' });
+        await refreshCurrentResults(refreshRaceId);
+        return true;
+      } catch (caughtError) {
+        handleError(caughtError, 'Unable to update draft race results.');
         return false;
       } finally {
         setIsLoading(false);
@@ -263,5 +294,6 @@ export const useAdminRaceResults = ({
     handleCreate,
     handlePublishResult,
     handleUpdate,
+    handleUpdateDraft,
   };
 };

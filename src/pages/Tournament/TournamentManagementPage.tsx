@@ -7,6 +7,7 @@ import { useToastNotifications } from '../../hooks/useToastNotifications';
 import { raceCrudService, type RaceCrudItem, type RaceFormData, type RaceScheduleOption } from '../../services/raceCrudService';
 import { pointRuleService } from '../../services/pointRuleService';
 import { tournamentService } from '../../services/tournamentService';
+import { formatVndAmountInput, normalizeVndAmountInput, parseVndAmount } from '../../utils/currency';
 import type { PointRuleRequest } from '../../types/pointRule';
 import type {
   CreatePrizeRequest,
@@ -161,15 +162,6 @@ const formatDate = (value: string) => {
     day: 'numeric',
     year: 'numeric',
   });
-};
-
-const parsePrizePoolInput = (value: unknown) => {
-  if (typeof value === 'number') {
-    return Number.isFinite(value) ? value : 0;
-  }
-
-  const numericValue = Number(String(value ?? '').replace(/[^\d.-]/g, ''));
-  return Number.isFinite(numericValue) ? numericValue : 0;
 };
 
 const formatDateTime = (value?: string) => {
@@ -335,7 +327,7 @@ const validateTournamentForm = (data: TournamentMutationData, originalTournament
     errors.location = 'Select HCM or Hanoi.';
   }
 
-  if (parsePrizePoolInput(data.prize) < 0) {
+  if (parseVndAmount(data.prize) < 0) {
     errors.prize = 'Prize pool cannot be negative.';
   }
 
@@ -381,7 +373,7 @@ const toFormData = (tournament: Tournament): TournamentMutationData => ({
   registrationDeadline: tournament.registrationDeadline,
   maximumParticipants: tournament.maximumParticipants,
   entryFee: tournament.entryFee,
-  prize: String(parsePrizePoolInput(tournament.prize)),
+  prize: String(parseVndAmount(tournament.prize)),
   status: tournament.status,
   registrationOpenAt: toDateTimeInputValue(tournament.registrationOpenAt),
   registrationCloseAt: toDateTimeInputValue(tournament.registrationCloseAt),
@@ -486,7 +478,7 @@ const hasTournamentCoreChanges = (current: TournamentMutationData, original: Tou
   || current.location.trim() !== original.location
   || current.startDate !== original.startDate
   || current.endDate !== original.endDate
-  || String(parsePrizePoolInput(current.prize)) !== String(parsePrizePoolInput(original.prize));
+  || String(parseVndAmount(current.prize)) !== String(parseVndAmount(original.prize));
 
 const hasRegistrationWindowChanges = (current: TournamentMutationData, original: Tournament) =>
   toInstantString(current.registrationOpenAt) !== toInstantString(original.registrationOpenAt)
@@ -1157,7 +1149,14 @@ const TournamentForm = ({
           </motion.div>
           <motion.div variants={revealUp}>
             <Field label="Prize Pool" error={formErrors.prize}>
-              <input type="number" min="0" value={formData.prize || ''} onChange={(event) => onChange('prize', event.target.value)} className={inputClassName} />
+              <input
+                type="text"
+                inputMode="numeric"
+                value={formatVndAmountInput(formData.prize)}
+                onChange={(event) => onChange('prize', normalizeVndAmountInput(event.target.value))}
+                className={inputClassName}
+                placeholder="500.000.000"
+              />
             </Field>
           </motion.div>
           <motion.div variants={revealUp}>
@@ -1284,11 +1283,15 @@ const PrizeRowsEditor = ({
             </td>
             <td className="px-4 py-3 align-top">
               <input
-                type="number"
-                min="0"
-                value={row.amount}
-                onChange={(event) => onChange(index, 'amount', event.target.value === '' ? '' : Number(event.target.value))}
+                type="text"
+                inputMode="numeric"
+                value={formatVndAmountInput(row.amount)}
+                onChange={(event) => {
+                  const amount = normalizeVndAmountInput(event.target.value);
+                  onChange(index, 'amount', amount === '' ? '' : Number(amount));
+                }}
                 className={inputClassName}
+                placeholder="100.000.000"
               />
               {formErrors[index]?.amount && <span className="mt-1 block text-label-md text-error">{formErrors[index]?.amount}</span>}
             </td>

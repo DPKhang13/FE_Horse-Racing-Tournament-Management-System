@@ -57,6 +57,19 @@ export type AdminRaceResultCreatePayload = AdminRaceResultUpdatePayload & {
   assignmentId: RaceResultId;
 };
 
+export type AdminRaceResultDraftItem = {
+  assignmentId: RaceResultId;
+  finishPosition?: number;
+  finishTimeSec?: number;
+  isDisqualified: boolean;
+  disqualifyReason?: string;
+};
+
+export type AdminRaceResultDraftUpdatePayload = {
+  reportId?: RaceResultId;
+  results: AdminRaceResultDraftItem[];
+};
+
 export type AdminRaceResultCancelPayload = {
   reason?: string;
   [key: string]: unknown;
@@ -124,6 +137,18 @@ export const adminRaceResultService = {
     return unwrapApiData<AdminRaceResult>(response);
   },
 
+  /** Updates every draft result belonging to one race before it is published. */
+  async updateDraft(
+    raceId: RaceResultId,
+    payload: AdminRaceResultDraftUpdatePayload,
+  ): Promise<unknown> {
+    const response = await apiClient.put(
+      `/api/v1/admin/races/${raceId}/results/draft/update`,
+      payload,
+    );
+    return unwrapApiData<unknown>(response);
+  },
+
   /** Publishes one race-result record using the current race-results API. */
   async publishResult(id: RaceResultId): Promise<AdminRaceResult | undefined> {
     const response = await apiClient.put(`/api/race-results/publish/${id}`);
@@ -133,13 +158,13 @@ export const adminRaceResultService = {
       : undefined;
   },
 
-  /** Publishes the legacy race-level workflow used by Race Control. */
+  /** Publishes every draft result belonging to one race. */
   async publishResults(raceId: RaceResultId): Promise<unknown> {
     const response = await apiClient.patch(`/api/v1/admin/races/${raceId}/results/publish`);
     return unwrapApiData<unknown>(response);
   },
 
-  /** Confirms the legacy race-level workflow used by Race Control. */
+  /** Confirms every draft result belonging to one race. */
   async confirmResults(raceId: RaceResultId): Promise<unknown> {
     const response = await apiClient.patch(`/api/v1/admin/races/${raceId}/results/confirm`);
     return unwrapApiData<unknown>(response);

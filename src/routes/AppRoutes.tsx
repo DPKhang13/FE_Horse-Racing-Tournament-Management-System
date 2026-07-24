@@ -3,7 +3,7 @@ import { lazy, Suspense, type ReactNode } from 'react';
 import MainLayout from '../components/MainLayout';
 import ProtectedRoute from '../components/ProtectedRoute';
 import { PageTransition, RouteLoadingState } from '../components/motion/MotionPrimitives';
-import { AUTHENTICATED_ROLES } from '../utils/permissions';
+import { AUTHENTICATED_ROLES, RESULT_VIEWER_ROLES } from '../utils/permissions';
 import { authService } from '../services/authService';
 
 const LandingPage = lazy(() => import('../pages/Home/LandingPage'));
@@ -75,9 +75,9 @@ const AppRoutes = () => {
       {/* Các trang khác có Header/Footer chung */}
       <Route path="/" element={withLayout(<LandingPage />)} />
       <Route path="/schedule" element={protectedPage(<SchedulePage />, ['horse_owner'])} />
-      <Route path="/results" element={protectedPage(<RaceResultList />)} />
-      <Route path="/results/rankings" element={protectedPage(<RankingPage />)} />
-      <Route path="/results/:resultId" element={protectedPage(<RaceResultDetail />)} />
+      <Route path="/results" element={protectedPage(<RaceResultList />, RESULT_VIEWER_ROLES)} />
+      <Route path="/results/rankings" element={protectedPage(<RankingPage />, RESULT_VIEWER_ROLES)} />
+      <Route path="/results/:resultId" element={protectedPage(<RaceResultDetail />, RESULT_VIEWER_ROLES)} />
       <Route path="/horses" element={protectedPage(<HorseManagementPage />, ['horse_owner'])} />
       <Route path="/owner-dashboard" element={protectedPage(<OwnerDashboardPage />, ['horse_owner'])} />
       <Route path="/jockey-dashboard" element={protectedPage(<JockeyDashboardPage />, ['jockey'])} />
@@ -103,7 +103,7 @@ const AppRoutes = () => {
       <Route path="/owner/invitations" element={protectedPage(<OwnerInvitationsPage />, ['horse_owner'])} />
       <Route path="/jockey/invitations" element={protectedPage(<JockeyInvitationsPage />, ['jockey'])} />
       <Route path="/jockey-assignments" element={protectedPage(<LegacyInvitationsRedirect />, ['horse_owner', 'jockey'])} />
-      <Route path="/race-control" element={protectedPage(<RaceControlPage />, ['admin', 'race_referee'])} />
+      <Route path="/race-control" element={protectedPage(<RaceControlPage />, ['race_referee'])} />
       <Route path="/notifications" element={protectedPage(<NotificationsPage />)} />
       <Route path="/wallet" element={protectedPage(<WalletPaymentPage />, ['spectator'])} />
       <Route path="/wallet/history" element={protectedPage(<WalletHistoryPage />, ['spectator'])} />
