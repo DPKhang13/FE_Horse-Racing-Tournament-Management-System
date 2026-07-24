@@ -164,7 +164,7 @@ export const adminRaceResultService = {
     return unwrapApiData<unknown>(response);
   },
 
-  /** Confirms the legacy race-level workflow used by Race Control. */
+  /** Confirms every draft result belonging to one race. */
   async confirmResults(raceId: RaceResultId): Promise<unknown> {
     const response = await apiClient.patch(`/api/v1/admin/races/${raceId}/results/confirm`);
     return unwrapApiData<unknown>(response);

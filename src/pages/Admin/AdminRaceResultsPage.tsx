@@ -222,6 +222,7 @@ const AdminRaceResultsPage = () => {
     error,
     fetchRaceResults,
     handleCreate,
+    handleConfirm,
     handlePublish,
     handleUpdateDraft,
   } = useAdminRaceResults();
@@ -238,6 +239,7 @@ const AdminRaceResultsPage = () => {
   const [editingResult, setEditingResult] = useState<AdminRaceResult | null>(null);
   const [editorError, setEditorError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [confirmTarget, setConfirmTarget] = useState<RaceResultGroup | null>(null);
   const [publishTarget, setPublishTarget] = useState<RaceResultGroup | null>(null);
 
   useEffect(() => {
@@ -454,7 +456,6 @@ const AdminRaceResultsPage = () => {
         }
 
         succeeded = await handleUpdateDraft(raceId, {
-          reportId: form.reportId.trim() ? toResultId(form.reportId) : undefined,
           results: draftItems.filter((item): item is AdminRaceResultDraftItem => item !== null),
         }, null);
       }
@@ -463,6 +464,31 @@ const AdminRaceResultsPage = () => {
         setEditorMode(null);
         setEditingResult(null);
         setForm(initialForm);
+      }
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  /** Confirms every draft result in the selected race. */
+  const handleConfirmDraft = async () => {
+    if (!confirmTarget || isSubmitting) {
+      return;
+    }
+
+    const raceId = confirmTarget.raceId;
+
+    if (raceId === undefined) {
+      return;
+    }
+
+    setIsSubmitting(true);
+
+    try {
+      const succeeded = await handleConfirm(raceId, null);
+
+      if (succeeded) {
+        setConfirmTarget(null);
       }
     } finally {
       setIsSubmitting(false);
@@ -628,6 +654,7 @@ const AdminRaceResultsPage = () => {
                   key={group.key}
                   group={group}
                   onEdit={openEditEditor}
+                  onConfirm={setConfirmTarget}
                   onPublish={setPublishTarget}
                 />
               ))}
@@ -646,6 +673,33 @@ const AdminRaceResultsPage = () => {
           onClose={closeEditor}
           onSubmit={handleEditorSubmit}
         />
+      )}
+
+      {confirmTarget && (
+        <div className="fixed inset-0 z-[180] flex items-center justify-center bg-black/60 px-4 py-8" role="presentation" onMouseDown={(event) => {
+          if (event.target === event.currentTarget && !isSubmitting) setConfirmTarget(null);
+        }}>
+          <section className="w-full max-w-md rounded-lg border border-outline-variant/60 bg-surface-container-low p-6 shadow-2xl" role="dialog" aria-modal="true" aria-labelledby="confirm-result-title">
+            <div className="flex items-start gap-4">
+              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-secondary/10 text-secondary">
+                <CheckCircle2 className="h-5 w-5" />
+              </span>
+              <div>
+                <h2 id="confirm-result-title" className="font-display text-xl font-bold text-on-surface">Confirm draft results?</h2>
+                <p className="mt-2 text-sm leading-6 text-on-surface-variant">
+                  All {confirmTarget.results.length} draft results for Race #{String(confirmTarget.raceId ?? confirmTarget.raceNumber ?? '-')} will be confirmed and ready to publish.
+                </p>
+              </div>
+            </div>
+            <div className="mt-6 flex justify-end gap-3 border-t border-outline-variant/40 pt-5">
+              <button type="button" onClick={() => setConfirmTarget(null)} disabled={isSubmitting} className="rounded-lg border border-outline-variant/60 px-4 py-2.5 text-sm font-bold text-on-surface-variant disabled:opacity-60">Cancel</button>
+              <button type="button" onClick={() => void handleConfirmDraft()} disabled={isSubmitting} className="inline-flex items-center gap-2 rounded-lg bg-secondary px-4 py-2.5 text-sm font-bold text-white disabled:opacity-60">
+                <CheckCircle2 className={`h-4 w-4 ${isSubmitting ? 'animate-pulse' : ''}`} />
+                {isSubmitting ? 'Confirming...' : 'Confirm draft'}
+              </button>
+            </div>
+          </section>
+        </div>
       )}
 
       {publishTarget && (
@@ -674,14 +728,23 @@ const AdminRaceResultsPage = () => {
 const RaceResultGroupTable = ({
   group,
   onEdit,
+  onConfirm,
   onPublish,
 }: {
   group: RaceResultGroup;
   onEdit: (result: AdminRaceResult) => void;
+  onConfirm: (group: RaceResultGroup) => void;
   onPublish: (group: RaceResultGroup) => void;
 }) => {
-  const publishedCount = group.results.filter((result) => String(result.status).toLowerCase() === 'published').length;
+  const statuses = group.results.map((result) => String(result.status ?? 'draft').trim().toLowerCase());
+  const draftCount = statuses.filter((status) => status === 'draft').length;
+  const confirmedCount = statuses.filter((status) => status === 'confirmed').length;
+  const publishedCount = statuses.filter((status) => status === 'published').length;
   const isPublished = group.results.length > 0 && publishedCount === group.results.length;
+  const canConfirm = group.raceId !== undefined && draftCount > 0 && publishedCount === 0;
+  const canPublish = group.raceId !== undefined
+    && group.results.length > 0
+    && confirmedCount === group.results.length;
 
   return (
     <section className="min-w-0 overflow-hidden rounded-lg border border-outline-variant/50 bg-surface-container-lowest/40">
@@ -702,13 +765,23 @@ const RaceResultGroupTable = ({
             </p>
           </div>
         </div>
-        <div className="flex flex-none items-center gap-3">
+        <div className="flex flex-none flex-wrap items-center justify-end gap-3">
           <div className="flex items-center gap-3 text-xs font-bold text-on-surface-variant">
             <span>{group.results.length} result{group.results.length === 1 ? '' : 's'}</span>
             <span className="h-4 w-px bg-outline-variant" />
             <span className="text-secondary">{publishedCount} published</span>
           </div>
-          <button type="button" onClick={() => onPublish(group)} disabled={group.raceId === undefined || isPublished} className="inline-flex items-center gap-2 rounded-lg border border-secondary/50 px-3 py-2 text-xs font-bold text-secondary hover:bg-secondary-container/20 disabled:opacity-40" title={isPublished ? 'Already published' : 'Publish race results'}>
+          <button
+            type="button"
+            onClick={() => onConfirm(group)}
+            disabled={!canConfirm}
+            className="inline-flex items-center gap-2 rounded-lg bg-secondary px-3 py-2 text-xs font-bold text-white hover:bg-opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
+            title={isPublished ? 'Already published' : draftCount === 0 ? 'No draft results to confirm' : 'Confirm draft results'}
+          >
+            <CheckCircle2 className="h-4 w-4" />
+            Confirm draft
+          </button>
+          <button type="button" onClick={() => onPublish(group)} disabled={!canPublish} className="inline-flex items-center gap-2 rounded-lg border border-secondary/50 px-3 py-2 text-xs font-bold text-secondary hover:bg-secondary-container/20 disabled:cursor-not-allowed disabled:opacity-40" title={isPublished ? 'Already published' : canPublish ? 'Publish race results' : 'Confirm all draft results before publishing'}>
             <Send className="h-4 w-4" />
             Publish
           </button>
@@ -731,7 +804,8 @@ const RaceResultGroupTable = ({
           <tbody className="divide-y divide-outline-variant/30">
             {group.results.map((result, index) => {
               const resultId = getResultId(result);
-              const isResultPublished = String(result.status).toLowerCase() === 'published';
+              const resultStatus = String(result.status ?? 'draft').trim().toLowerCase();
+              const isResultEditable = resultStatus === 'draft';
 
               return (
                 <tr key={String(resultId ?? `${result.assignmentId}-${index}`)} className="hover:bg-surface-container-low/60">
@@ -760,7 +834,7 @@ const RaceResultGroupTable = ({
                   <td className="px-4 py-4 text-xs text-on-surface-variant">{formatDateTime(result.recordedAt)}</td>
                   <td className="px-4 py-4">
                     <div className="flex justify-end gap-2">
-                      <button type="button" onClick={() => onEdit(result)} disabled={result.assignmentId === undefined || result.raceId === undefined || isResultPublished} className="rounded-lg border border-outline-variant/60 p-2 text-on-surface-variant hover:border-primary hover:text-primary disabled:opacity-40" aria-label="Edit draft race result" title={isResultPublished ? 'Published results cannot be edited' : 'Edit draft'}>
+                      <button type="button" onClick={() => onEdit(result)} disabled={result.assignmentId === undefined || result.raceId === undefined || !isResultEditable} className="rounded-lg border border-outline-variant/60 p-2 text-on-surface-variant hover:border-primary hover:text-primary disabled:cursor-not-allowed disabled:opacity-40" aria-label="Edit draft race result" title={isResultEditable ? 'Edit draft' : 'Only draft results can be edited'}>
                         <Edit3 className="h-4 w-4" />
                       </button>
                     </div>
@@ -842,7 +916,7 @@ const ResultEditorModal = ({
 
       <form onSubmit={onSubmit} className="grid gap-4 sm:grid-cols-2">
         <TextField label="Assignment ID" value={form.assignmentId} onChange={(value) => onChange({ assignmentId: value })} required readOnly={mode === 'edit'} />
-        <TextField label="Report ID" value={form.reportId} onChange={(value) => onChange({ reportId: value })} />
+        {mode === 'create' && <TextField label="Report ID" value={form.reportId} onChange={(value) => onChange({ reportId: value })} />}
         {mode === 'create' && <TextField label="Final round" type="number" value={form.finalRound} onChange={(value) => onChange({ finalRound: value })} min="1" />}
         <TextField label="Finish position" type="number" value={form.finishPosition} onChange={(value) => onChange({ finishPosition: value })} min="1" />
         <TextField label="Finish time (seconds)" type="number" value={form.finishTimeSec} onChange={(value) => onChange({ finishTimeSec: value })} min="0" step="0.001" />

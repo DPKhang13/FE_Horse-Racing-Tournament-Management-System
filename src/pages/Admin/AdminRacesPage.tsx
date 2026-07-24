@@ -47,6 +47,16 @@ type PointRuleFormData = PointRuleRequest & {
 };
 type PointRuleFormErrors = Partial<Record<keyof PointRuleRequest, string>>;
 type RaceAction = 'start' | 'openBetting' | 'complete' | 'cancel';
+type ConfirmableRaceAction = Exclude<RaceAction, 'openBetting'>;
+type PendingRaceAction = {
+  action: ConfirmableRaceAction;
+  race: AdminRaceItem;
+};
+type RaceActionSuccess = {
+  action: ConfirmableRaceAction;
+  raceName: string;
+  text: string;
+};
 type RaceStatusFilter = 'All' | 'scheduled' | 'ongoing' | 'completed' | 'cancelled';
 type RefereeAssignmentFormData = {
   refereeId: number | '';
@@ -326,6 +336,8 @@ const AdminRacesPage = () => {
   const [isSaving, setIsSaving] = useState(false);
   const [isPointRulesLoading, setIsPointRulesLoading] = useState(false);
   const [actionRaceId, setActionRaceId] = useState<number | null>(null);
+  const [pendingRaceAction, setPendingRaceAction] = useState<PendingRaceAction | null>(null);
+  const [raceActionSuccess, setRaceActionSuccess] = useState<RaceActionSuccess | null>(null);
   const [editingRace, setEditingRace] = useState<AdminRaceItem | null>(null);
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [formData, setFormData] = useState<AdminRaceFormData>(emptyRaceForm);
@@ -610,6 +622,11 @@ const AdminRacesPage = () => {
     setError(null);
   };
 
+  const openRaceActionConfirmation = (race: AdminRaceItem, action: ConfirmableRaceAction) => {
+    setNotice(null);
+    setPendingRaceAction({ race, action });
+  };
+
   const handleRefereeFormChange = <K extends keyof RefereeAssignmentFormData>(
     field: K,
     value: RefereeAssignmentFormData[K],
@@ -804,14 +821,10 @@ const AdminRacesPage = () => {
       cancel: 'cancel',
     };
 
-    const confirmationMessage = action === 'start'
-      ? `Start "${race.name}" as an Admin?\n\nThis will move the race to ongoing and close betting for this race.`
-      : action === 'openBetting'
-        ? `Open betting for "${race.name}"?\n\nThis will move the race from ready to open_for_betting and generate bet options.`
-        : `Are you sure you want to ${labels[action]} "${race.name}"?`;
-    const confirmed = window.confirm(confirmationMessage);
-
-    if (!confirmed) {
+    if (
+      action === 'openBetting'
+      && !window.confirm(`Open betting for "${race.name}"?\n\nThis will move the race from ready to open_for_betting and generate bet options.`)
+    ) {
       return;
     }
 
@@ -838,7 +851,13 @@ const AdminRacesPage = () => {
       }
 
       await loadRaces();
-      setNotice({ tone: 'success', text: successText });
+
+      if (action === 'openBetting') {
+        setNotice({ tone: 'success', text: successText });
+      } else {
+        setPendingRaceAction(null);
+        setRaceActionSuccess({ action, raceName: race.name, text: successText });
+      }
     } catch (error) {
       const detail = getApiErrorMessage(error, `Unable to ${labels[action]} race.`);
       setNotice({
@@ -1029,15 +1048,15 @@ const AdminRacesPage = () => {
                         </IconButton>
                         <IconButton
                           label={canStartRace(race.status) ? `Start ${race.name}` : `${race.name} cannot be started from ${race.status}`}
-                          onClick={() => void handleRaceAction(race, 'start')}
+                          onClick={() => openRaceActionConfirmation(race, 'start')}
                           disabled={actionRaceId === race.raceId || !canStartRace(race.status)}
                         >
                           <Play className="h-4 w-4" />
                         </IconButton>
-                        <IconButton label={`Complete ${race.name}`} onClick={() => void handleRaceAction(race, 'complete')} disabled={actionRaceId === race.raceId}>
+                        <IconButton label={`Complete ${race.name}`} onClick={() => openRaceActionConfirmation(race, 'complete')} disabled={actionRaceId === race.raceId}>
                           <CheckCircle2 className="h-4 w-4" />
                         </IconButton>
-                        <IconButton label={`Cancel ${race.name}`} onClick={() => void handleRaceAction(race, 'cancel')} disabled={actionRaceId === race.raceId} danger>
+                        <IconButton label={`Cancel ${race.name}`} onClick={() => openRaceActionConfirmation(race, 'cancel')} disabled={actionRaceId === race.raceId} danger>
                           <Ban className="h-4 w-4" />
                         </IconButton>
                       </div>
@@ -1109,6 +1128,27 @@ const AdminRacesPage = () => {
               onCancel={closeRefereeModal}
             />
           </Modal>
+        )}
+
+        {pendingRaceAction && (
+          <RaceActionConfirmationModal
+            action={pendingRaceAction.action}
+            race={pendingRaceAction.race}
+            isProcessing={actionRaceId === pendingRaceAction.race.raceId}
+            onConfirm={() => void handleRaceAction(pendingRaceAction.race, pendingRaceAction.action)}
+            onClose={() => {
+              if (actionRaceId === null) {
+                setPendingRaceAction(null);
+              }
+            }}
+          />
+        )}
+
+        {raceActionSuccess && (
+          <RaceActionSuccessModal
+            result={raceActionSuccess}
+            onClose={() => setRaceActionSuccess(null)}
+          />
         )}
       </div>
     </div>
@@ -1183,9 +1223,23 @@ const IconButton = ({
   </button>
 );
 
-const Modal = ({ title, subtitle, onClose, children }: { title: string; subtitle: string; onClose: () => void; children: ReactNode }) => (
+const Modal = ({
+  title,
+  subtitle,
+  onClose,
+  children,
+  maxWidthClassName = 'max-w-5xl',
+  closeDisabled = false,
+}: {
+  title: string;
+  subtitle: string;
+  onClose: () => void;
+  children: ReactNode;
+  maxWidthClassName?: string;
+  closeDisabled?: boolean;
+}) => (
   <div className="fixed inset-0 z-[60] overflow-y-auto bg-black/60 px-4 py-8" role="dialog" aria-modal="true" aria-label={title}>
-    <div className="mx-auto max-w-5xl rounded-lg border border-outline-variant bg-surface-container shadow-xl">
+    <div className={`mx-auto ${maxWidthClassName} rounded-lg border border-outline-variant bg-surface-container shadow-xl`}>
       <div className="flex items-start justify-between gap-6 border-b border-outline-variant p-6">
         <div>
           <p className="mb-2 text-label-sm font-bold uppercase tracking-widest text-outline">{subtitle}</p>
@@ -1194,7 +1248,8 @@ const Modal = ({ title, subtitle, onClose, children }: { title: string; subtitle
         <button
           type="button"
           onClick={onClose}
-          className="flex h-10 w-10 items-center justify-center rounded-md border border-outline-variant text-on-surface-variant transition-colors hover:border-primary hover:text-primary"
+          disabled={closeDisabled}
+          className="flex h-10 w-10 items-center justify-center rounded-md border border-outline-variant text-on-surface-variant transition-colors hover:border-primary hover:text-primary disabled:cursor-not-allowed disabled:opacity-50"
           aria-label="Close modal"
           title="Close modal"
         >
@@ -1205,6 +1260,138 @@ const Modal = ({ title, subtitle, onClose, children }: { title: string; subtitle
     </div>
   </div>
 );
+
+const raceActionCopy: Record<ConfirmableRaceAction, {
+  title: string;
+  question: string;
+  description: string;
+  confirmLabel: string;
+  processingLabel: string;
+  successTitle: string;
+}> = {
+  start: {
+    title: 'Start Race',
+    question: 'Start this race now?',
+    description: 'The race will move to Ongoing and betting for this race will close immediately.',
+    confirmLabel: 'Start Race',
+    processingLabel: 'Starting...',
+    successTitle: 'Race Started',
+  },
+  complete: {
+    title: 'Complete Race',
+    question: 'Mark this race as completed?',
+    description: 'Confirm that all race operations are finished before completing this race.',
+    confirmLabel: 'Complete Race',
+    processingLabel: 'Completing...',
+    successTitle: 'Race Completed',
+  },
+  cancel: {
+    title: 'Cancel Race',
+    question: 'Cancel this race?',
+    description: 'The race will move to Cancelled and no further race operations should be performed.',
+    confirmLabel: 'Cancel Race',
+    processingLabel: 'Cancelling...',
+    successTitle: 'Race Cancelled',
+  },
+};
+
+const RaceActionConfirmationModal = ({
+  action,
+  race,
+  isProcessing,
+  onConfirm,
+  onClose,
+}: {
+  action: ConfirmableRaceAction;
+  race: AdminRaceItem;
+  isProcessing: boolean;
+  onConfirm: () => void;
+  onClose: () => void;
+}) => {
+  const copy = raceActionCopy[action];
+  const ActionIcon = action === 'start' ? Play : action === 'complete' ? CheckCircle2 : Ban;
+  const isDanger = action === 'cancel';
+
+  return (
+    <Modal
+      title={copy.title}
+      subtitle={`Race #${race.raceNumber} / ${race.name}`}
+      onClose={onClose}
+      maxWidthClassName="max-w-xl"
+      closeDisabled={isProcessing}
+    >
+      <div className="space-y-6 p-6">
+        <div className="flex items-start gap-4">
+          <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-md ${isDanger ? 'bg-error-container/30 text-error' : 'bg-secondary/10 text-secondary'}`}>
+            <ActionIcon className="h-5 w-5" />
+          </div>
+          <div className="min-w-0">
+            <h3 className="text-body-lg font-bold text-on-surface">{copy.question}</h3>
+            <p className="mt-2 text-body-sm leading-6 text-on-surface-variant">{copy.description}</p>
+          </div>
+        </div>
+
+        <div className="flex flex-col-reverse gap-3 border-t border-outline-variant pt-5 sm:flex-row sm:justify-end">
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={isProcessing}
+            className="rounded-md border border-outline-variant px-6 py-3 text-body-sm font-bold text-on-surface-variant transition-colors hover:border-primary hover:text-primary disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            Keep Race
+          </button>
+          <button
+            type="button"
+            onClick={onConfirm}
+            disabled={isProcessing}
+            className={`inline-flex items-center justify-center gap-2 rounded-md px-6 py-3 text-body-sm font-bold transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${
+              isDanger
+                ? 'border border-error/40 text-error hover:border-error hover:bg-error-container/20'
+                : 'bg-secondary text-on-secondary hover:bg-opacity-90'
+            }`}
+          >
+            <ActionIcon className={`h-4 w-4 ${isProcessing ? 'animate-pulse' : ''}`} />
+            {isProcessing ? copy.processingLabel : copy.confirmLabel}
+          </button>
+        </div>
+      </div>
+    </Modal>
+  );
+};
+
+const RaceActionSuccessModal = ({ result, onClose }: { result: RaceActionSuccess; onClose: () => void }) => {
+  const copy = raceActionCopy[result.action];
+
+  return (
+    <Modal
+      title={copy.successTitle}
+      subtitle={result.raceName}
+      onClose={onClose}
+      maxWidthClassName="max-w-xl"
+    >
+      <div className="space-y-6 p-6">
+        <div className="flex items-start gap-4" role="status">
+          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-md bg-secondary/10 text-secondary">
+            <CheckCircle2 className="h-6 w-6" />
+          </div>
+          <p className="min-w-0 whitespace-pre-wrap break-words pt-2 text-body-sm leading-6 text-on-surface-variant">
+            {result.text}
+          </p>
+        </div>
+
+        <div className="flex justify-end border-t border-outline-variant pt-5">
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-md bg-secondary px-6 py-3 text-body-sm font-bold text-on-secondary transition-colors hover:bg-opacity-90"
+          >
+            Done
+          </button>
+        </div>
+      </div>
+    </Modal>
+  );
+};
 
 const Field = ({ label, error, children }: { label: string; error?: string; children: ReactNode }) => (
   <label className="space-y-2">
@@ -1405,9 +1592,6 @@ const RefereeAssignmentPanel = ({
           <option value="">Select referee role</option>
           <option value="chief_referee">Chief referee</option>
           <option value="main_referee">Main referee</option>
-          <option value="finish_judge">Finish judge</option>
-          <option value="track_judge">Track judge</option>
-          <option value="weight_judge">Weight judge</option>
         </select>
       </Field>
       <button

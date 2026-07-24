@@ -135,7 +135,10 @@ export const useAdminRaceResults = ({
   );
 
   const handleConfirm = useCallback(
-    async (raceId: RaceResultId) => {
+    async (
+      raceId: RaceResultId,
+      refreshRaceId: RaceResultId | null = raceId,
+    ) => {
       setIsLoading(true);
       setError(null);
 
@@ -143,7 +146,7 @@ export const useAdminRaceResults = ({
         await adminRaceResultService.confirmResults(raceId);
         console.log(`Race results confirmed for race ${raceId}.`);
         showToast({ tone: 'success', text: 'Race results confirmed.' });
-        await refreshCurrentResults(raceId);
+        await refreshCurrentResults(refreshRaceId);
         return true;
       } catch (caughtError) {
         handleError(caughtError, 'Unable to confirm race results.');
