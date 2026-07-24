@@ -8,6 +8,13 @@ export const AUTHENTICATED_ROLES: UserRoleType[] = [
   'spectator',
 ];
 
+export const RESULT_VIEWER_ROLES: UserRoleType[] = [
+  'horse_owner',
+  'jockey',
+  'race_referee',
+  'spectator',
+];
+
 export const normalizeRoleType = (roleType: unknown): UserRoleType | undefined => {
   if (!roleType) {
     return undefined;
@@ -103,7 +110,7 @@ export const navigationItems: NavigationItem[] = [
   { label: 'Bet Management', to: '/admin/bets', allowedRoles: ['admin'], requiresAuth: true },
   { label: 'Horses', to: '/admin/horses', allowedRoles: ['admin'], requiresAuth: true },
   { label: 'Race Registrations', to: '/admin/registrations', allowedRoles: ['admin'], requiresAuth: true },
-  { label: 'Race Control', to: '/race-control', allowedRoles: ['admin', 'race_referee'], requiresAuth: true },
+  { label: 'Race Control', to: '/race-control', allowedRoles: ['race_referee'], requiresAuth: true },
   { label: 'Schedule', to: '/schedule', allowedRoles: ['horse_owner'], requiresAuth: true },
   { label: 'Registrations', to: '/registrations', allowedRoles: ['horse_owner'], requiresAuth: true },
   { label: 'Invitations', to: '/owner/invitations', allowedRoles: ['horse_owner'], requiresAuth: true },
@@ -111,7 +118,7 @@ export const navigationItems: NavigationItem[] = [
   { label: 'Invitations', to: '/jockey/invitations', allowedRoles: ['jockey'], requiresAuth: true },
   { label: 'Prediction', to: '/prediction', allowedRoles: ['spectator'], requiresAuth: true },
   { label: 'Wallet', to: '/wallet', allowedRoles: ['spectator'], requiresAuth: true },
-  { label: 'Results', to: '/results', allowedRoles: AUTHENTICATED_ROLES, requiresAuth: true },
+  { label: 'Results', to: '/results', allowedRoles: RESULT_VIEWER_ROLES, requiresAuth: true },
   { label: 'Horses', to: '/horses', allowedRoles: ['horse_owner'], requiresAuth: true },
   { label: 'Tracking', to: '/tracking', allowedRoles: ['spectator'], requiresAuth: true },
   { label: 'Notifications', to: '/notifications', allowedRoles: AUTHENTICATED_ROLES, requiresAuth: true },
