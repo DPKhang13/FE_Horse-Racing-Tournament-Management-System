@@ -1,5 +1,6 @@
 import { apiClient, getApiResponseMessage, unwrapApiData, unwrapApiList } from './apiClient';
 import type { TournamentApiItem } from './scheduleService';
+import { parseVndAmount } from '../utils/currency';
 import type {
   CreatePrizeRequest,
   MatchStatus,
@@ -127,15 +128,6 @@ const formatCurrency = (value: unknown) => {
   }).format(amount);
 };
 
-const parseCurrencyAmount = (value: unknown) => {
-  if (typeof value === 'number') {
-    return Number.isFinite(value) ? value : 0;
-  }
-
-  const numericValue = Number(asString(value).replace(/[^\d.-]/g, ''));
-  return Number.isFinite(numericValue) ? numericValue : 0;
-};
-
 const normalizeTournamentStatus = (value: unknown): TournamentStatus => {
   const normalizedValue = asString(value, 'Upcoming').trim().toLowerCase().replace(/[_-]+/g, ' ');
 
@@ -191,7 +183,7 @@ const cleanTournamentPayload = (data: TournamentPayloadData) => ({
   location: data.location.trim(),
   startDate: data.startDate,
   endDate: data.endDate,
-  prizePool: isManagementTournamentData(data) ? parseCurrencyAmount(data.prize) : Number(data.prizePool),
+  prizePool: isManagementTournamentData(data) ? parseVndAmount(data.prize) : Number(data.prizePool),
   status: data.status.trim(),
 });
 
@@ -200,7 +192,7 @@ const cleanTournamentUpdatePayload = (data: TournamentPayloadData) => ({
   location: data.location.trim(),
   startDate: data.startDate,
   endDate: data.endDate,
-  prizePool: isManagementTournamentData(data) ? parseCurrencyAmount(data.prize) : Number(data.prizePool),
+  prizePool: isManagementTournamentData(data) ? parseVndAmount(data.prize) : Number(data.prizePool),
   status: data.status.trim(),
 });
 
@@ -495,7 +487,7 @@ const buildTournamentFromData = (
   existingTournament?: Tournament,
 ): Tournament => {
   const tournamentName = isManagementTournamentData(data) ? data.tournamentName : data.name;
-  const prizePool = isManagementTournamentData(data) ? parseCurrencyAmount(data.prize) : data.prizePool;
+  const prizePool = isManagementTournamentData(data) ? parseVndAmount(data.prize) : data.prizePool;
 
   return {
     tournamentId,
@@ -514,7 +506,7 @@ const buildTournamentFromData = (
       : existingTournament?.maximumParticipants ?? 16,
     currentParticipants: existingTournament?.currentParticipants ?? 0,
     entryFee: isManagementTournamentData(data) ? Number(data.entryFee) : existingTournament?.entryFee ?? 0,
-    prize: isManagementTournamentData(data) ? data.prize.trim() : formatCurrency(prizePool),
+    prize: formatCurrency(prizePool),
     status: normalizeTournamentStatus(data.status),
     registrationOpenAt: isManagementTournamentData(data) ? data.registrationOpenAt : existingTournament?.registrationOpenAt,
     registrationCloseAt: isManagementTournamentData(data) ? data.registrationCloseAt : existingTournament?.registrationCloseAt,
