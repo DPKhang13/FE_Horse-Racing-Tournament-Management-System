@@ -1,27 +1,67 @@
 import { apiClient, unwrapApiData, unwrapApiList } from './apiClient';
 import { authService } from './authService';
 
-export type VnpayPaymentRequest = {
+export type PaymentProviderId = 'vnpay' | 'zalopay';
+
+export type PaymentProvider = {
+  id: PaymentProviderId;
+  label: string;
+  shortLabel: string;
+  description: string;
+};
+
+export const paymentProviders: PaymentProvider[] = [
+  {
+    id: 'vnpay',
+    label: 'VNPay',
+    shortLabel: 'VNPay',
+    description: 'ATM, thẻ ngân hàng và QR VNPay.',
+  },
+  {
+    id: 'zalopay',
+    label: 'ZaloPay',
+    shortLabel: 'ZaloPay',
+    description: 'Ví ZaloPay, QR hoặc ứng dụng ZaloPay.',
+  },
+];
+
+export const getPaymentProvider = (provider: string | null | undefined): PaymentProvider => {
+  const normalizedProvider = provider?.toLowerCase();
+  return paymentProviders.find((item) => item.id === normalizedProvider) ?? paymentProviders[0];
+};
+
+export type PaymentRequest = {
   amount: number;
   locale?: string;
 };
 
-export type VnpayPaymentResponse = {
+export type PaymentResponse = {
   paymentUrl?: string;
+  payUrl?: string;
+  deeplink?: string;
+  qrCodeUrl?: string;
+  provider?: PaymentProviderId | string;
   transactionRef?: string;
   txnRef?: string;
+  orderId?: string;
+  appTransId?: string;
   transaction?: unknown;
   [key: string]: unknown;
 };
 
-type VnpayTransactionBase = {
+type PaymentTransactionBase = {
   txId?: number | string;
   walletId?: number;
   userId?: number;
+  provider?: PaymentProviderId | string;
+  refType?: PaymentProviderId | string;
   txType?: string;
   transactionId?: string;
   txnRef?: string;
   transactionRef?: string;
+  orderId?: string;
+  appTransId?: string;
+  transId?: string;
   amount?: number;
   totalAmount?: number;
   value?: number;
@@ -43,8 +83,12 @@ type VnpayTransactionBase = {
   [key: string]: unknown;
 };
 
-export type VnpayTransactionSummary = VnpayTransactionBase;
-export type VnpayTransactionDetail = VnpayTransactionBase;
+export type PaymentTransactionSummary = PaymentTransactionBase;
+export type PaymentTransactionDetail = PaymentTransactionBase;
+export type VnpayPaymentRequest = PaymentRequest;
+export type VnpayPaymentResponse = PaymentResponse;
+export type VnpayTransactionSummary = PaymentTransactionSummary;
+export type VnpayTransactionDetail = PaymentTransactionDetail;
 
 export type VnpayReturnResponse = {
   validSignature?: boolean;
@@ -61,13 +105,20 @@ export type VnpayReturnResponse = {
   transaction?: unknown;
 };
 
+const providerPath = (provider: PaymentProviderId) => `/api/payments/${provider}`;
+
 export const paymentService = {
-  async createVnpayPayment(data: VnpayPaymentRequest): Promise<VnpayPaymentResponse> {
-    const response = await apiClient.post('/api/payments/vnpay/create-payment', {
+  async createPayment(provider: PaymentProviderId, data: PaymentRequest): Promise<PaymentResponse> {
+    const response = await apiClient.post(`${providerPath(provider)}/create-payment`, {
       amount: Number(data.amount),
       locale: data.locale?.trim() || 'vn',
     });
-    return unwrapApiData<VnpayPaymentResponse>(response);
+    const payment = unwrapApiData<PaymentResponse>(response);
+    return { ...payment, provider: payment.provider ?? provider };
+  },
+
+  async createVnpayPayment(data: VnpayPaymentRequest): Promise<VnpayPaymentResponse> {
+    return this.createPayment('vnpay', data);
   },
 
   async handleVnpayReturn(search: string): Promise<VnpayReturnResponse> {
@@ -76,16 +127,24 @@ export const paymentService = {
     return unwrapApiData<VnpayReturnResponse>(response);
   },
 
-  async getVnpayTopupHistory(): Promise<VnpayTransactionSummary[]> {
-    const response = await apiClient.get('/api/payments/vnpay/topup-history');
-    return unwrapApiList<VnpayTransactionSummary>(response);
+  async getTopupHistory(provider: PaymentProviderId): Promise<PaymentTransactionSummary[]> {
+    const response = await apiClient.get(`${providerPath(provider)}/topup-history`);
+    return unwrapApiList<PaymentTransactionSummary>(response).map((transaction) => ({
+      ...transaction,
+      provider: transaction.provider ?? transaction.refType ?? provider,
+    }));
   },
 
-  async getCurrentUserVnpayTopupHistory(): Promise<VnpayTransactionSummary[]> {
-    const [history, currentUser] = await Promise.all([
-      this.getVnpayTopupHistory(),
+  async getVnpayTopupHistory(): Promise<VnpayTransactionSummary[]> {
+    return this.getTopupHistory('vnpay');
+  },
+
+  async getCurrentUserTopupHistory(): Promise<PaymentTransactionSummary[]> {
+    const [providerResults, currentUser] = await Promise.all([
+      Promise.allSettled(paymentProviders.map((provider) => this.getTopupHistory(provider.id))),
       authService.getCurrentUser().catch(() => authService.getStoredUserProfile()),
     ]);
+    const history = providerResults.flatMap((result) => (result.status === 'fulfilled' ? result.value : []));
     const currentUserId = Number(currentUser?.userId ?? currentUser?.id);
 
     if (!Number.isFinite(currentUserId)) {
@@ -95,8 +154,17 @@ export const paymentService = {
     return history.filter((transaction) => Number(transaction.userId) === currentUserId);
   },
 
+  async getCurrentUserVnpayTopupHistory(): Promise<VnpayTransactionSummary[]> {
+    return this.getCurrentUserTopupHistory();
+  },
+
+  async getTransaction(provider: PaymentProviderId, txId: string): Promise<PaymentTransactionDetail> {
+    const response = await apiClient.get(`/api/payments/transactions/${encodeURIComponent(txId)}`);
+    const transaction = unwrapApiData<PaymentTransactionDetail>(response);
+    return { ...transaction, provider: transaction.provider ?? transaction.refType ?? provider };
+  },
+
   async getVnpayTransaction(txId: string): Promise<VnpayTransactionDetail> {
-    const response = await apiClient.get(`/api/payments/vnpay/transactions/${encodeURIComponent(txId)}`);
-    return unwrapApiData<VnpayTransactionDetail>(response);
+    return this.getTransaction('vnpay', txId);
   },
 };

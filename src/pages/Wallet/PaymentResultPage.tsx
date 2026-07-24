@@ -1,70 +1,36 @@
-import { useEffect, useMemo } from 'react';
-import { Link, useLocation, useSearchParams } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { motion } from 'motion/react';
 import { CheckCircle2, CircleX, Wallet } from 'lucide-react';
-import { API_BASE_URL } from '../../services/apiClient';
+import { getPaymentProvider } from '../../services/paymentService';
 
 const revealUp = {
   hidden: { opacity: 0, y: 24 },
   visible: { opacity: 1, y: 0 },
 };
 
-const VND_PER_POINT = 1000;
-
 const PaymentResultPage = () => {
-  const location = useLocation();
   const [searchParams] = useSearchParams();
-  const hasRawVnpayReturn = searchParams.has('vnp_ResponseCode') || searchParams.has('vnp_TxnRef');
-  const responseCode = searchParams.get('responseCode') ?? searchParams.get('vnp_ResponseCode');
-  const transactionStatus =
-    searchParams.get('transactionStatus') ??
-    searchParams.get('vnpayTransactionStatus') ??
-    searchParams.get('vnp_TransactionStatus');
-  const txnRef = searchParams.get('txnRef') ?? searchParams.get('transactionRef') ?? searchParams.get('vnp_TxnRef');
-  const amountParam = searchParams.get('amount') ?? searchParams.get('vnp_Amount');
+  const provider = getPaymentProvider(searchParams.get('provider'));
+  const txnRef = searchParams.get('txnRef');
+  const amountParam = searchParams.get('amount');
   const amountValue = Number(amountParam);
   const pointsAdded = searchParams.get('pointsAdded');
   const message = searchParams.get('message');
   const pointsAddedNumber = pointsAdded === null ? Number.NaN : Number(pointsAdded);
   const amount = Number.isFinite(amountValue) && amountValue > 0
-    ? searchParams.has('vnp_Amount') ? amountValue / 100 : amountValue
-    : Number.isFinite(pointsAddedNumber) && pointsAddedNumber > 0
-      ? pointsAddedNumber * VND_PER_POINT
-      : undefined;
+    ? amountValue
+    : undefined;
   const pointsAddedLabel = pointsAdded === null
     ? '-'
     : Number.isFinite(pointsAddedNumber)
       ? `${new Intl.NumberFormat('vi-VN').format(pointsAddedNumber)} pts`
       : `${pointsAdded} pts`;
-  const isSuccess = useMemo(() => {
-    const normalizedStatus = transactionStatus?.toLowerCase();
-
-    if (searchParams.get('success') === 'true') {
-      return true;
-    }
-
-    if (normalizedStatus === 'completed' || normalizedStatus === 'success') {
-      return true;
-    }
-
-    return responseCode === '00' && (!transactionStatus || transactionStatus === '00');
-  }, [responseCode, searchParams, transactionStatus]);
-
-  useEffect(() => {
-    if (!location.search || !hasRawVnpayReturn) {
-      return;
-    }
-
-    window.location.replace(`${API_BASE_URL}/api/payments/vnpay/handle-payment-return${location.search}`);
-  }, [hasRawVnpayReturn, location.search]);
-
-  const statusMessage = hasRawVnpayReturn
-    ? 'Confirming payment with server...'
-    : isSuccess
-      ? pointsAdded
-        ? `Payment confirmed. ${pointsAddedLabel} added to your wallet.`
-        : 'Payment confirmed. Your wallet will update shortly.'
-      : message || 'Payment could not be completed.';
+  const isSuccess = searchParams.get('success') === 'true';
+  const statusMessage = isSuccess
+    ? pointsAdded
+      ? `Payment confirmed. ${pointsAddedLabel} added to your wallet.`
+      : 'Payment confirmed. Your wallet will update shortly.'
+    : message || 'Payment could not be completed.';
 
   return (
     <main className="min-h-screen bg-surface text-on-surface">
@@ -81,7 +47,7 @@ const PaymentResultPage = () => {
                 {isSuccess ? <CheckCircle2 className="h-7 w-7 text-secondary" /> : <CircleX className="h-7 w-7 text-error" />}
               </div>
               <div>
-                <p className="text-xs font-bold uppercase tracking-[0.18em] text-secondary">Payment result</p>
+                <p className="text-xs font-bold uppercase tracking-[0.18em] text-secondary">{provider.label} result</p>
                 <h1 className="mt-2 font-display text-3xl font-bold text-on-surface">
                   {isSuccess ? 'Payment successful' : 'Payment failed'}
                 </h1>

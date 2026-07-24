@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { Link } from 'react-router-dom';
 import { motion } from 'motion/react';
-import { ArrowUpRight, CreditCard, Loader2, RefreshCw, Wallet } from 'lucide-react';
+import { ArrowUpRight, CreditCard, Landmark, Loader2, QrCode, RefreshCw, Wallet } from 'lucide-react';
 import { getApiErrorMessage } from '../../services/apiClient';
-import { paymentService } from '../../services/paymentService';
+import { paymentProviders, paymentService, type PaymentProviderId } from '../../services/paymentService';
 import { walletService } from '../../services/walletService';
 
 const amountOptions = [10000, 20000, 50000, 100000];
@@ -34,6 +34,7 @@ const formatPoints = (value: number) => new Intl.NumberFormat('vi-VN', {
 
 const WalletPaymentPage = () => {
   const [amount, setAmount] = useState(10000);
+  const [selectedProvider, setSelectedProvider] = useState<PaymentProviderId>('zalopay');
   const [walletBalance, setWalletBalance] = useState<number | undefined>();
   const [walletStatus, setWalletStatus] = useState('');
   const [isLoadingWallet, setIsLoadingWallet] = useState(true);
@@ -41,6 +42,10 @@ const WalletPaymentPage = () => {
   const [errorMessage, setErrorMessage] = useState('');
 
   const selectedAmountLabel = useMemo(() => formatCurrency(amount), [amount]);
+  const selectedProviderInfo = useMemo(
+    () => paymentProviders.find((provider) => provider.id === selectedProvider) ?? paymentProviders[0],
+    [selectedProvider],
+  );
 
   const loadWallet = async () => {
     setIsLoadingWallet(true);
@@ -67,7 +72,7 @@ const WalletPaymentPage = () => {
     event.preventDefault();
 
     if (!Number.isFinite(amount) || amount < 10000) {
-      setErrorMessage('Minimum top-up amount is 10.000 đ.');
+      setErrorMessage('Minimum top-up amount is 10.000 VND.');
       return;
     }
 
@@ -75,15 +80,16 @@ const WalletPaymentPage = () => {
     setErrorMessage('');
 
     try {
-      const response = await paymentService.createVnpayPayment({ amount, locale: 'vn' });
+      const response = await paymentService.createPayment(selectedProvider, { amount, locale: 'vn' });
+      const paymentUrl = response.paymentUrl ?? response.payUrl ?? response.deeplink ?? response.qrCodeUrl;
 
-      if (!response.paymentUrl) {
+      if (!paymentUrl || typeof paymentUrl !== 'string') {
         throw new Error('Payment URL was not returned.');
       }
 
-      window.location.href = response.paymentUrl;
+      window.location.href = paymentUrl;
     } catch (error) {
-      setErrorMessage(getApiErrorMessage(error, 'Could not create VNPay payment.'));
+      setErrorMessage(getApiErrorMessage(error, `Could not create ${selectedProviderInfo.label} payment.`));
       setIsSubmitting(false);
     }
   };
@@ -159,8 +165,9 @@ const WalletPaymentPage = () => {
                 <p className="mt-2 text-lg font-bold capitalize text-secondary">{walletStatus || '-'}</p>
               </div>
               <div className="rounded-lg border border-outline-variant/50 bg-surface-container-lowest p-4">
-                <p className="text-xs font-bold uppercase tracking-[0.16em] text-outline">Selected amount</p>
+                <p className="text-xs font-bold uppercase tracking-[0.16em] text-outline">Selected payment</p>
                 <p className="mt-2 text-lg font-bold text-on-surface">{selectedAmountLabel}</p>
+                <p className="mt-1 text-xs font-semibold text-on-surface-variant">{selectedProviderInfo.label}</p>
               </div>
             </div>
           </motion.section>
@@ -171,10 +178,41 @@ const WalletPaymentPage = () => {
           >
             <div className="mb-6 flex items-center gap-3">
               <CreditCard className="h-5 w-5 text-secondary" />
-              <h2 className="font-display text-2xl font-bold text-on-surface">Top up with VNPay</h2>
+              <h2 className="font-display text-2xl font-bold text-on-surface">Top up wallet</h2>
             </div>
 
             <form onSubmit={handleCreatePayment} className="grid gap-5">
+              <div className="grid gap-3">
+                <p className="text-xs font-bold uppercase tracking-[0.16em] text-outline">Payment gateway</p>
+                <div className="grid gap-3 md:grid-cols-2">
+                  {paymentProviders.map((provider) => {
+                    const isSelected = selectedProvider === provider.id;
+                    const Icon = provider.id === 'zalopay' ? QrCode : Landmark;
+
+                    return (
+                      <button
+                        key={provider.id}
+                        type="button"
+                        onClick={() => setSelectedProvider(provider.id)}
+                        className={`flex min-h-[116px] flex-col items-start justify-between rounded-lg border p-4 text-left transition ${
+                          isSelected
+                            ? 'border-primary bg-primary/10 text-on-surface shadow-sm'
+                            : 'border-outline-variant bg-surface-container-lowest text-on-surface-variant hover:border-primary hover:text-primary'
+                        }`}
+                      >
+                        <span className={`rounded-lg p-2 ${isSelected ? 'bg-primary text-on-primary' : 'bg-surface-container-low text-secondary'}`}>
+                          <Icon className="h-5 w-5" />
+                        </span>
+                        <span>
+                          <span className="block text-sm font-bold">{provider.label}</span>
+                          <span className="mt-1 block text-xs font-medium leading-5 text-on-surface-variant">{provider.description}</span>
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
               <div className="grid gap-2">
                 <label htmlFor="wallet-amount" className="text-xs font-bold uppercase tracking-[0.16em] text-outline">
                   Amount
@@ -215,7 +253,7 @@ const WalletPaymentPage = () => {
                 whileTap={{ scale: isSubmitting ? 1 : 0.98 }}
               >
                 {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowUpRight className="h-4 w-4" />}
-                Continue to VNPay
+                Continue to {selectedProviderInfo.shortLabel}
               </motion.button>
             </form>
           </motion.section>
