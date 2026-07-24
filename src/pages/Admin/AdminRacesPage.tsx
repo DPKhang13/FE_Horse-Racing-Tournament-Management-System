@@ -104,6 +104,13 @@ const formatDateTime = (value?: string) => {
 
 const normalizeStatus = (status: string) => status.trim().toLowerCase().replace(/[_\s-]+/g, '_');
 
+const isOpenForBettingStatus = (status: string) => {
+  const value = normalizeStatus(status);
+  return value === 'open_for_betting'
+    || value === 'betting_open'
+    || (value.includes('open') && value.includes('betting'));
+};
+
 const getRaceStatusClassName = (status: string) => {
   const value = normalizeStatus(status);
 
@@ -142,10 +149,27 @@ const getStatusFilterValue = (status: string): Exclude<RaceStatusFilter, 'All'> 
 
 const canStartRace = (status: string) => {
   const value = normalizeStatus(status);
-  return value === 'scheduled' || value === 'ready' || value === 'pending';
+  return value === 'scheduled' || value === 'ready' || value === 'pending' || isOpenForBettingStatus(status);
 };
 
 const canOpenBetting = (status: string) => normalizeStatus(status) === 'ready';
+
+const canAssignReferee = (status: string) => {
+  if (isOpenForBettingStatus(status)) {
+    return true;
+  }
+
+  const value = normalizeStatus(status);
+  return !(
+    value.includes('ongoing')
+    || value.includes('progress')
+    || value.includes('running')
+    || value.includes('live')
+    || value.includes('complete')
+    || value.includes('finish')
+    || value.includes('cancel')
+  );
+};
 
 const validateRaceForm = (data: AdminRaceFormData, existingRace?: AdminRaceItem | null) => {
   const errors: RaceFormErrors = {};
@@ -602,6 +626,11 @@ const AdminRacesPage = () => {
       return;
     }
 
+    if (selectedRefereeRace && !canAssignReferee(selectedRefereeRace.status)) {
+      setError(`Referees cannot be assigned while this race is ${selectedRefereeRace.status}.`);
+      return;
+    }
+
     const refereeId = Number(refereeForm.refereeId);
     const refereeRole = refereeForm.refereeRole.trim();
     const selectedReferee = refereeOptions.find((referee) => referee.refereeId === refereeId);
@@ -984,7 +1013,11 @@ const AdminRacesPage = () => {
                         <IconButton label={`Edit ${race.name}`} onClick={() => void openEditModal(race)} disabled={actionRaceId === race.raceId}>
                           <Pencil className="h-4 w-4" />
                         </IconButton>
-                        <IconButton label={`Manage referees for ${race.name}`} onClick={() => openRefereeModal(race)} disabled={actionRaceId === race.raceId}>
+                        <IconButton
+                          label={canAssignReferee(race.status) ? `Manage referees for ${race.name}` : `${race.name} cannot assign referees from ${race.status}`}
+                          onClick={() => openRefereeModal(race)}
+                          disabled={actionRaceId === race.raceId || !canAssignReferee(race.status)}
+                        >
                           <Users className="h-4 w-4" />
                         </IconButton>
                         <IconButton
@@ -1328,6 +1361,7 @@ const RefereeAssignmentPanel = ({
 }) => {
   const hasAssignableReferees = refereeOptions.some((referee) => referee.hasRefereeProfile);
   const isAtCapacity = refereeList.length >= race.maxReferees;
+  const canAssign = canAssignReferee(race.status);
 
   return (
   <form onSubmit={onSubmit} className="space-y-6 p-6">
@@ -1336,7 +1370,7 @@ const RefereeAssignmentPanel = ({
         <select
           value={formData.refereeId || ''}
           onChange={(event) => onChange('refereeId', event.target.value ? Number(event.target.value) : '')}
-          disabled={isRefereeOptionsLoading || refereeOptions.length === 0 || isAtCapacity}
+          disabled={isRefereeOptionsLoading || refereeOptions.length === 0 || isAtCapacity || !canAssign}
           className={inputClassName}
         >
           <option value="">
@@ -1365,7 +1399,7 @@ const RefereeAssignmentPanel = ({
         <select
           value={formData.refereeRole}
           onChange={(event) => onChange('refereeRole', event.target.value)}
-          disabled={isAtCapacity}
+          disabled={isAtCapacity || !canAssign}
           className={inputClassName}
         >
           <option value="">Select referee role</option>
@@ -1378,7 +1412,7 @@ const RefereeAssignmentPanel = ({
       </Field>
       <button
         type="submit"
-        disabled={isAssigning || isRefereeOptionsLoading || isAtCapacity}
+        disabled={isAssigning || isRefereeOptionsLoading || isAtCapacity || !canAssign}
         className="inline-flex h-[46px] items-center justify-center gap-2 rounded-md bg-secondary px-5 text-body-sm font-bold text-on-secondary transition-all hover:bg-opacity-90 disabled:cursor-not-allowed disabled:opacity-70"
       >
         <UserPlus className="h-4 w-4" />
@@ -1386,9 +1420,12 @@ const RefereeAssignmentPanel = ({
       </button>
     </div>
 
-    {(error || isAtCapacity) && (
+    {(error || isAtCapacity || !canAssign) && (
       <div role="alert" className="whitespace-pre-wrap break-words rounded-md border border-error/30 bg-error-container/20 px-4 py-3 text-body-sm font-semibold text-error">
-        {error || `Referee capacity reached (${refereeList.length}/${race.maxReferees}). Increase Max Referees before assigning another referee.`}
+        {error
+          || (isAtCapacity
+            ? `Referee capacity reached (${refereeList.length}/${race.maxReferees}). Increase Max Referees before assigning another referee.`
+            : `Referees cannot be assigned while this race is ${race.status}.`)}
       </div>
     )}
 
