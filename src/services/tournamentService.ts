@@ -4,6 +4,8 @@ import { parseVndAmount } from '../utils/currency';
 import type {
   CreatePrizeRequest,
   MatchStatus,
+  PrizeAwardResponse,
+  PrizeAwardStatus,
   PrizeResponse,
   Tournament,
   TournamentMatch,
@@ -259,6 +261,29 @@ const mapApiPrize = (item: unknown, index = 0): PrizeResponse => {
     prizeName: asString(raw.prizeName),
     amount: asNumber(raw.amount),
     note: asString(raw.note),
+  };
+};
+
+const mapApiPrizeAward = (item: unknown, index = 0): PrizeAwardResponse => {
+  const raw = item as RawRecord;
+  const status = asString(raw.status, 'announced').trim().toLowerCase();
+
+  return {
+    awardId: asNumber(raw.awardId ?? raw.id, index + 1),
+    prizeId: asNumber(raw.prizeId),
+    tournamentId: asNumber(raw.tournamentId),
+    raceId: asNumber(raw.raceId),
+    resultId: asNumber(raw.resultId),
+    horseId: asNumber(raw.horseId),
+    ownerId: asNumber(raw.ownerId),
+    finishPosition: asNumber(raw.finishPosition, index + 1),
+    amount: asNumber(raw.amount),
+    status: (status === 'awarded' ? 'awarded' : 'announced') as PrizeAwardStatus,
+    awardedAt: raw.awardedAt ? asString(raw.awardedAt) : undefined,
+    horseName: asString(raw.horseName, '-'),
+    ownerFullName: asString(raw.ownerFullName, '-'),
+    tournamentName: asString(raw.tournamentName),
+    prizeName: asString(raw.prizeName, `Position ${index + 1} Prize`),
   };
 };
 
@@ -766,6 +791,21 @@ export const tournamentService = {
       cleanPrizePayload(prize),
     );
     return mapApiPrize(unwrapApiData<RawRecord>(response));
+  },
+
+  async awardPrizes(tournamentId: number | string): Promise<PrizeAwardResponse[]> {
+    const response = await apiClient.patch(`/api/v1/admin/tournaments/${tournamentId}/award-prizes`);
+    return unwrapApiList<RawRecord>(response).map((item, index) => mapApiPrizeAward(item, index));
+  },
+
+  async getPrizeAwards(tournamentId: number | string): Promise<PrizeAwardResponse[]> {
+    const response = await apiClient.get(`/api/v1/admin/tournaments/${tournamentId}/prize-awards`);
+    return unwrapApiList<RawRecord>(response).map((item, index) => mapApiPrizeAward(item, index));
+  },
+
+  async markPrizeAwarded(tournamentId: number | string, awardId: number | string): Promise<PrizeAwardResponse> {
+    const response = await apiClient.patch(`/api/v1/admin/tournaments/${tournamentId}/prize-awards/${awardId}/mark-awarded`);
+    return mapApiPrizeAward(unwrapApiData<RawRecord>(response));
   },
 
   async getRaceReferees(raceId: number | string): Promise<RefereeAssignmentItem[]> {

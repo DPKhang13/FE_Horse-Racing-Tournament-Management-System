@@ -37,9 +37,11 @@ const WalletHistoryPage = lazy(() => import('../pages/Wallet/WalletHistoryPage')
 const WalletTransactionDetailPage = lazy(() => import('../pages/Wallet/WalletTransactionDetailPage'));
 const TournamentManagementPage = lazy(() => import('../pages/Tournament/TournamentManagementPage'));
 const TournamentSchedulePage = lazy(() => import('../pages/Tournament/TournamentSchedulePage'));
+const TournamentPrizeAwardsPage = lazy(() => import('../pages/Tournament/TournamentPrizeAwardsPage'));
 const UserManagementPage = lazy(() => import('../pages/Admin/UserManagementPage'));
 const OwnerDashboardPage = lazy(() => import('../pages/Owner/OwnerDashboardPage'));
 const AdminRaceResultsPage = lazy(() => import('../pages/Admin/AdminRaceResultsPage'));
+const AdminPrizeAwardsPage = lazy(() => import('../pages/Admin/AdminPrizeAwardsPage'));
 const RefereeDashboardPage = lazy(() => import('../pages/Referee/RefereeDashboardPage'));
 
 const asyncPage = (page: ReactNode) => (
@@ -95,10 +97,12 @@ const AppRoutes = () => {
       <Route path="/admin/schedule" element={protectedPage(<AdminSchedulePage />, ['admin'])} />
       <Route path="/admin/races" element={protectedPage(<AdminRacesPage />, ['admin'])} />
       <Route path="/admin/race-results" element={protectedPage(<AdminRaceResultsPage />, ['admin'])} />
+      <Route path="/admin/prize-awards" element={protectedPage(<AdminPrizeAwardsPage />, ['admin'])} />
       <Route path="/admin/bets" element={protectedPage(<AdminBetManagementPage />, ['admin'])} />
       <Route path="/admin/race-schedule" element={<Navigate to="/admin/schedule" replace />} />
       <Route path="/tournaments" element={protectedPage(<TournamentManagementPage />, ['admin'])} />
       <Route path="/tournaments/:tournamentId/schedule" element={protectedPage(<TournamentSchedulePage />, ['admin'])} />
+      <Route path="/tournaments/:tournamentId/prize-awards" element={protectedPage(<TournamentPrizeAwardsPage />, ['admin'])} />
       <Route path="/registrations" element={protectedPage(<RaceRegistrationPage />, ['horse_owner', 'admin'])} />
       <Route path="/owner/invitations" element={protectedPage(<OwnerInvitationsPage />, ['horse_owner'])} />
       <Route path="/jockey/invitations" element={protectedPage(<JockeyInvitationsPage />, ['jockey'])} />

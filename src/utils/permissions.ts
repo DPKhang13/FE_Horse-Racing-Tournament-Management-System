@@ -104,6 +104,7 @@ export const navigationItems: NavigationItem[] = [
   { label: 'Dashboard', to: '/owner-dashboard', allowedRoles: ['horse_owner'], requiresAuth: true },
   { label: 'Dashboard', to: '/jockey-dashboard', allowedRoles: ['jockey'], requiresAuth: true },
   { label: 'Tournaments', to: '/tournaments', allowedRoles: ['admin'], requiresAuth: true },
+  { label: 'Prize Awards', to: '/admin/prize-awards', allowedRoles: ['admin'], requiresAuth: true },
   { label: 'Schedule', to: '/admin/schedule', allowedRoles: ['admin'], requiresAuth: true },
   { label: 'Races', to: '/admin/races', allowedRoles: ['admin'], requiresAuth: true },
   { label: 'Race Results', to: '/admin/race-results', allowedRoles: ['admin'], requiresAuth: true },
