@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import {
   Coins,
   Filter,
@@ -15,6 +15,11 @@ import {
 } from 'lucide-react';
 import { getApiErrorMessage } from '../../services/apiClient';
 import { betService, type BetOptionItem } from '../../services/betService';
+import {
+  adminScheduleRaceApi,
+  type AdminRaceItem,
+  type AdminTournamentOption,
+} from './adminScheduleRaceApi';
 
 type Notice = {
   tone: 'success' | 'error';
@@ -72,8 +77,13 @@ const AdminBetManagementPage = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [notice, setNotice] = useState<Notice | null>(null);
   const [isGenerateModalOpen, setIsGenerateModalOpen] = useState(false);
+  const [generateTournamentId, setGenerateTournamentId] = useState('');
   const [generateRaceId, setGenerateRaceId] = useState('');
+  const [generateTournaments, setGenerateTournaments] = useState<AdminTournamentOption[]>([]);
+  const [generateRaces, setGenerateRaces] = useState<AdminRaceItem[]>([]);
   const [generateError, setGenerateError] = useState('');
+  const [isGenerateTournamentLoading, setIsGenerateTournamentLoading] = useState(false);
+  const [isGenerateRaceLoading, setIsGenerateRaceLoading] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
   const [isRateModalOpen, setIsRateModalOpen] = useState(false);
   const [selectedOption, setSelectedOption] = useState<BetOptionItem | null>(null);
@@ -81,6 +91,8 @@ const AdminBetManagementPage = () => {
   const [rateError, setRateError] = useState('');
   const [isDetailLoading, setIsDetailLoading] = useState(false);
   const [isRateSaving, setIsRateSaving] = useState(false);
+  const generateTournamentRequestIdRef = useRef(0);
+  const generateRaceRequestIdRef = useRef(0);
 
   const loadOptions = async (raceId: number | '' = activeRaceId, showLoading = true) => {
     if (showLoading) {
@@ -168,24 +180,108 @@ const AdminBetManagementPage = () => {
     await loadOptions('');
   };
 
+  const loadGenerateTournaments = async () => {
+    const requestId = generateTournamentRequestIdRef.current + 1;
+    generateTournamentRequestIdRef.current = requestId;
+    setIsGenerateTournamentLoading(true);
+
+    try {
+      const tournaments = await adminScheduleRaceApi.getTournaments();
+
+      if (requestId !== generateTournamentRequestIdRef.current) {
+        return;
+      }
+
+      setGenerateTournaments(tournaments);
+
+      if (tournaments.length === 0) {
+        setGenerateError('No tournaments are available.');
+      }
+    } catch (error) {
+      if (requestId === generateTournamentRequestIdRef.current) {
+        setGenerateTournaments([]);
+        setGenerateError(getApiErrorMessage(error, 'Unable to load tournaments.'));
+      }
+    } finally {
+      if (requestId === generateTournamentRequestIdRef.current) {
+        setIsGenerateTournamentLoading(false);
+      }
+    }
+  };
+
   const openGenerateModal = () => {
-    setGenerateRaceId(activeRaceId ? String(activeRaceId) : raceIdFilter.trim());
+    setGenerateTournamentId('');
+    setGenerateRaceId('');
+    setGenerateTournaments([]);
+    setGenerateRaces([]);
     setGenerateError('');
     setIsGenerateModalOpen(true);
+    void loadGenerateTournaments();
+  };
+
+  const handleGenerateTournamentChange = async (tournamentId: string) => {
+    const requestId = generateRaceRequestIdRef.current + 1;
+    generateRaceRequestIdRef.current = requestId;
+    setGenerateTournamentId(tournamentId);
+    setGenerateRaceId('');
+    setGenerateRaces([]);
+    setGenerateError('');
+
+    if (!tournamentId) {
+      setIsGenerateRaceLoading(false);
+      return;
+    }
+
+    setIsGenerateRaceLoading(true);
+
+    try {
+      const races = await adminScheduleRaceApi.getRacesByTournament(tournamentId);
+
+      if (requestId !== generateRaceRequestIdRef.current) {
+        return;
+      }
+
+      setGenerateRaces(races);
+
+      if (races.length === 0) {
+        setGenerateError('This tournament has no races available.');
+      }
+    } catch (error) {
+      if (requestId === generateRaceRequestIdRef.current) {
+        setGenerateRaces([]);
+        setGenerateError(getApiErrorMessage(error, 'Unable to load races for this tournament.'));
+      }
+    } finally {
+      if (requestId === generateRaceRequestIdRef.current) {
+        setIsGenerateRaceLoading(false);
+      }
+    }
   };
 
   const closeGenerateModal = () => {
+    generateTournamentRequestIdRef.current += 1;
+    generateRaceRequestIdRef.current += 1;
     setIsGenerateModalOpen(false);
+    setGenerateTournamentId('');
+    setGenerateRaceId('');
+    setGenerateRaces([]);
     setGenerateError('');
+    setIsGenerateTournamentLoading(false);
+    setIsGenerateRaceLoading(false);
   };
 
   const handleGenerateSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
-    const parsedRaceId = parsePositiveInteger(generateRaceId.trim());
+    if (!generateTournamentId) {
+      setGenerateError('Select a tournament first.');
+      return;
+    }
 
-    if (!parsedRaceId) {
-      setGenerateError('Race ID must be a positive whole number.');
+    const parsedRaceId = parsePositiveInteger(generateRaceId);
+
+    if (!parsedRaceId || !generateRaces.some((race) => race.raceId === parsedRaceId)) {
+      setGenerateError('Select a race to generate bet options.');
       return;
     }
 
@@ -197,9 +293,10 @@ const AdminBetManagementPage = () => {
       setBetOptions(generatedOptions);
       setRaceIdFilter(String(parsedRaceId));
       setActiveRaceId(parsedRaceId);
+      const generatedRace = generateRaces.find((race) => race.raceId === parsedRaceId);
       setNotice({
         tone: 'success',
-        text: `Generated ${generatedOptions.length} bet option${generatedOptions.length === 1 ? '' : 's'} for race #${parsedRaceId}.`,
+        text: `Generated ${generatedOptions.length} bet option${generatedOptions.length === 1 ? '' : 's'} for ${generatedRace?.name ?? 'race'} #${parsedRaceId}.`,
       });
       closeGenerateModal();
     } catch (error) {
@@ -440,10 +537,19 @@ const AdminBetManagementPage = () => {
 
       {isGenerateModalOpen && (
         <GenerateBetsModal
+          tournamentId={generateTournamentId}
           raceId={generateRaceId}
+          tournaments={generateTournaments}
+          races={generateRaces}
           error={generateError}
+          isTournamentLoading={isGenerateTournamentLoading}
+          isRaceLoading={isGenerateRaceLoading}
           isSubmitting={isGenerating}
-          onChange={setGenerateRaceId}
+          onTournamentChange={(value) => void handleGenerateTournamentChange(value)}
+          onRaceChange={(value) => {
+            setGenerateRaceId(value);
+            setGenerateError('');
+          }}
           onClose={closeGenerateModal}
           onSubmit={handleGenerateSubmit}
         />
@@ -521,36 +627,87 @@ const ParticipantAvatar = ({ option }: { option: BetOptionItem }) => {
 };
 
 const GenerateBetsModal = ({
+  tournamentId,
   raceId,
+  tournaments,
+  races,
   error,
+  isTournamentLoading,
+  isRaceLoading,
   isSubmitting,
-  onChange,
+  onTournamentChange,
+  onRaceChange,
   onClose,
   onSubmit,
 }: {
+  tournamentId: string;
   raceId: string;
+  tournaments: AdminTournamentOption[];
+  races: AdminRaceItem[];
   error: string;
+  isTournamentLoading: boolean;
+  isRaceLoading: boolean;
   isSubmitting: boolean;
-  onChange: (value: string) => void;
+  onTournamentChange: (value: string) => void;
+  onRaceChange: (value: string) => void;
   onClose: () => void;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
 }) => (
   <Modal title="Generate Bets for Race" subtitle="Auto-generate options" onClose={onClose} maxWidthClassName="max-w-xl">
     <form onSubmit={onSubmit} className="space-y-5 p-6">
-      <Field label="Race ID" error={error}>
-        <input
-          type="number"
-          min="1"
-          step="1"
-          value={raceId}
-          onChange={(event) => onChange(event.target.value)}
-          className={inputClassName}
-          autoFocus
-        />
-      </Field>
+      <div className="grid gap-4 sm:grid-cols-2">
+        <Field label="Tournament">
+          <select
+            value={tournamentId}
+            onChange={(event) => onTournamentChange(event.target.value)}
+            disabled={isTournamentLoading || isSubmitting}
+            className={inputClassName}
+            autoFocus
+          >
+            <option value="">
+              {isTournamentLoading ? 'Loading tournaments...' : 'Select tournament'}
+            </option>
+            {tournaments.map((tournament) => (
+              <option key={tournament.tournamentId} value={tournament.tournamentId}>
+                {tournament.tournamentName} (#{tournament.tournamentId})
+              </option>
+            ))}
+          </select>
+        </Field>
+
+        <Field label="Race">
+          <select
+            value={raceId}
+            onChange={(event) => onRaceChange(event.target.value)}
+            disabled={!tournamentId || isRaceLoading || isSubmitting}
+            className={inputClassName}
+          >
+            <option value="">
+              {!tournamentId
+                ? 'Select tournament first'
+                : isRaceLoading
+                  ? 'Loading races...'
+                  : races.length === 0
+                    ? 'No races available'
+                    : 'Select race'}
+            </option>
+            {races.map((race) => (
+              <option key={race.raceId} value={race.raceId}>
+                Race {race.raceNumber}: {race.name} (#{race.raceId})
+              </option>
+            ))}
+          </select>
+        </Field>
+      </div>
+
+      {error && (
+        <div role="alert" className="rounded-md border border-error/30 bg-error-container/20 px-4 py-3 text-body-sm font-semibold text-error">
+          {error}
+        </div>
+      )}
 
       <div className="rounded-md border border-outline-variant bg-surface-container-low px-4 py-3 text-body-sm font-semibold text-on-surface-variant">
-        This calls the admin generator and then scopes the table to the generated race.
+        Select a tournament and race. The generated options will then be shown in the table for that race.
       </div>
 
       <div className="flex flex-col-reverse gap-3 border-t border-outline-variant pt-5 sm:flex-row sm:justify-end">
@@ -563,7 +720,7 @@ const GenerateBetsModal = ({
         </button>
         <button
           type="submit"
-          disabled={isSubmitting}
+          disabled={isSubmitting || isTournamentLoading || isRaceLoading || !raceId}
           className="gold-gradient inline-flex items-center justify-center gap-2 rounded-md px-6 py-3 text-body-sm font-extrabold text-on-primary transition-all disabled:cursor-not-allowed disabled:opacity-70"
         >
           <WandSparkles className="h-4 w-4" />
