@@ -133,18 +133,18 @@ const RaceResultDetail = () => {
           Back to Results
         </Link>
 
-        <div className="bg-primary-container rounded-lg p-6 md:p-8 text-white mb-8">
+        <div className="bg-cyan-700 rounded-lg p-6 md:p-8 text-white mb-8">
           <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-6">
             <div>
               <div className="flex flex-wrap items-center gap-3 mb-3">
-                <span className="text-label-md text-on-primary-container uppercase tracking-widest">
+                <span className="text-label-md text-cyan-50 uppercase tracking-widest">
                   R{result.raceNumber} • {result.grade}
                 </span>
                 <ResultStatusChip status={result.status} />
               </div>
               <h1 className="text-headline-lg font-bold mb-3">{result.raceName}</h1>
-              <p className="text-body-md text-on-primary-container mb-4">{result.tournamentName}</p>
-              <div className="flex flex-wrap gap-x-6 gap-y-2 text-body-sm text-on-primary-container/90">
+              <p className="text-body-md text-cyan-50 mb-4">{result.tournamentName}</p>
+              <div className="flex flex-wrap gap-x-6 gap-y-2 text-body-sm text-cyan-50/90">
                 <span className="inline-flex items-center gap-2">
                   <Calendar className="w-4 h-4" />
                   {formatDate(result.date)}
@@ -158,16 +158,16 @@ const RaceResultDetail = () => {
 
             <div className="shrink-0 space-y-3">
               <div className="rounded-lg bg-white/10 px-4 py-3">
-                <p className="text-label-sm text-on-primary-container uppercase tracking-wider">Winner</p>
+                <p className="text-label-sm text-cyan-50 uppercase tracking-wider">Winner</p>
                 <p className="text-body-lg font-bold">{result.winnerHorse}</p>
-                <p className="text-body-sm text-on-primary-container">{result.winnerJockey}</p>
+                <p className="text-body-sm text-cyan-50">{result.winnerJockey}</p>
               </div>
               <div className="rounded-lg bg-white/10 px-4 py-3">
-                <p className="text-label-sm text-on-primary-container uppercase tracking-wider">Finish Time</p>
+                <p className="text-label-sm text-cyan-50 uppercase tracking-wider">Finish Time</p>
                 <p className="text-body-lg font-bold tabular-nums">{result.winnerTime}</p>
               </div>
               {publishedLabel && (
-                <p className="text-label-sm text-on-primary-container uppercase tracking-wider">
+                <p className="text-label-sm text-cyan-50 uppercase tracking-wider">
                   Published {publishedLabel}
                 </p>
               )}
@@ -182,7 +182,7 @@ const RaceResultDetail = () => {
               { label: 'Runners', value: result.entries.length.toString() },
             ].map((item) => (
               <div key={item.label}>
-                <p className="text-label-sm text-on-primary-container uppercase tracking-wider">{item.label}</p>
+                <p className="text-label-sm text-cyan-50 uppercase tracking-wider">{item.label}</p>
                 <p className="text-body-sm font-bold mt-1">{item.value}</p>
               </div>
             ))}
@@ -201,7 +201,7 @@ const RaceResultDetail = () => {
                   <div className="flex items-center gap-3 mb-4">
                     <RankBadge rank={entry.finishPosition as number} />
                     <div>
-                      <h3 className="text-body-lg font-bold text-primary">{entry.horseName}</h3>
+                      <h3 className="text-body-lg font-bold text-cyan-300">{entry.horseName}</h3>
                       <p className="text-body-sm text-on-surface-variant">{entry.jockeyName}</p>
                     </div>
                   </div>

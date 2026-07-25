@@ -75,7 +75,7 @@ const RaceResultTable = ({
               </td>
               <td className="px-3 py-4">
                 <div>
-                  <span className="break-words text-body-sm font-bold text-primary">{entry.horseName}</span>
+                  <span className="break-words text-body-sm font-bold text-cyan-300">{entry.horseName}</span>
                   {entry.isDisqualified && entry.disqualificationReason && (
                     <p className="text-label-sm text-on-error-container mt-1 normal-case tracking-normal font-normal">
                       {entry.disqualificationReason}
@@ -93,7 +93,7 @@ const RaceResultTable = ({
               </td>
               {showPoints && (
                 <td className="px-3 py-4 text-right">
-                  <span className="text-body-sm font-semibold text-primary tabular-nums">
+                  <span className="text-body-sm font-semibold text-cyan-300 tabular-nums">
                     {entry.pointsAwarded}
                   </span>
                 </td>

@@ -43,7 +43,7 @@ const PrizeBreakdown = ({ distributions, totalPrizePool }: PrizeBreakdownProps) 
               >
                 {item.position}
               </span>
-              <span className="text-body-sm font-semibold text-primary">{item.label}</span>
+              <span className="text-body-sm font-semibold text-cyan-300">{item.label}</span>
             </div>
             <span className="text-body-sm font-bold text-secondary tabular-nums">{item.amount}</span>
           </div>

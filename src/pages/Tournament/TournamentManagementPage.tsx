@@ -2266,7 +2266,7 @@ const TournamentDetailModal = ({
           </Link>
         }
       >
-        <SchedulePreview matches={tournament.schedule} />
+        <SchedulePreview matches={tournament.schedule} tournamentLocation={tournament.location} />
       </DetailSection>
     </div>
   </Modal>
@@ -2305,22 +2305,21 @@ const ParticipantsTable = ({ participants }: { participants: TournamentParticipa
   );
 };
 
-const SchedulePreview = ({ matches }: { matches: TournamentMatch[] }) => {
+const SchedulePreview = ({ matches, tournamentLocation }: { matches: TournamentMatch[]; tournamentLocation: string }) => {
   if (matches.length === 0) {
     return <InlineEmptyState text="No matches exist for this tournament." />;
   }
 
   return (
     <div className="overflow-x-auto">
-      <table className="w-full min-w-[860px] text-left">
+      <table className="w-full min-w-[760px] text-left">
         <thead className="border-b border-outline-variant bg-surface-container">
           <tr>
             <th className="px-4 py-3 text-label-sm uppercase tracking-wider text-outline">Match</th>
             <th className="px-4 py-3 text-label-sm uppercase tracking-wider text-outline">Round</th>
             <th className="px-4 py-3 text-label-sm uppercase tracking-wider text-outline">Date</th>
             <th className="px-4 py-3 text-label-sm uppercase tracking-wider text-outline">Time</th>
-            <th className="px-4 py-3 text-label-sm uppercase tracking-wider text-outline">Arena / Location</th>
-            <th className="px-4 py-3 text-label-sm uppercase tracking-wider text-outline">Participants</th>
+            <th className="px-4 py-3 text-label-sm uppercase tracking-wider text-outline">Location</th>
             <th className="px-4 py-3 text-label-sm uppercase tracking-wider text-outline">Status</th>
           </tr>
         </thead>
@@ -2331,8 +2330,7 @@ const SchedulePreview = ({ matches }: { matches: TournamentMatch[] }) => {
               <td className="px-4 py-3 text-body-sm text-on-surface-variant">{match.round}</td>
               <td className="px-4 py-3 text-body-sm text-on-surface-variant">{formatDate(match.matchDate)}</td>
               <td className="px-4 py-3 text-body-sm text-on-surface-variant">{match.startTime} - {match.endTime}</td>
-              <td className="px-4 py-3 text-body-sm text-on-surface-variant">{match.arenaLocation}</td>
-              <td className="px-4 py-3 text-body-sm text-on-surface-variant">{match.participant1} vs {match.participant2}</td>
+              <td className="px-4 py-3 text-body-sm text-on-surface-variant">{tournamentLocation || '-'}</td>
               <td className="px-4 py-3">
                 <MatchStatusBadge status={match.matchStatus} />
               </td>
