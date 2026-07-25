@@ -98,7 +98,7 @@ const SchedulePage = () => {
     const q = searchQuery.trim().toLowerCase();
     if (!q) return tournaments;
     return tournaments.filter((t) =>
-      [t.name, t.location, t.status].some((v) => v?.toLowerCase().includes(q)),
+      [t.name, t.tournamentName, t.location, t.status].some((v) => v?.toLowerCase().includes(q)),
     );
   }, [tournaments, searchQuery]);
 
@@ -181,7 +181,7 @@ const SchedulePage = () => {
                 >
                   <div className="flex items-start justify-between gap-4 mb-4">
                     <h3 className="text-body-lg font-bold text-primary group-hover:text-secondary transition-colors">
-                      {t.name ?? `Tournament ${tid}`}
+                      {t.name ?? t.tournamentName ?? `Tournament ${tid}`}
                     </h3>
                     <ChevronRight className="h-5 w-5 text-outline shrink-0 mt-0.5" />
                   </div>
@@ -222,7 +222,7 @@ const SchedulePage = () => {
                   {selectedTournament.location ?? '-'}
                 </p>
                 <h2 className="text-headline-md font-bold text-primary">
-                  {selectedTournament.name ?? `Tournament ${selectedTournamentId}`}
+                  {selectedTournament.name ?? selectedTournament.tournamentName ?? `Tournament ${selectedTournamentId}`}
                 </h2>
                 <div className="flex flex-wrap gap-4 mt-3">
                   <span className="text-body-sm text-on-surface-variant">

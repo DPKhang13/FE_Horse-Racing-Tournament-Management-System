@@ -4,6 +4,7 @@ export type TournamentApiItem = {
   tournamentId?: number;
   id?: number;
   name?: string;
+  tournamentName?: string;
   location?: string;
   startDate?: string;
   endDate?: string;
@@ -54,6 +55,7 @@ export type RaceParticipantItem = {
 };
 
 type RawRace = Record<string, unknown>;
+type RawTournament = TournamentApiItem & Record<string, unknown>;
 
 const asString = (value: unknown, fallback = '') => {
   if (value === null || value === undefined) {
@@ -66,6 +68,26 @@ const asString = (value: unknown, fallback = '') => {
 const asNumber = (value: unknown, fallback = 0) => {
   const numericValue = Number(value);
   return Number.isFinite(numericValue) ? numericValue : fallback;
+};
+
+const mapTournament = (raw: RawTournament, index: number): TournamentApiItem => {
+  const tournamentId = asNumber(raw.tournamentId ?? raw.id, index + 1);
+  const name = asString(raw.name ?? raw.tournamentName, `Tournament ${tournamentId}`);
+
+  return {
+    ...raw,
+    tournamentId,
+    id: raw.id === undefined ? tournamentId : asNumber(raw.id, tournamentId),
+    name,
+    tournamentName: asString(raw.tournamentName ?? raw.name, name),
+    location: asString(raw.location, '-'),
+    startDate: raw.startDate ? asString(raw.startDate) : undefined,
+    endDate: raw.endDate ? asString(raw.endDate) : undefined,
+    registrationOpenAt: raw.registrationOpenAt ? asString(raw.registrationOpenAt) : undefined,
+    registrationCloseAt: raw.registrationCloseAt ? asString(raw.registrationCloseAt) : undefined,
+    prizePool: raw.prizePool === undefined ? undefined : asNumber(raw.prizePool),
+    status: asString(raw.status, '-'),
+  };
 };
 
 const formatCurrency = (value: unknown) => {
@@ -131,7 +153,16 @@ export const scheduleService = {
     const response = await apiClient.get('/api/tournaments/get-tournament-list', {
       params: status ? { status } : undefined,
     });
-    return unwrapApiList<TournamentApiItem>(response);
+    return unwrapApiList<RawTournament>(response)
+      .map(mapTournament)
+      .sort((left, right) => {
+        const leftTime = new Date(left.startDate ?? '').getTime();
+        const rightTime = new Date(right.startDate ?? '').getTime();
+        const normalizedLeftTime = Number.isFinite(leftTime) ? leftTime : Number.MAX_SAFE_INTEGER;
+        const normalizedRightTime = Number.isFinite(rightTime) ? rightTime : Number.MAX_SAFE_INTEGER;
+
+        return normalizedLeftTime - normalizedRightTime;
+      });
   },
 
   async getRaceSchedule(): Promise<RaceScheduleItem[]> {
