@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { motion } from 'motion/react';
 import { ArrowLeft, Wallet } from 'lucide-react';
 import { getApiErrorMessage } from '../../services/apiClient';
-import { paymentService, type VnpayTransactionSummary } from '../../services/paymentService';
+import { getPaymentProvider, paymentService, type PaymentTransactionSummary } from '../../services/paymentService';
 
 const formatCurrency = (value: number) => new Intl.NumberFormat('vi-VN', {
   style: 'currency',
@@ -24,34 +24,58 @@ const parseAmount = (value: unknown) => {
   return undefined;
 };
 
-const formatDate = (value: unknown) => {
+const parseTransactionDate = (value: unknown) => {
   if (value === undefined || value === null || value === '') {
-    return '-';
+    return undefined;
   }
 
   const rawValue = String(value);
-  const isoDateMatch = rawValue.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  const isoDateMatch = rawValue.match(/^(\d{4})-(\d{2})-(\d{2})$/);
 
   if (isoDateMatch) {
     const [, year, month, day] = isoDateMatch;
-    return `${day}/${month}/${year}`;
+    return { date: new Date(Number(year), Number(month) - 1, Number(day)), hasTime: false };
   }
 
   const date = new Date(rawValue);
 
   if (Number.isNaN(date.getTime())) {
-    return rawValue;
+    return undefined;
+  }
+
+  return { date, hasTime: true };
+};
+
+const formatDate = (value: unknown) => {
+  const parsed = parseTransactionDate(value);
+
+  if (!parsed) {
+    return '-';
   }
 
   return new Intl.DateTimeFormat('vi-VN', {
     day: '2-digit',
     month: '2-digit',
     year: 'numeric',
-  }).format(date);
+  }).format(parsed.date);
+};
+
+const formatTime = (value: unknown) => {
+  const parsed = parseTransactionDate(value);
+
+  if (!parsed?.hasTime) {
+    return '-';
+  }
+
+  return new Intl.DateTimeFormat('vi-VN', {
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  }).format(parsed.date);
 };
 
 const WalletHistoryPage = () => {
-  const [transactions, setTransactions] = useState<VnpayTransactionSummary[]>([]);
+  const [transactions, setTransactions] = useState<PaymentTransactionSummary[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
 
@@ -63,7 +87,7 @@ const WalletHistoryPage = () => {
       setError('');
 
       try {
-        const history = await paymentService.getCurrentUserVnpayTopupHistory();
+        const history = await paymentService.getCurrentUserTopupHistory();
 
         if (isMounted) {
           setTransactions(history);
@@ -127,7 +151,7 @@ const WalletHistoryPage = () => {
         >
           <div className="mb-6 flex items-center gap-3">
             <Wallet className="h-5 w-5 text-secondary" />
-            <p className="text-sm font-bold uppercase tracking-[0.18em] text-secondary">VNPay top-up history</p>
+            <p className="text-sm font-bold uppercase tracking-[0.18em] text-secondary">Top-up history</p>
           </div>
 
           {isLoading ? (
@@ -144,26 +168,41 @@ const WalletHistoryPage = () => {
                 <thead>
                   <tr className="border-b border-outline-variant/50 text-xs uppercase tracking-[0.18em] text-outline">
                     <th className="px-4 py-3">Transaction</th>
+                    <th className="px-4 py-3">Gateway</th>
                     <th className="px-4 py-3">Amount</th>
                     <th className="px-4 py-3">Points</th>
                     <th className="px-4 py-3">Status</th>
                     <th className="px-4 py-3">Date</th>
+                    <th className="px-4 py-3">Time</th>
                     <th className="px-4 py-3">Action</th>
                   </tr>
                 </thead>
                 <tbody>
                   {transactions.map((transaction, index) => {
                     const transactionId =
-                      transaction.txId ?? transaction.transactionId ?? transaction.txnRef ?? transaction.transactionRef ?? `#${index + 1}`;
+                      transaction.txId ??
+                      transaction.transactionId ??
+                      transaction.txnRef ??
+                      transaction.transactionRef ??
+                      transaction.orderId ??
+                      transaction.appTransId ??
+                      transaction.transId ??
+                      `#${index + 1}`;
+                    const provider = getPaymentProvider(typeof transaction.provider === 'string' ? transaction.provider : undefined);
                     const amount = parseAmount(transaction.cashAmount ?? transaction.amount ?? transaction.totalAmount ?? transaction.value);
                     const points = parseAmount(transaction.pointsAmount);
                     const status = (transaction.status ?? transaction.responseCode ?? transaction.transactionStatus ?? 'Unknown') as string;
-                    const date = formatDate(transaction.payDate ?? transaction.createdAt ?? transaction.updatedAt);
+                    const paymentTime = status.toLowerCase() === 'completed'
+                      ? transaction.updatedAt ?? transaction.payDate ?? transaction.createdAt
+                      : transaction.payDate ?? transaction.createdAt ?? transaction.updatedAt;
+                    const date = formatDate(paymentTime);
+                    const time = formatTime(paymentTime);
                     const txLink = encodeURIComponent(String(transactionId));
 
                     return (
                       <tr key={`${transactionId}-${index}`} className="border-b border-outline-variant/20">
                         <td className="px-4 py-4 font-semibold text-on-surface">{transactionId}</td>
+                        <td className="px-4 py-4 text-on-surface-variant">{provider.label}</td>
                         <td className="px-4 py-4 text-on-surface-variant">
                           {amount === undefined ? '-' : formatCurrency(amount)}
                         </td>
@@ -171,10 +210,11 @@ const WalletHistoryPage = () => {
                           {points === undefined ? '-' : `${points.toLocaleString('vi-VN')} pts`}
                         </td>
                         <td className="px-4 py-4 text-on-surface-variant capitalize">{status}</td>
-                        <td className="px-4 py-4 text-on-surface-variant">{date}</td>
+                        <td className="whitespace-nowrap px-4 py-4 text-on-surface-variant">{date}</td>
+                        <td className="whitespace-nowrap px-4 py-4 font-medium tabular-nums text-on-surface-variant">{time}</td>
                         <td className="px-4 py-4">
                           <Link
-                            to={`/wallet/transactions/${txLink}`}
+                            to={`/wallet/transactions/${txLink}?provider=${provider.id}`}
                             className="rounded-lg border border-primary/20 bg-primary/10 px-3 py-2 text-xs font-semibold text-primary transition hover:bg-primary/15"
                           >
                             View

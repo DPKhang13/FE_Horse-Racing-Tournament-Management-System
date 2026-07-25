@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { motion } from 'motion/react';
 import { ArrowLeft } from 'lucide-react';
 import { getApiErrorMessage } from '../../services/apiClient';
-import { paymentService, type VnpayTransactionDetail } from '../../services/paymentService';
+import { getPaymentProvider, paymentService, type PaymentTransactionDetail } from '../../services/paymentService';
 
 const formatCurrency = (value: number) => new Intl.NumberFormat('vi-VN', {
   style: 'currency',
@@ -11,13 +11,13 @@ const formatCurrency = (value: number) => new Intl.NumberFormat('vi-VN', {
   maximumFractionDigits: 0,
 }).format(value);
 
-const formatDate = (value: unknown) => {
+const formatDateTime = (value: unknown) => {
   if (value === undefined || value === null || value === '') {
     return '-';
   }
 
   const rawValue = String(value);
-  const isoDateMatch = rawValue.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  const isoDateMatch = rawValue.match(/^(\d{4})-(\d{2})-(\d{2})$/);
 
   if (isoDateMatch) {
     const [, year, month, day] = isoDateMatch;
@@ -30,16 +30,25 @@ const formatDate = (value: unknown) => {
     return rawValue;
   }
 
-  return new Intl.DateTimeFormat('vi-VN', {
+  const dateLabel = new Intl.DateTimeFormat('vi-VN', {
     day: '2-digit',
     month: '2-digit',
     year: 'numeric',
   }).format(date);
+  const timeLabel = new Intl.DateTimeFormat('vi-VN', {
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  }).format(date);
+
+  return `${dateLabel}, ${timeLabel}`;
 };
 
 const WalletTransactionDetailPage = () => {
   const { txId } = useParams<{ txId: string }>();
-  const [transaction, setTransaction] = useState<VnpayTransactionDetail | null>(null);
+  const [searchParams] = useSearchParams();
+  const provider = getPaymentProvider(searchParams.get('provider'));
+  const [transaction, setTransaction] = useState<PaymentTransactionDetail | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
 
@@ -57,7 +66,7 @@ const WalletTransactionDetailPage = () => {
       setError('');
 
       try {
-        const transactionDetail = await paymentService.getVnpayTransaction(txId);
+        const transactionDetail = await paymentService.getTransaction(provider.id, txId);
 
         if (isMounted) {
           setTransaction(transactionDetail);
@@ -78,10 +87,13 @@ const WalletTransactionDetailPage = () => {
     return () => {
       isMounted = false;
     };
-  }, [txId]);
+  }, [provider.id, txId]);
 
   const amount = transaction?.cashAmount ?? transaction?.amount ?? transaction?.totalAmount ?? transaction?.value;
   const pointsAmount = transaction?.pointsAmount;
+  const paymentTime = transaction?.status?.toLowerCase() === 'completed'
+    ? transaction.updatedAt ?? transaction.payDate ?? transaction.createdAt
+    : transaction?.payDate ?? transaction?.createdAt ?? transaction?.updatedAt;
 
   return (
     <main className="min-h-screen bg-surface text-on-surface">
@@ -130,7 +142,20 @@ const WalletTransactionDetailPage = () => {
             <div className="grid gap-6 sm:grid-cols-[1fr_1fr]">
               <div className="rounded-xl border border-outline-variant/50 bg-surface-container-lowest p-6">
                 <p className="text-xs font-bold uppercase tracking-[0.14em] text-outline">Transaction ID</p>
-                <p className="mt-3 text-base font-semibold text-on-surface">{transaction.txId ?? transaction.transactionId ?? transaction.txnRef ?? transaction.transactionRef ?? '-'}</p>
+                <p className="mt-3 text-base font-semibold text-on-surface">
+                  {transaction.txId ??
+                    transaction.transactionId ??
+                    transaction.txnRef ??
+                    transaction.transactionRef ??
+                    transaction.orderId ??
+                    transaction.appTransId ??
+                    transaction.transId ??
+                    '-'}
+                </p>
+              </div>
+              <div className="rounded-xl border border-outline-variant/50 bg-surface-container-lowest p-6">
+                <p className="text-xs font-bold uppercase tracking-[0.14em] text-outline">Gateway</p>
+                <p className="mt-3 text-base font-semibold text-on-surface">{provider.label}</p>
               </div>
               <div className="rounded-xl border border-outline-variant/50 bg-surface-container-lowest p-6">
                 <p className="text-xs font-bold uppercase tracking-[0.14em] text-outline">Status</p>
@@ -148,7 +173,7 @@ const WalletTransactionDetailPage = () => {
               </div>
               <div className="rounded-xl border border-outline-variant/50 bg-surface-container-lowest p-6">
                 <p className="text-xs font-bold uppercase tracking-[0.14em] text-outline">Payment date</p>
-                <p className="mt-3 text-base font-semibold text-on-surface">{formatDate(transaction.payDate ?? transaction.createdAt ?? transaction.updatedAt)}</p>
+                <p className="mt-3 text-base font-semibold text-on-surface">{formatDateTime(paymentTime)}</p>
               </div>
             </div>
           ) : (
