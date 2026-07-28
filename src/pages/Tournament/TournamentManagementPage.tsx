@@ -1246,19 +1246,19 @@ const TournamentForm = ({
           </motion.div>
           {shouldShowForceClose && (
             <motion.div className="md:col-span-2" variants={revealUp}>
-              <label className="flex items-start gap-3 rounded-md border border-amber-200 bg-amber-50 p-4 text-body-sm text-amber-800">
+              <label className="flex items-start gap-3 rounded-md border border-error/40 bg-surface-container-low p-4 text-body-sm text-on-surface-variant">
                 <input
                   type="checkbox"
                   checked={forceCloseRegistration}
                   onChange={(event) => onForceCloseRegistrationChange(event.target.checked)}
-                  className="mt-1 h-4 w-4 accent-amber-600"
+                  className="mt-1 h-4 w-4 accent-error"
                 />
                 <span className="flex-1 space-y-1">
-                  <span className="flex items-center gap-2 font-bold">
+                  <span className="flex items-center gap-2 font-bold text-error">
                     <AlertTriangle className="h-4 w-4" />
                     Force close registration
                   </span>
-                  <span className="block text-body-xs text-amber-700">
+                  <span className="block text-body-xs text-on-surface-variant">
                     Reject pending registrations, cancel unconfirmed jockey assignments, and allow closing races without eligible horses.
                   </span>
                 </span>
