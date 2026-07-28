@@ -398,11 +398,11 @@ export const raceOperationsService = {
 
   async createReport(raceId: number | string, data: RefereeReportFormData): Promise<RefereeReportItem> {
     const response = await apiClient.post(`/api/v1/referee/races/${raceId}/reports/create`, {
-      reportType: data.reportType?.trim() || undefined,
-      inspectionNotes: data.inspectionNotes?.trim() || undefined,
-      violationNotes: data.violationNotes?.trim() || undefined,
-      resultNotes: data.resultNotes?.trim() || undefined,
-      verdict: data.verdict?.trim() || undefined,
+      reportType: data.reportType?.trim() ?? '',
+      inspectionNotes: data.inspectionNotes?.trim() ?? '',
+      violationNotes: data.violationNotes?.trim() ?? '',
+      resultNotes: data.resultNotes?.trim() ?? '',
+      verdict: data.verdict?.trim() ?? '',
     });
     return mapReport(unwrapApiData<RawObject>(response));
   },
@@ -410,6 +410,17 @@ export const raceOperationsService = {
   async getReports(raceId: number | string): Promise<RefereeReportItem[]> {
     const response = await apiClient.get(`/api/v1/referee/races/${raceId}/reports/get`);
     return unwrapApiList<RawObject>(response).map(mapReport);
+  },
+
+  async createChiefFinalReport(raceId: number | string, resultNotes: string): Promise<RefereeReportItem> {
+    const response = await apiClient.post(`/api/v1/referee/races/${raceId}/reports/create`, {
+      reportType: 'final',
+      inspectionNotes: '',
+      violationNotes: '',
+      resultNotes: resultNotes.trim(),
+      verdict: 'clean',
+    });
+    return mapReport(unwrapApiData<RawObject>(response));
   },
 
   async createDraft(raceId: number | string, data: { reportId?: number; results: RaceDraftResultItemInput[] }): Promise<RaceResultDraftData> {

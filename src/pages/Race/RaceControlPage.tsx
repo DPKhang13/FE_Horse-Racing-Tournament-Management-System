@@ -19,7 +19,7 @@ type DisqualificationReasonMap = Record<string, string>;
 type ResultView = 'overall' | string;
 
 const initialReportForm: RefereeReportFormData = {
-  reportType: 'incident',
+  reportType: 'inspection',
   inspectionNotes: '',
   violationNotes: '',
   resultNotes: '',
@@ -27,6 +27,9 @@ const initialReportForm: RefereeReportFormData = {
 };
 
 const normalizeStatus = (value?: string) => value?.trim().toLowerCase().replace(/[\s-]+/g, '_') ?? '';
+const MAIN_INSPECTION_REPORT_TYPE = 'inspection';
+const MAIN_VIOLATION_REPORT_TYPE = 'violation';
+const getMainReportType = (verdict?: string) => (normalizeStatus(verdict) === 'violation' ? MAIN_VIOLATION_REPORT_TYPE : MAIN_INSPECTION_REPORT_TYPE);
 const getAssignmentId = (item: ChiefRaceParticipantItem | RaceResultWorkflowItem) => item.assignmentId ?? ('id' in item ? item.id : undefined) ?? 0;
 const getLapViewValue = (lap: number) => 'lap:' + lap;
 
@@ -491,8 +494,11 @@ const RaceControlPage = () => {
     }
     await withBusy(async () => {
       const created = await raceOperationsService.createReport(normalizedRaceId, {
-        ...reportForm,
+        reportType: getMainReportType(reportForm.verdict),
+        inspectionNotes: reportForm.inspectionNotes,
         violationNotes: reportForm.verdict === 'violation' ? reportForm.violationNotes : '',
+        resultNotes: reportForm.resultNotes,
+        verdict: reportForm.verdict,
       });
       setMessage('Report #' + created.reportId + ' submitted.');
       setReportForm(initialReportForm);
@@ -511,7 +517,7 @@ const RaceControlPage = () => {
       return;
     }
     await withBusy(async () => {
-      const created = await raceOperationsService.createReport(normalizedRaceId, { reportType: 'final', verdict: 'clean', resultNotes: chiefFinalNotes });
+      const created = await raceOperationsService.createChiefFinalReport(normalizedRaceId, chiefFinalNotes);
       setMessage('Final report #' + created.reportId + ' submitted.');
       setChiefFinalNotes('');
       await loadRaceData(normalizedRaceId, refereeRole);
@@ -629,8 +635,8 @@ const RaceControlPage = () => {
             <section className="glass-panel rounded-xl p-5 md:p-6">
               <SectionTitle icon={<ClipboardList className="h-5 w-5" />} eyebrow="Race report" title="Submit report" />
               <form className="mt-5 grid gap-4" onSubmit={(event) => void handleSubmitMainReport(event)}>
-                <SelectInput label="Report type" value={reportForm.reportType ?? 'incident'} options={[{ value: 'incident', label: 'Incident report' }, { value: 'inspection', label: 'Inspection report' }]} onChange={(value) => setReportForm((current) => ({ ...current, reportType: value }))} />
-                <SelectInput label="Verdict" value={reportForm.verdict ?? 'clean'} options={[{ value: 'clean', label: 'Clean - no violation' }, { value: 'violation', label: 'Violation detected' }]} onChange={(value) => setReportForm((current) => ({ ...current, verdict: value, violationNotes: value === 'violation' ? current.violationNotes : '' }))} />
+                <SelectInput label="Report type" value={reportForm.reportType ?? getMainReportType(reportForm.verdict)} options={[{ value: MAIN_INSPECTION_REPORT_TYPE, label: 'Inspection report' }, { value: MAIN_VIOLATION_REPORT_TYPE, label: 'Violation report' }]} onChange={(value) => setReportForm((current) => ({ ...current, reportType: value, verdict: value === MAIN_VIOLATION_REPORT_TYPE ? 'violation' : 'clean', violationNotes: value === MAIN_VIOLATION_REPORT_TYPE ? current.violationNotes : '' }))} />
+                <SelectInput label="Verdict" value={reportForm.verdict ?? 'clean'} options={[{ value: 'clean', label: 'Clean - no violation' }, { value: 'violation', label: 'Violation detected' }]} onChange={(value) => setReportForm((current) => ({ ...current, reportType: getMainReportType(value), verdict: value, violationNotes: value === 'violation' ? current.violationNotes : '' }))} />
                 <TextArea label="Inspection notes" value={reportForm.inspectionNotes ?? ''} onChange={(value) => setReportForm((current) => ({ ...current, inspectionNotes: value }))} />
                 {reportForm.verdict === 'violation' && <TextArea label="Violation notes" value={reportForm.violationNotes ?? ''} onChange={(value) => setReportForm((current) => ({ ...current, violationNotes: value }))} />}
                 <TextArea label="Result notes" value={reportForm.resultNotes ?? ''} onChange={(value) => setReportForm((current) => ({ ...current, resultNotes: value }))} />
