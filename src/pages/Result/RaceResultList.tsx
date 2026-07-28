@@ -1,52 +1,198 @@
-import { useEffect, useMemo, useState } from 'react';
-import { ChevronRight, Filter, Search, Trophy } from 'lucide-react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import {
+  Calendar,
+  ChevronRight,
+  Clock,
+  Filter,
+  Flag,
+  Medal,
+  Search,
+  Trophy,
+  Users,
+} from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { authService } from '../../services/authService';
 import { useToastNotifications } from '../../hooks/useToastNotifications';
 import { HorseService } from '../../services/HorseService';
-import { jockeyAssignmentService } from '../../services/jockeyAssignmentService';
+import { jockeyAssignmentService, type JockeyAssignmentItem } from '../../services/jockeyAssignmentService';
 import { raceResultService } from '../../services/raceResultService';
 import type { Horse } from '../../types/horse';
-import type { RaceResultListItem, RaceResultStatus, RaceResultSummary } from '../../types/raceResult';
+import type { RaceResultEntry, RaceResultStatus, RaceResultSummary } from '../../types/raceResult';
 import type { UserProfile } from '../../types/user';
-import RaceResultCard from './components/RaceResultCard';
 import ResultNav from './components/ResultNav';
 
 type StatusFilter = RaceResultStatus | 'all';
 
+type RacePerspective = {
+  entry?: RaceResultEntry;
+  label: string;
+  context: string;
+};
+
 const statusOptions: { value: StatusFilter; label: string }[] = [
-  { value: 'all', label: 'All Status' },
+  { value: 'all', label: 'All Results' },
   { value: 'published', label: 'Published' },
   { value: 'confirmed', label: 'Confirmed' },
   { value: 'draft', label: 'Draft' },
 ];
 
-const formatDateTime = (value?: string) => {
+const normalizeText = (value?: string) => String(value ?? '').trim().toLowerCase();
+
+const sameId = (first: unknown, second: unknown) => (
+  first !== null &&
+  first !== undefined &&
+  second !== null &&
+  second !== undefined &&
+  String(first) === String(second)
+);
+
+const formatDate = (value?: string) => {
   if (!value) {
     return '-';
   }
 
-  return new Date(value).toLocaleString('en-US', {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return '-';
+  }
+
+  return date.toLocaleDateString('en-US', {
     month: 'short',
     day: 'numeric',
     year: 'numeric',
+  });
+};
+
+const formatRaceTime = (value?: string) => {
+  if (!value) {
+    return 'Race day pending';
+  }
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return 'Race day pending';
+  }
+
+  return date.toLocaleTimeString('en-US', {
     hour: '2-digit',
     minute: '2-digit',
   });
 };
 
-const statusClassName = (status?: string) => {
-  const value = String(status ?? '').toLowerCase();
+const getResultRoute = (result: RaceResultSummary) => `/results/${result.raceId || result.id}`;
 
-  if (value === 'published' || value === 'confirmed') {
-    return 'bg-secondary/15 text-secondary';
+const getSortedEntries = (entries: RaceResultEntry[]) => [...entries].sort((first, second) => {
+  if (first.isDisqualified && !second.isDisqualified) {
+    return 1;
   }
 
-  if (value === 'draft') {
-    return 'bg-surface-container-high text-on-surface-variant';
+  if (!first.isDisqualified && second.isDisqualified) {
+    return -1;
   }
 
-  return 'bg-surface-container-high text-on-surface-variant';
+  return (first.finishPosition ?? 999) - (second.finishPosition ?? 999);
+});
+
+const getRankLabel = (entry?: RaceResultEntry) => {
+  if (!entry) {
+    return '-';
+  }
+
+  if (entry.isDisqualified) {
+    return 'DQ';
+  }
+
+  return entry.finishPosition ? `#${entry.finishPosition}` : '-';
+};
+
+const getOutcomeClassName = (entry?: RaceResultEntry) => {
+  if (!entry) {
+    return 'border-outline-variant bg-surface-container-high text-on-surface-variant';
+  }
+
+  if (entry.isDisqualified) {
+    return 'border-error/50 bg-error-container/30 text-error';
+  }
+
+  if (entry.finishPosition === 1) {
+    return 'border-primary/70 bg-primary/15 text-primary';
+  }
+
+  if (entry.finishPosition && entry.finishPosition <= 3) {
+    return 'border-secondary/60 bg-secondary/15 text-secondary';
+  }
+
+  return 'border-outline-variant bg-surface-container-high text-on-surface';
+};
+
+const getPersonalEntry = (
+  result: RaceResultSummary,
+  profile: UserProfile | undefined,
+  ownerHorses: Horse[],
+  jockeyAssignments: JockeyAssignmentItem[],
+) => {
+  if (profile?.roleType === 'horse_owner') {
+    const ownerHorseIds = new Set(ownerHorses.map((horse) => String(horse.horseId)));
+    return getSortedEntries(result.entries).find((entry) => ownerHorseIds.has(String(entry.horseId)));
+  }
+
+  if (profile?.roleType === 'jockey') {
+    const raceAssignments = jockeyAssignments.filter((assignment) => sameId(assignment.raceId, result.raceId));
+
+    for (const assignment of raceAssignments) {
+      const byAssignment = result.entries.find((entry) => sameId(entry.assignmentId, assignment.assignmentId ?? assignment.id));
+      if (byAssignment) {
+        return byAssignment;
+      }
+
+      const byHorse = result.entries.find((entry) => sameId(entry.horseId, assignment.horseId));
+      if (byHorse) {
+        return byHorse;
+      }
+
+      const byJockeyName = result.entries.find(
+        (entry) => normalizeText(entry.jockeyName) === normalizeText(assignment.jockeyFullName),
+      );
+      if (byJockeyName) {
+        return byJockeyName;
+      }
+    }
+
+    return result.entries.find((entry) => normalizeText(entry.jockeyName) === normalizeText(profile.fullName));
+  }
+
+  return undefined;
+};
+
+const getPerspective = (
+  result: RaceResultSummary,
+  profile: UserProfile | undefined,
+  ownerHorses: Horse[],
+  jockeyAssignments: JockeyAssignmentItem[],
+): RacePerspective => {
+  const entry = getPersonalEntry(result, profile, ownerHorses, jockeyAssignments);
+
+  if (profile?.roleType === 'jockey') {
+    return {
+      entry,
+      label: 'Your Finish',
+      context: entry ? `${entry.horseName} / Gate ${entry.gateNumber || '-'}` : 'Public race record',
+    };
+  }
+
+  if (profile?.roleType === 'horse_owner') {
+    return {
+      entry,
+      label: 'Stable Finish',
+      context: entry ? `${entry.horseName} / ${entry.jockeyName}` : 'Stable race record',
+    };
+  }
+
+  return {
+    entry: getSortedEntries(result.entries)[0],
+    label: 'Winner',
+    context: result.winnerJockey,
+  };
 };
 
 const RaceResultList = () => {
@@ -54,19 +200,15 @@ const RaceResultList = () => {
   const [search, setSearch] = useState('');
   const [status, setStatus] = useState<StatusFilter>('all');
   const [tournament, setTournament] = useState('All Tournaments');
-  const [allResults, setAllResults] = useState<RaceResultListItem[]>([]);
+  const [results, setResults] = useState<RaceResultSummary[]>([]);
   const [ownerHorses, setOwnerHorses] = useState<Horse[]>([]);
-  const [ownerResultSummaries, setOwnerResultSummaries] = useState<RaceResultSummary[]>([]);
-  const [selectedHorseId, setSelectedHorseId] = useState<number | null>(null);
-  const [showHistory, setShowHistory] = useState(false);
+  const [jockeyAssignments, setJockeyAssignments] = useState<JockeyAssignmentItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState('');
 
   useToastNotifications([
     errorMessage ? { tone: 'error', text: errorMessage } : null,
   ]);
-
-  const isOwner = profile?.roleType === 'horse_owner';
 
   useEffect(() => {
     let isMounted = true;
@@ -76,40 +218,25 @@ const RaceResultList = () => {
       setErrorMessage('');
 
       try {
-        const currentProfile = profile ?? await authService.getCurrentUser();
+        const currentProfile = authService.getStoredUserProfile() ?? await authService.getCurrentUser();
+        const [resultSummaries, horses, assignments] = await Promise.all([
+          raceResultService.getRaceResultSummaries(),
+          currentProfile.roleType === 'horse_owner'
+            ? HorseService.getOwnerHorses(currentProfile)
+            : Promise.resolve([]),
+          currentProfile.roleType === 'jockey'
+            ? jockeyAssignmentService.getMine()
+            : Promise.resolve([]),
+        ]);
 
         if (!isMounted) {
           return;
         }
 
         setProfile(currentProfile);
-
-        if (currentProfile.roleType === 'horse_owner') {
-          const [horses, summaries] = await Promise.all([
-            HorseService.getOwnerHorses(currentProfile),
-            raceResultService.getRaceResultSummaries(),
-          ]);
-
-          if (isMounted) {
-            setOwnerHorses(horses);
-            setOwnerResultSummaries(summaries);
-            setSelectedHorseId((current) => current ?? horses[0]?.horseId ?? null);
-          }
-        } else {
-          const resultList = await raceResultService.getRaceResultList();
-
-          if (isMounted) {
-            let filteredList = resultList;
-            if (currentProfile.roleType === 'jockey') {
-              const myAssignments = await jockeyAssignmentService.getMine();
-              const jockeyRaceIds = new Set(myAssignments.map((a) => String(a.raceId)).filter(Boolean));
-              if (jockeyRaceIds.size > 0) {
-                filteredList = resultList.filter((r) => jockeyRaceIds.has(String(r.raceId)));
-              }
-            }
-            setAllResults(filteredList);
-          }
-        }
+        setResults(resultSummaries);
+        setOwnerHorses(horses);
+        setJockeyAssignments(assignments);
       } catch (error) {
         if (isMounted) {
           setErrorMessage(error instanceof Error ? error.message : 'Unable to load race results.');
@@ -128,250 +255,127 @@ const RaceResultList = () => {
     };
   }, []);
 
-  const tournamentOptions = useMemo(
-    () => raceResultService.getTournamentFilterOptions(allResults),
-    [allResults],
-  );
+  const scopedResults = useMemo(() => {
+    if (profile?.roleType === 'horse_owner') {
+      if (ownerHorses.length === 0) {
+        return [];
+      }
 
-  const results = useMemo(() => {
-    const query = search.trim().toLowerCase();
-
-    return allResults.filter((item) => {
-      const matchesSearch =
-        !query ||
-        item.raceName.toLowerCase().includes(query) ||
-        item.tournamentName.toLowerCase().includes(query) ||
-        item.track.toLowerCase().includes(query) ||
-        item.topFinishers.some(
-          (finisher) =>
-            finisher.horseName.toLowerCase().includes(query) ||
-            finisher.jockeyName.toLowerCase().includes(query),
-        );
-      const matchesStatus = status === 'all' || item.status === status;
-      const matchesTournament = tournament === 'All Tournaments' || item.tournamentName === tournament;
-
-      return matchesSearch && matchesStatus && matchesTournament;
-    });
-  }, [allResults, search, status, tournament]);
-
-  const publishedCount = results.filter((item) => item.status === 'published').length;
-
-  const selectedHorse = useMemo(
-    () => ownerHorses.find((horse) => horse.horseId === selectedHorseId) ?? null,
-    [ownerHorses, selectedHorseId],
-  );
-
-  const selectedHorseHistory = useMemo(() => {
-    if (!selectedHorse) {
-      return [];
+      const ownerHorseIds = new Set(ownerHorses.map((horse) => String(horse.horseId)));
+      return results.filter((result) => result.entries.some((entry) => ownerHorseIds.has(String(entry.horseId))));
     }
 
-    return ownerResultSummaries
-      .filter((summary) => summary.entries.some((entry) => Number(entry.horseId) === selectedHorse.horseId))
-      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-  }, [ownerResultSummaries, selectedHorse]);
+    if (profile?.roleType === 'jockey' && jockeyAssignments.length > 0) {
+      const raceIds = new Set(jockeyAssignments.map((assignment) => String(assignment.raceId)).filter(Boolean));
+      return results.filter((result) => raceIds.has(String(result.raceId)) || raceIds.has(String(result.id)));
+    }
 
-  const selectedHorseEntries = useMemo(
-    () =>
-      selectedHorseHistory.map((summary) => ({
-        summary,
-        entry: summary.entries.find((entry) => Number(entry.horseId) === selectedHorse?.horseId),
-      })),
-    [selectedHorse?.horseId, selectedHorseHistory],
+    return results;
+  }, [jockeyAssignments, ownerHorses, profile?.roleType, results]);
+
+  const tournamentOptions = useMemo(
+    () => raceResultService.getTournamentFilterOptions(scopedResults.map((result) => ({
+      id: result.id,
+      raceId: result.raceId,
+      raceName: result.raceName,
+      raceNumber: result.raceNumber,
+      tournamentName: result.tournamentName,
+      track: result.track,
+      date: result.date,
+      status: result.status,
+      publishedAt: result.publishedAt,
+      totalPrizePool: result.totalPrizePool,
+      topFinishers: [],
+    }))),
+    [scopedResults],
   );
 
-  if (isOwner) {
-    return (
-      <div className="bg-surface min-h-screen py-12">
-        <div className="max-w-container mx-auto px-4 md:px-margin-desktop">
-          <div className="flex flex-col gap-8 mb-10">
-            <div className="flex flex-col md:flex-row md:items-end justify-between gap-6">
-              <div>
-                <p className="text-label-md text-secondary uppercase tracking-widest mb-2">Owner Result Screen</p>
-                <h1 className="text-headline-lg font-bold text-primary mb-2">Horse Results</h1>
-              </div>
-              <ResultNav />
-            </div>
-          </div>
+  const filteredResults = useMemo(() => {
+    const query = search.trim().toLowerCase();
 
-          <div className="grid gap-6 xl:grid-cols-[320px_minmax(0,1fr)]">
-            <section className="rounded-lg border border-outline-variant bg-white p-5">
-              <div className="mb-4">
-                <p className="text-label-sm text-secondary uppercase tracking-wider mb-1">Horse Menu</p>
-                <h2 className="text-title-large font-bold text-primary">My Horses</h2>
-              </div>
+    return scopedResults
+      .filter((result) => {
+        const sortedEntries = getSortedEntries(result.entries);
+        const matchesSearch =
+          !query ||
+          result.raceName.toLowerCase().includes(query) ||
+          result.tournamentName.toLowerCase().includes(query) ||
+          result.track.toLowerCase().includes(query) ||
+          sortedEntries.some(
+            (entry) =>
+              entry.horseName.toLowerCase().includes(query) ||
+              entry.jockeyName.toLowerCase().includes(query),
+          );
+        const matchesStatus = status === 'all' || result.status === status;
+        const matchesTournament = tournament === 'All Tournaments' || result.tournamentName === tournament;
 
-              {isLoading ? (
-                <EmptyState title="Loading horses" description="Fetching your horse list." />
-              ) : ownerHorses.length === 0 ? (
-                <EmptyState title="No horses found" description="Your horses will appear here." />
-              ) : (
-                <div className="space-y-3">
-                  {ownerHorses.map((horse) => (
-                    <button
-                      key={horse.horseId}
-                      type="button"
-                      onClick={() => {
-                        setSelectedHorseId(horse.horseId);
-                        setShowHistory(false);
-                      }}
-                      className={`flex w-full items-center gap-3 rounded-lg border px-4 py-3 text-left transition-colors ${
-                        selectedHorseId === horse.horseId
-                          ? 'border-primary bg-primary-container/10'
-                          : 'border-outline-variant bg-surface-container-low hover:border-primary'
-                      }`}
-                    >
-                      <img src={horse.avatarUrl} alt={horse.name} className="h-12 w-12 rounded-md border border-outline-variant object-cover" />
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate text-body-md font-bold text-primary">{horse.name}</p>
-                        <p className="mt-1 text-body-sm text-on-surface-variant">{horse.breed} • Group {horse.rankGroup}</p>
-                      </div>
-                      <ChevronRight className="h-4 w-4 text-outline" />
-                    </button>
-                  ))}
-                </div>
-              )}
-            </section>
+        return matchesSearch && matchesStatus && matchesTournament;
+      })
+      .sort((first, second) => new Date(second.date).getTime() - new Date(first.date).getTime());
+  }, [scopedResults, search, status, tournament]);
 
-            <section className="rounded-lg border border-outline-variant bg-white p-6">
-              {isLoading ? (
-                <EmptyState title="Loading horse results" description="Fetching horse detail and race history." />
-              ) : !selectedHorse ? (
-                <EmptyState title="Select a horse" description="Choose a horse from the menu to see its info." />
-              ) : (
-                <div className="space-y-6">
-                  <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
-                    <div className="flex items-start gap-4">
-                      <img src={selectedHorse.avatarUrl} alt={selectedHorse.name} className="h-24 w-24 rounded-lg border border-outline-variant object-cover" />
-                      <div>
-                        <p className="text-label-md text-secondary uppercase tracking-wider">{selectedHorse.id}</p>
-                        <h2 className="mt-2 text-headline-md font-bold text-primary">{selectedHorse.name}</h2>
-                        <p className="mt-2 text-body-md text-on-surface-variant">
-                          {selectedHorse.breed} • Group {selectedHorse.rankGroup} • {selectedHorse.totalWins} wins
-                        </p>
-                      </div>
-                    </div>
+  const rows = useMemo(
+    () => filteredResults.map((result) => ({
+      result,
+      perspective: getPerspective(result, profile, ownerHorses, jockeyAssignments),
+      entries: getSortedEntries(result.entries),
+    })),
+    [filteredResults, jockeyAssignments, ownerHorses, profile],
+  );
 
-                    <button
-                      type="button"
-                      onClick={() => setShowHistory((current) => !current)}
-                      className="rounded-md bg-primary px-5 py-3 text-body-sm font-bold text-on-primary transition-opacity hover:bg-opacity-90"
-                    >
-                      {showHistory ? 'Hide Race History' : 'View Race History'}
-                    </button>
-                  </div>
-
-                  <div className="grid gap-4 md:grid-cols-4">
-                    <InfoCard label="Status" value={selectedHorse.status} />
-                    <InfoCard label="Points" value={String(selectedHorse.rankingPoints)} />
-                    <InfoCard label="Age" value={String(selectedHorse.age)} />
-                    <InfoCard label="Weight" value={`${selectedHorse.weightKg} kg`} />
-                  </div>
-
-                  {showHistory && (
-                    <div className="space-y-4">
-                      <div>
-                        <p className="text-label-md text-secondary uppercase tracking-widest mb-1">Race History</p>
-                        <h3 className="text-title-large font-bold text-primary">Past performances</h3>
-                      </div>
-
-                      {selectedHorseEntries.length === 0 ? (
-                        <EmptyState title="No race history yet" description="This horse does not have any result history yet." />
-                      ) : (
-                        <div className="space-y-4">
-                          {selectedHorseEntries.map(({ summary, entry }) => (
-                            <article key={summary.id} className="rounded-lg border border-outline-variant bg-surface-container-low p-5">
-                              <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-                                <div>
-                                  <p className="text-label-sm text-secondary uppercase tracking-wider">{summary.tournamentName}</p>
-                                  <h4 className="mt-2 text-body-lg font-bold text-primary">{summary.raceName}</h4>
-                                  <p className="mt-2 text-body-sm text-on-surface-variant">
-                                    {summary.track} • {formatDateTime(summary.date)}
-                                  </p>
-                                </div>
-
-                                <div className="flex flex-wrap items-center gap-3">
-                                  <span className={`inline-flex rounded-full px-3 py-1 text-[11px] font-bold uppercase tracking-wider ${statusClassName(summary.status)}`}>
-                                    {summary.status}
-                                  </span>
-                                  <Link
-                                    to={`/results/${summary.id}`}
-                                    className="rounded-md border border-outline-variant px-4 py-2 text-body-sm font-semibold text-primary transition-colors hover:border-primary"
-                                  >
-                                    Open Result
-                                  </Link>
-                                </div>
-                              </div>
-
-                              <div className="mt-4 grid gap-3 md:grid-cols-4">
-                                <InfoCard label="Position" value={entry?.finishPosition ? `#${entry.finishPosition}` : 'DQ'} />
-                                <InfoCard label="Jockey" value={entry?.jockeyName ?? '-'} />
-                                <InfoCard label="Finish Time" value={entry?.finishTime ?? '-'} />
-                                <InfoCard label="Points" value={String(entry?.pointsAwarded ?? 0)} />
-                              </div>
-                            </article>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </div>
-              )}
-            </section>
-          </div>
-        </div>
-      </div>
-    );
-  }
+  const personalEntries = rows.map((row) => row.perspective.entry).filter((entry): entry is RaceResultEntry => Boolean(entry));
+  const winCount = personalEntries.filter((entry) => entry.finishPosition === 1).length;
+  const podiumCount = personalEntries.filter((entry) => entry.finishPosition !== null && entry.finishPosition <= 3).length;
+  const publishedCount = filteredResults.filter((result) => result.status === 'published').length;
+  const archiveLabel = profile?.roleType === 'jockey'
+    ? 'Jockey Match History'
+    : profile?.roleType === 'horse_owner'
+      ? 'Stable Match History'
+      : 'Race Match History';
 
   return (
-    <div className="bg-surface min-h-screen py-12">
-      <div className="max-w-container mx-auto px-4 md:px-margin-desktop">
-        <div className="flex flex-col gap-8 mb-10">
-          <div className="flex flex-col md:flex-row md:items-end justify-between gap-6">
-            <div>
-              <p className="text-label-md text-secondary uppercase tracking-widest mb-2">Result Screen</p>
-              <h1 className="text-headline-lg font-bold text-primary mb-2">Race Results</h1>
-            </div>
-            <ResultNav />
+    <div className="min-h-screen bg-surface py-10 text-on-surface racing-grid">
+      <div className="mx-auto max-w-container px-4 md:px-margin-desktop">
+        <header className="mb-8 flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
+          <div className="max-w-3xl">
+            <p className="mb-2 text-label-md font-bold uppercase tracking-[0.22em] text-secondary">Result Archive</p>
+            <h1 className="font-display text-3xl font-extrabold text-primary md:text-5xl">{archiveLabel}</h1>
+            <p className="mt-3 max-w-2xl text-body-md text-on-surface-variant">
+              Review every finished race like a competitive match log: placement, finish time, gates,
+              points, prize data, and a full post-race breakdown on demand.
+            </p>
           </div>
+          <ResultNav />
+        </header>
 
-          <div className="grid gap-4 sm:grid-cols-3">
-            {[
-              { label: 'Total Races', value: results.length.toString(), accent: 'text-primary' },
-              { label: 'Published', value: publishedCount.toString(), accent: 'text-secondary' },
-              { label: 'Tournaments', value: (tournamentOptions.length - 1).toString(), accent: 'text-tertiary' },
-            ].map((stat) => (
-              <article
-                key={stat.label}
-                className="rounded-lg border border-outline-variant bg-white p-5"
-              >
-                <p className="text-label-sm text-outline uppercase tracking-wider">{stat.label}</p>
-                <p className={`mt-2 text-headline-md font-bold tabular-nums ${stat.accent}`}>{stat.value}</p>
-              </article>
-            ))}
-          </div>
-        </div>
+        <section className="mb-6 grid gap-3 md:grid-cols-4">
+          <StatTile icon={<Flag className="h-4 w-4" />} label="Race Logs" value={String(filteredResults.length)} />
+          <StatTile icon={<Trophy className="h-4 w-4" />} label="Published" value={String(publishedCount)} />
+          <StatTile icon={<Medal className="h-4 w-4" />} label="Wins" value={String(winCount)} />
+          <StatTile icon={<Users className="h-4 w-4" />} label="Podiums" value={String(podiumCount)} />
+        </section>
 
-        <div className="flex flex-col lg:flex-row lg:items-center gap-4 mb-8">
-          <div className="relative flex-1 max-w-md">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-outline" />
-            <input
-              type="text"
-              value={search}
-              onChange={(event) => setSearch(event.target.value)}
-              placeholder="Search by race, horse, or jockey..."
-              className="w-full bg-white border border-outline-variant rounded-md py-2.5 pl-10 pr-4 text-body-sm focus:outline-none focus:border-primary transition-colors"
-            />
-          </div>
+        <section className="mb-6 rounded-lg border border-outline-variant bg-surface-container/95 p-4 shadow-2xl shadow-black/20">
+          <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto_auto] lg:items-center">
+            <label className="relative block">
+              <span className="sr-only">Search race history</span>
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-outline" />
+              <input
+                type="text"
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+                placeholder="Search race, tournament, horse, jockey..."
+                className="h-11 w-full rounded-md border border-outline-variant bg-surface-container-lowest pl-10 pr-4 text-body-sm text-on-surface placeholder:text-outline focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30"
+              />
+            </label>
 
-          <div className="flex flex-wrap items-center gap-3">
-            <div className="flex items-center gap-2">
-              <Filter className="w-4 h-4 text-outline" />
+            <label className="flex items-center gap-2 rounded-md border border-outline-variant bg-surface-container-lowest px-3">
+              <Filter className="h-4 w-4 text-outline" />
+              <span className="sr-only">Filter by status</span>
               <select
                 value={status}
                 onChange={(event) => setStatus(event.target.value as StatusFilter)}
-                className="bg-white border border-outline-variant rounded-md py-2.5 px-4 text-body-sm focus:outline-none focus:border-primary"
+                className="h-11 min-w-36 bg-transparent text-body-sm text-on-surface focus:outline-none"
               >
                 {statusOptions.map((option) => (
                   <option key={option.value} value={option.value}>
@@ -379,50 +383,156 @@ const RaceResultList = () => {
                   </option>
                 ))}
               </select>
-            </div>
+            </label>
 
-            <select
-              value={tournament}
-              onChange={(event) => setTournament(event.target.value)}
-              className="bg-white border border-outline-variant rounded-md py-2.5 px-4 text-body-sm focus:outline-none focus:border-primary"
-            >
-              {tournamentOptions.map((option) => (
-                <option key={option} value={option}>
-                  {option}
-                </option>
-              ))}
-            </select>
+            <label className="rounded-md border border-outline-variant bg-surface-container-lowest px-3">
+              <span className="sr-only">Filter by tournament</span>
+              <select
+                value={tournament}
+                onChange={(event) => setTournament(event.target.value)}
+                className="h-11 w-full min-w-48 bg-transparent text-body-sm text-on-surface focus:outline-none"
+              >
+                {tournamentOptions.map((option) => (
+                  <option key={option} value={option}>
+                    {option}
+                  </option>
+                ))}
+              </select>
+            </label>
           </div>
-        </div>
+        </section>
 
         {isLoading ? (
-          <EmptyState title="Loading results" description="Fetching race results from the server." />
-        ) : results.length === 0 ? (
-          <EmptyState title="No results found" description="Try adjusting your search or filter criteria." />
+          <EmptyState title="Loading match history" description="Syncing published race logs from the server." />
+        ) : rows.length === 0 ? (
+          <EmptyState title="No race history found" description="Try a different search or wait until a race result is published." />
         ) : (
-          <div className="space-y-10">
-            {results.map((result) => (
-              <RaceResultCard key={result.id} result={result} />
+          <section className="space-y-3" aria-label="Race history list">
+            {rows.map(({ result, perspective, entries }) => (
+              <RaceHistoryRow
+                key={result.raceId || result.id}
+                result={result}
+                perspective={perspective}
+                entries={entries}
+              />
             ))}
-          </div>
+          </section>
         )}
       </div>
     </div>
   );
 };
 
-const InfoCard = ({ label, value }: { label: string; value: string }) => (
-  <div className="rounded-lg border border-outline-variant bg-white p-4">
-    <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-outline">{label}</p>
-    <p className="mt-1 text-body-md font-semibold text-primary">{value}</p>
-  </div>
+const StatTile = ({ icon, label, value }: { icon: ReactNode; label: string; value: string }) => (
+  <article className="rounded-lg border border-outline-variant bg-surface-container/90 p-4">
+    <div className="mb-3 inline-flex h-9 w-9 items-center justify-center rounded-md border border-primary/30 bg-primary/10 text-primary">
+      {icon}
+    </div>
+    <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-outline">{label}</p>
+    <p className="mt-1 font-display text-3xl font-extrabold text-on-surface tabular-nums">{value}</p>
+  </article>
 );
 
 const EmptyState = ({ title, description }: { title: string; description: string }) => (
-  <div className="rounded-lg border border-outline-variant bg-white p-12 text-center">
-    <Trophy className="w-10 h-10 text-outline mx-auto mb-4" />
-    <h2 className="text-headline-md font-bold text-primary mb-2">{title}</h2>
-    <p className="text-body-md text-on-surface-variant">{description}</p>
+  <div className="rounded-lg border border-outline-variant bg-surface-container/95 p-10 text-center">
+    <Trophy className="mx-auto mb-4 h-11 w-11 text-outline" />
+    <h2 className="font-display text-2xl font-bold text-primary">{title}</h2>
+    <p className="mx-auto mt-2 max-w-xl text-body-md text-on-surface-variant">{description}</p>
+  </div>
+);
+
+const RaceHistoryRow = ({
+  result,
+  perspective,
+  entries,
+}: {
+  result: RaceResultSummary;
+  perspective: RacePerspective;
+  entries: RaceResultEntry[];
+}) => {
+  const topFinishers = entries.filter((entry) => entry.finishPosition !== null).slice(0, 3);
+
+  return (
+    <Link
+      to={getResultRoute(result)}
+      className="group block rounded-lg border border-outline-variant bg-surface-container/95 p-4 shadow-xl shadow-black/20 transition-colors duration-200 hover:border-primary/70 hover:bg-surface-container-high focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+      aria-label={`Open result detail for ${result.raceName}`}
+    >
+      <article className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(280px,0.75fr)_auto] xl:items-center">
+        <div className="min-w-0">
+          <div className="mb-3 flex flex-wrap items-center gap-2">
+            <span className="rounded border border-secondary/30 bg-secondary/10 px-2 py-1 text-[11px] font-bold uppercase tracking-[0.16em] text-secondary">
+              R{result.raceNumber || '-'}
+            </span>
+            <span className="rounded border border-outline-variant bg-surface-container-low px-2 py-1 text-[11px] font-bold uppercase tracking-[0.16em] text-outline">
+              {result.status}
+            </span>
+            <span className="text-label-sm uppercase tracking-[0.16em] text-outline">{result.tournamentName}</span>
+          </div>
+          <h2 className="truncate font-display text-2xl font-extrabold text-on-surface group-hover:text-primary">
+            {result.raceName}
+          </h2>
+          <div className="mt-3 flex flex-wrap gap-x-4 gap-y-2 text-body-sm text-on-surface-variant">
+            <span className="inline-flex items-center gap-2">
+              <Calendar className="h-4 w-4 text-primary" />
+              {formatDate(result.date)}
+            </span>
+            <span className="inline-flex items-center gap-2">
+              <Clock className="h-4 w-4 text-primary" />
+              {formatRaceTime(result.date)}
+            </span>
+            <span className="inline-flex items-center gap-2">
+              <Flag className="h-4 w-4 text-primary" />
+              {result.track}
+            </span>
+          </div>
+        </div>
+
+        <div className="grid gap-3 sm:grid-cols-[150px_minmax(0,1fr)]">
+          <div className={`rounded-lg border p-3 ${getOutcomeClassName(perspective.entry)}`}>
+            <p className="text-[10px] font-bold uppercase tracking-[0.16em] opacity-75">{perspective.label}</p>
+            <p className="mt-1 font-display text-3xl font-extrabold tabular-nums">{getRankLabel(perspective.entry)}</p>
+            <p className="mt-1 truncate text-label-sm font-semibold opacity-90">{perspective.context}</p>
+          </div>
+
+          <div className="rounded-lg border border-outline-variant bg-surface-container-low p-3">
+            <p className="mb-2 text-[10px] font-bold uppercase tracking-[0.16em] text-outline">Top finishers</p>
+            <div className="space-y-2">
+              {topFinishers.length === 0 ? (
+                <p className="text-body-sm text-on-surface-variant">No ranked finishers yet.</p>
+              ) : (
+                topFinishers.map((entry) => <MiniFinisher key={entry.id || entry.horseId} entry={entry} />)
+              )}
+            </div>
+          </div>
+        </div>
+
+        <div className="flex items-center justify-between gap-3 xl:min-w-48 xl:flex-col xl:items-end">
+          <div className="grid grid-cols-2 gap-2 text-right xl:w-full">
+            <InfoPill label="Time" value={perspective.entry?.finishTime ?? result.winnerTime ?? '-'} />
+            <InfoPill label="Points" value={String(perspective.entry?.pointsAwarded ?? entries[0]?.pointsAwarded ?? 0)} />
+          </div>
+          <span className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-md border border-primary/40 bg-primary/10 text-primary transition-colors group-hover:bg-primary group-hover:text-on-primary">
+            <ChevronRight className="h-5 w-5" />
+          </span>
+        </div>
+      </article>
+    </Link>
+  );
+};
+
+const MiniFinisher = ({ entry }: { entry: RaceResultEntry }) => (
+  <div className="grid grid-cols-[38px_minmax(0,1fr)_auto] items-center gap-2 text-body-sm">
+    <span className="font-display text-lg font-bold text-primary tabular-nums">#{entry.finishPosition}</span>
+    <span className="truncate font-semibold text-on-surface">{entry.horseName}</span>
+    <span className="truncate text-right text-on-surface-variant">{entry.finishTime ?? '-'}</span>
+  </div>
+);
+
+const InfoPill = ({ label, value }: { label: string; value: string }) => (
+  <div className="rounded-md border border-outline-variant bg-surface-container-low px-3 py-2">
+    <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-outline">{label}</p>
+    <p className="mt-1 truncate text-body-sm font-bold text-on-surface tabular-nums">{value}</p>
   </div>
 );
 

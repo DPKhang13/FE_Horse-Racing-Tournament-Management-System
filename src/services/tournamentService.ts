@@ -51,6 +51,12 @@ type TournamentCountResponse = {
   total?: number;
 };
 
+export type CloseRegistrationRequest = {
+  autoRejectPending?: boolean;
+  autoCancelUnconfirmed?: boolean;
+  allowCloseWithoutEligibleRaces?: boolean;
+};
+
 const isManagementTournamentData = (data: TournamentPayloadData): data is TournamentMutationData =>
   'tournamentName' in data;
 
@@ -724,15 +730,28 @@ export const tournamentService = {
 
   async closeRegistration(
     tournamentId: number | string,
-    data: { autoRejectPending?: boolean; autoCancelUnconfirmed?: boolean } = {},
+    data: CloseRegistrationRequest = {},
   ): Promise<Tournament> {
     const response = await apiClient.patch(`/api/v1/admin/tournaments/${tournamentId}/close-registration`, {
       autoRejectPending: data.autoRejectPending ?? false,
       autoCancelUnconfirmed: data.autoCancelUnconfirmed ?? false,
+      allowCloseWithoutEligibleRaces: data.allowCloseWithoutEligibleRaces ?? false,
     });
+    const responseData = response.data && typeof response.data === 'object' && !Array.isArray(response.data)
+      ? response.data as RawRecord
+      : {};
+    const closeData = unwrapApiData<unknown>(response);
+    const closeRecord = closeData && typeof closeData === 'object' && !Array.isArray(closeData)
+      ? closeData as RawRecord
+      : {};
+
     return {
       ...await this.getTournamentById(tournamentId),
       responseMessage: getApiResponseMessage(response),
+      closeRegistrationSummary: {
+        rejectedPendingRegistrations: asNumber(closeRecord.rejectedPendingRegistrations ?? responseData.rejectedPendingRegistrations),
+        cancelledUnconfirmedRegistrations: asNumber(closeRecord.cancelledUnconfirmedRegistrations ?? responseData.cancelledUnconfirmedRegistrations),
+      },
     };
   },
 

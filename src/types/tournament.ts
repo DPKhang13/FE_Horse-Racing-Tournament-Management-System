@@ -53,6 +53,10 @@ export type Tournament = {
   createdAt?: string;
   updatedAt?: string;
   responseMessage?: string;
+  closeRegistrationSummary?: {
+    rejectedPendingRegistrations: number;
+    cancelledUnconfirmedRegistrations: number;
+  };
 };
 
 export type TournamentMutationData = {

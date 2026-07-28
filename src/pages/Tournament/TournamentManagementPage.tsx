@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react';
-import { Ban, CalendarDays, ClipboardList, Eye, Filter, Flag, Medal, Pencil, Plus, RefreshCw, Save, Search, Trash2, Trophy, Users, X } from 'lucide-react';
+import { AlertTriangle, Ban, CalendarDays, ClipboardList, Eye, Filter, Flag, Medal, Pencil, Plus, RefreshCw, Save, Search, Trash2, Trophy, Users, X } from 'lucide-react';
 import { motion } from 'motion/react';
 import { Link, useNavigate } from 'react-router-dom';
 import { getApiErrorMessage } from '../../services/apiClient';
@@ -392,6 +392,20 @@ const validateTournamentForm = (data: TournamentMutationData, originalTournament
   return errors;
 };
 
+const formatCloseRegistrationSummary = (tournament: Tournament) => {
+  const summary = tournament.closeRegistrationSummary;
+
+  if (!summary) {
+    return '';
+  }
+
+  return [
+    'Warning: close registration processed by backend.',
+    String(summary.rejectedPendingRegistrations) + ' pending registration(s) rejected.',
+    String(summary.cancelledUnconfirmedRegistrations) + ' unconfirmed registration(s) cancelled.',
+  ].join('\n');
+};
+
 const toFormData = (tournament: Tournament): TournamentMutationData => ({
   tournamentName: tournament.tournamentName,
   tournamentType: tournament.tournamentType,
@@ -536,6 +550,7 @@ const TournamentManagementPage = () => {
   const [lastCreatedTournament, setLastCreatedTournament] = useState<Tournament | null>(null);
   const [raceModalTournament, setRaceModalTournament] = useState<Tournament | null>(null);
   const [isRaceModalOpen, setIsRaceModalOpen] = useState(false);
+  const [forceCloseRegistration, setForceCloseRegistration] = useState(false);
 
   useToastNotifications([
     message ? { tone: 'success', text: message } : null,
@@ -610,6 +625,7 @@ const TournamentManagementPage = () => {
     setMessage('');
     setShowTournamentSuccess(false);
     setLastCreatedTournament(null);
+    setForceCloseRegistration(false);
     setIsFormOpen(true);
   };
 
@@ -622,6 +638,7 @@ const TournamentManagementPage = () => {
     setMessage('');
     setShowTournamentSuccess(false);
     setLastCreatedTournament(null);
+    setForceCloseRegistration(false);
     setIsFormOpen(true);
   };
 
@@ -633,10 +650,15 @@ const TournamentManagementPage = () => {
     setCreatePrizeErrors({});
     setShowTournamentSuccess(false);
     setLastCreatedTournament(null);
+    setForceCloseRegistration(false);
   };
 
   const handleFieldChange = <K extends keyof TournamentMutationData>(field: K, value: TournamentMutationData[K]) => {
     setFormData((current) => ({ ...current, [field]: value }));
+
+    if (field === 'status' && value !== 'Registration Closed') {
+      setForceCloseRegistration(false);
+    }
 
     if (formErrors[field]) {
       setFormErrors((current) => {
@@ -725,7 +747,16 @@ const TournamentManagementPage = () => {
             registrationCloseAt,
           });
         } else if (shouldUseWorkflow && formData.status === 'Registration Closed') {
-          finalTournament = await tournamentService.closeRegistration(selectedTournament.tournamentId);
+          finalTournament = await tournamentService.closeRegistration(selectedTournament.tournamentId, {
+            autoRejectPending: forceCloseRegistration,
+            autoCancelUnconfirmed: forceCloseRegistration,
+            allowCloseWithoutEligibleRaces: forceCloseRegistration,
+          });
+          const closeRegistrationSummary = formatCloseRegistrationSummary(finalTournament);
+
+          if (closeRegistrationSummary) {
+            responseMessages.push(closeRegistrationSummary);
+          }
         } else if (shouldUseWorkflow && formData.status === 'Ongoing') {
           finalTournament = await tournamentService.startTournament(selectedTournament.tournamentId);
         } else if (shouldUseWorkflow && formData.status === 'Completed') {
@@ -1008,6 +1039,8 @@ const TournamentManagementPage = () => {
             isEditing={Boolean(selectedTournament)}
             editableStatuses={editableTournamentStatuses}
             selectedTournament={selectedTournament}
+            forceCloseRegistration={forceCloseRegistration}
+            onForceCloseRegistrationChange={setForceCloseRegistration}
             onChange={handleFieldChange}
             onCreatePrizeChange={handleCreatePrizeChange}
             onSubmit={handleSubmit}
@@ -1073,6 +1106,8 @@ const TournamentForm = ({
   isEditing,
   editableStatuses,
   selectedTournament,
+  forceCloseRegistration,
+  onForceCloseRegistrationChange,
   onChange,
   onCreatePrizeChange,
   onSubmit,
@@ -1090,6 +1125,8 @@ const TournamentForm = ({
   isEditing: boolean;
   editableStatuses: TournamentStatus[];
   selectedTournament: Tournament | null;
+  forceCloseRegistration: boolean;
+  onForceCloseRegistrationChange: (value: boolean) => void;
   onChange: <K extends keyof TournamentMutationData>(field: K, value: TournamentMutationData[K]) => void;
   onCreatePrizeChange: (index: number, field: EditablePrizeField, value: string | number) => void;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
@@ -1099,6 +1136,10 @@ const TournamentForm = ({
   onDone?: () => void;
   onCreateSchedule?: (tournament: Tournament) => void;
 }) => {
+  const shouldShowForceClose = isEditing
+    && selectedTournament?.status === 'Registration Open'
+    && formData.status === 'Registration Closed';
+
   if (showTournamentSuccess && lastCreatedTournament) {
     return (
       <motion.div 
@@ -1203,6 +1244,27 @@ const TournamentForm = ({
               </select>
             </Field>
           </motion.div>
+          {shouldShowForceClose && (
+            <motion.div className="md:col-span-2" variants={revealUp}>
+              <label className="flex items-start gap-3 rounded-md border border-amber-200 bg-amber-50 p-4 text-body-sm text-amber-800">
+                <input
+                  type="checkbox"
+                  checked={forceCloseRegistration}
+                  onChange={(event) => onForceCloseRegistrationChange(event.target.checked)}
+                  className="mt-1 h-4 w-4 accent-amber-600"
+                />
+                <span className="flex-1 space-y-1">
+                  <span className="flex items-center gap-2 font-bold">
+                    <AlertTriangle className="h-4 w-4" />
+                    Force close registration
+                  </span>
+                  <span className="block text-body-xs text-amber-700">
+                    Reject pending registrations, cancel unconfirmed jockey assignments, and allow closing races without eligible horses.
+                  </span>
+                </span>
+              </label>
+            </motion.div>
+          )}
           {formData.status === 'Registration Open' && (
             <>
               <motion.div variants={revealUp}>
