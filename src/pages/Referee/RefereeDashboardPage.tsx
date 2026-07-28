@@ -7,6 +7,10 @@ import { raceOperationsService, type RefereeAssignedRaceItem } from '../../servi
 import { formatRefereeRoleLabel } from '../../utils/permissions';
 
 const normalizeStatus = (value?: string) => value?.trim().toLowerCase().replace(/[\s-]+/g, '_') ?? '';
+const formatStatusLabel = (status?: string) => {
+  if (!status?.trim()) return '-';
+  return status.trim().replace(/[_-]+/g, ' ').replace(/\s+/g, ' ').replace(/\b\w/g, (character) => character.toUpperCase());
+};
 
 const formatDateTime = (value?: string) => {
   if (!value) return '-';
@@ -178,7 +182,7 @@ const RaceList = ({ races, isLoading, emptyText, onOpen }: { races: RefereeAssig
 };
 
 const StatusBadge = ({ status }: { status?: string }) => (
-  <span className={`inline-flex rounded-full border px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider ${statusClassName(status)}`}>{status || '-'}</span>
+  <span className={`inline-flex rounded-full border px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider ${statusClassName(status)}`}>{formatStatusLabel(status)}</span>
 );
 
 const MetricCard = ({ icon, label, value }: { icon: ReactNode; label: string; value: number }) => (
