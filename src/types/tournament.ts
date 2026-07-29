@@ -1,0 +1,124 @@
+export type TournamentStatus =
+  | 'Upcoming'
+  | 'Registration Open'
+  | 'Registration Closed'
+  | 'Ongoing'
+  | 'Completed'
+  | 'Cancelled';
+
+export type MatchStatus = 'Scheduled' | 'Ongoing' | 'Finished' | 'Cancelled';
+
+export type TournamentParticipant = {
+  participantId: string;
+  horseName: string;
+  ownerName: string;
+  jockeyName: string;
+  stableName: string;
+  status: string;
+};
+
+export type TournamentMatch = {
+  matchId: string;
+  matchName: string;
+  round: string;
+  matchDate: string;
+  startTime: string;
+  endTime: string;
+  arenaLocation: string;
+  participant1: string;
+  participant2: string;
+  matchStatus: MatchStatus;
+};
+
+export type Tournament = {
+  tournamentId: number;
+  id: string;
+  tournamentName: string;
+  tournamentType: string;
+  description: string;
+  startDate: string;
+  endDate: string;
+  location: string;
+  registrationDeadline: string;
+  maximumParticipants: number;
+  currentParticipants: number;
+  entryFee: number;
+  prize: string;
+  status: TournamentStatus;
+  registrationOpenAt?: string;
+  registrationCloseAt?: string;
+  rulesNotes: string;
+  participants: TournamentParticipant[];
+  schedule: TournamentMatch[];
+  createdAt?: string;
+  updatedAt?: string;
+  responseMessage?: string;
+  closeRegistrationSummary?: {
+    rejectedPendingRegistrations: number;
+    cancelledUnconfirmedRegistrations: number;
+  };
+};
+
+export type TournamentMutationData = {
+  tournamentName: string;
+  tournamentType: string;
+  description: string;
+  startDate: string;
+  endDate: string;
+  location: string;
+  registrationDeadline: string;
+  maximumParticipants: number;
+  entryFee: number;
+  prize: string;
+  status: TournamentStatus;
+  registrationOpenAt?: string;
+  registrationCloseAt?: string;
+  rulesNotes: string;
+};
+
+export type PrizeResponse = {
+  id: number;
+  prizeId: number;
+  tournamentId: number;
+  tournamentName: string;
+  tournamentStatus: string;
+  prizePool: number;
+  finishPosition: number;
+  prizeName: string;
+  amount: number;
+  note: string;
+};
+
+export type CreatePrizeRequest = {
+  finishPosition: number;
+  prizeName: string;
+  amount: number;
+  note: string;
+};
+
+export type UpdatePrizeRequest = {
+  finishPosition: number;
+  prizeName: string;
+  amount: number;
+  note: string;
+};
+
+export type PrizeAwardStatus = 'announced' | 'awarded';
+
+export type PrizeAwardResponse = {
+  awardId: number;
+  prizeId: number;
+  tournamentId: number;
+  raceId: number;
+  resultId: number;
+  horseId: number;
+  ownerId: number;
+  finishPosition: number;
+  amount: number;
+  status: PrizeAwardStatus;
+  awardedAt?: string;
+  horseName: string;
+  ownerFullName: string;
+  tournamentName: string;
+  prizeName: string;
+};
