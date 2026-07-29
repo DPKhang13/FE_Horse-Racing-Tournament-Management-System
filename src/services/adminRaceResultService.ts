@@ -52,6 +52,11 @@ export type AdminRaceResultDraftUpdatePayload = {
 };
 
 export const adminRaceResultService = {
+  async getAllResults(): Promise<AdminRaceResult[]> {
+    const response = await apiClient.get('/api/race-results/get-all');
+    return unwrapApiList<AdminRaceResult>(response);
+  },
+
   async getResultsByRace(raceId: RaceResultId): Promise<AdminRaceResult[]> {
     const response = await apiClient.get(`/api/v1/admin/races/${raceId}/results/get`);
     const results = unwrapApiList<AdminRaceResult>(response);

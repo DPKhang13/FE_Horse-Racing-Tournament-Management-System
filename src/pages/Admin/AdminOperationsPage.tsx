@@ -416,9 +416,6 @@ const AdminOperationsDashboard = () => {
           onClear={() => setFilters(defaultFilters())}
         />
 
-        <section className="mb-6 rounded-lg border border-primary/20 bg-primary/10 px-4 py-3 text-body-sm font-semibold text-on-surface-variant">
-          Tournament filtering applies to races, bets, and prize awards. Deposits and withdrawals are filtered by date only because they are not linked to tournaments in the database.
-        </section>
 
         {filterErrorMessage && (
           <section className="mb-6 rounded-lg border border-error/30 bg-error-container/20 px-4 py-3 text-body-sm font-semibold text-error">

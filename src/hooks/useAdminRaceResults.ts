@@ -60,6 +60,24 @@ export const useAdminRaceResults = ({
     [handleError, selectedRaceId],
   );
 
+  const fetchAllResults = useCallback(async () => {
+    setSelectedRaceId(null);
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      const results = await adminRaceResultService.getAllResults();
+      setResultList(results);
+      return results;
+    } catch (caughtError) {
+      handleError(caughtError, 'Unable to load race results.');
+      setResultList([]);
+      return [];
+    } finally {
+      setIsLoading(false);
+    }
+  }, [handleError]);
+
   const refreshCurrentResults = useCallback(
     async (raceId: RaceResultId | null = selectedRaceId) => {
       await fetchRaceResults(raceId);
@@ -115,6 +133,7 @@ export const useAdminRaceResults = ({
     setResultList,
     setSelectedRaceId,
     fetchRaceResults,
+    fetchAllResults,
     handlePublish,
     handleUpdateDraft,
   };

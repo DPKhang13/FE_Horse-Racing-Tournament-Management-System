@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState, type FormEvent } from 'react';
+import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
+import { createPortal } from 'react-dom';
 import {
   CheckCircle2,
   Edit3,
@@ -208,9 +209,9 @@ const AdminRaceResultsPage = () => {
     resultList,
     isLoading,
     error,
-    setResultList,
     setSelectedRaceId,
     fetchRaceResults,
+    fetchAllResults,
     handlePublish,
     handleUpdateDraft,
   } = useAdminRaceResults();
@@ -233,11 +234,12 @@ const AdminRaceResultsPage = () => {
     let isActive = true;
 
     queueMicrotask(() => {
+      void fetchAllResults();
+
       void adminScheduleRaceApi.getTournaments()
         .then((items) => {
           if (isActive) {
             setTournaments(items);
-            setTournamentIdFilter((current) => current || (items[0]?.tournamentId === undefined ? '' : String(items[0].tournamentId)));
           }
         })
         .catch(() => {
@@ -255,28 +257,24 @@ const AdminRaceResultsPage = () => {
     return () => {
       isActive = false;
     };
-  }, []);
+  }, [fetchAllResults]);
 
   useEffect(() => {
     if (!tournamentIdFilter) {
+      setTournamentRaces([]);
+      setIsTournamentRaceLoading(false);
       return undefined;
     }
 
     let isActive = true;
 
     queueMicrotask(() => {
+      setIsTournamentRaceLoading(true);
+
       void adminScheduleRaceApi.getRacesByTournament(tournamentIdFilter)
         .then((items) => {
           if (isActive) {
             setTournamentRaces(items);
-
-            const firstRaceId = items[0]?.raceId;
-            if (!raceIdFilter.trim() && !appliedRaceIdFilter.trim() && firstRaceId !== undefined) {
-              const nextRaceId = String(firstRaceId);
-              setRaceIdFilter(nextRaceId);
-              setAppliedRaceIdFilter(nextRaceId);
-              void fetchRaceResults(nextRaceId);
-            }
           }
         })
         .catch(() => {
@@ -294,7 +292,7 @@ const AdminRaceResultsPage = () => {
     return () => {
       isActive = false;
     };
-  }, [appliedRaceIdFilter, fetchRaceResults, raceIdFilter, tournamentIdFilter]);
+  }, [tournamentIdFilter]);
 
   const selectedTournamentRaceIds = useMemo(
     () => new Set(tournamentRaces.map((race) => String(race.raceId))),
@@ -338,12 +336,11 @@ const AdminRaceResultsPage = () => {
     disqualified: resultList.filter((item) => item.isDisqualified).length,
   }), [resultList]);
 
-  const loadRaceResults = (raceId: string) => {
+  const loadRaceResults = useCallback((raceId: string) => {
     const normalizedRaceId = raceId.trim();
     setRaceIdFilter(normalizedRaceId);
     setAppliedRaceIdFilter(normalizedRaceId);
-    void fetchRaceResults(normalizedRaceId || null);
-  };
+  }, []);
 
   const handleFilterSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -357,7 +354,7 @@ const AdminRaceResultsPage = () => {
     setRaceIdFilter('');
     setAppliedRaceIdFilter('');
     setSelectedRaceId(null);
-    setResultList([]);
+    void fetchAllResults();
   };
   const handleTournamentChange = (tournamentId: string) => {
     setTournamentIdFilter(tournamentId);
@@ -366,7 +363,17 @@ const AdminRaceResultsPage = () => {
     setRaceIdFilter('');
     setAppliedRaceIdFilter('');
     setSelectedRaceId(null);
-    setResultList([]);
+  };
+
+  const handleRefreshResults = () => {
+    const normalizedRaceId = (appliedRaceIdFilter || raceIdFilter).trim();
+
+    if (normalizedRaceId) {
+      void fetchRaceResults(normalizedRaceId);
+      return;
+    }
+
+    void fetchAllResults();
   };
 
   /** Opens the selected result in the update modal. */
@@ -450,6 +457,10 @@ const AdminRaceResultsPage = () => {
       });
 
       if (succeeded) {
+        if (!appliedRaceIdFilter.trim()) {
+          void fetchAllResults();
+        }
+
         setEditorMode(null);
         setEditingResult(null);
         setForm(initialForm);
@@ -476,6 +487,10 @@ const AdminRaceResultsPage = () => {
       const succeeded = await handlePublish(raceId);
 
       if (succeeded) {
+        if (!appliedRaceIdFilter.trim()) {
+          await fetchAllResults();
+        }
+
         setPublishTarget(null);
       }
     } finally {
@@ -570,7 +585,7 @@ const AdminRaceResultsPage = () => {
                 Filter
               </button>
               {(tournamentIdFilter || appliedRaceIdFilter) && (
-                <button type="button" onClick={handleClearFilters} disabled={isLoading} className="rounded-lg border border-outline-variant/60 px-4 py-2.5 text-sm font-bold text-on-surface-variant disabled:opacity-60">
+                <button type="button" onClick={handleClearFilters} disabled={isLoading} className="rounded-lg border border-outline-variant bg-surface-container-low px-4 py-2.5 text-sm font-bold text-on-surface-variant transition-colors hover:border-primary hover:text-primary disabled:opacity-60">
                   Show all
                 </button>
               )}
@@ -590,7 +605,7 @@ const AdminRaceResultsPage = () => {
                   : `${groupedResults.length} race${groupedResults.length === 1 ? '' : 's'}`}
               </p>
             </div>
-            <button type="button" onClick={() => void fetchRaceResults(appliedRaceIdFilter || raceIdFilter || null)} disabled={isLoading || (!appliedRaceIdFilter && !raceIdFilter)} className="rounded-lg border border-outline-variant/60 p-2.5 text-on-surface-variant hover:text-primary disabled:opacity-60" aria-label="Refresh race results" title="Refresh selected race">
+            <button type="button" onClick={handleRefreshResults} disabled={isLoading} className="rounded-lg border border-outline-variant/60 p-2.5 text-on-surface-variant hover:text-primary disabled:opacity-60" aria-label="Refresh race results" title={appliedRaceIdFilter || raceIdFilter ? 'Refresh selected race' : 'Refresh all race results'}>
               <RefreshCw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
             </button>
           </div>
@@ -598,7 +613,7 @@ const AdminRaceResultsPage = () => {
           {isLoading ? (
             <ResultListState isLoading title="Loading race results" description="Fetching result records from the API." />
           ) : groupedResults.length === 0 ? (
-            <ResultListState title={appliedRaceIdFilter ? "No race results found" : "Select a race to view results"} description={appliedRaceIdFilter ? "No results match the selected race filter." : "Choose a tournament and race, or enter a Race ID, to load results from the Admin race results API."} />
+            <ResultListState title="No race results found" description={appliedRaceIdFilter || tournamentIdFilter ? 'No results match the selected filters.' : 'The full race results API did not return any records.'} />
           ) : (
             <div className="mt-5 space-y-5">
               {groupedResults.map((group) => (
@@ -625,29 +640,66 @@ const AdminRaceResultsPage = () => {
         />
       )}
 
-      {publishTarget && (
-        <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/60 px-4 py-8" role="presentation" onClick={(event) => {
-          if (event.target === event.currentTarget && !isSubmitting) setPublishTarget(null);
-        }}>
-          <section className="relative z-10 w-full max-w-md rounded-lg border border-outline-variant/60 bg-white p-6 text-on-surface shadow-2xl ring-1 ring-black/10" role="dialog" aria-modal="true" aria-labelledby="publish-result-title" onClick={(event) => event.stopPropagation()}>
-            <h2 id="publish-result-title" className="font-display text-xl font-bold text-on-surface">Publish race results?</h2>
-            <p className="mt-2 text-sm leading-6 text-on-surface-variant">
-              All {publishTarget.results.length} results for Race #{String(publishTarget.raceId ?? publishTarget.raceNumber ?? '-')} will become publicly available.
-            </p>
-            <div className="mt-6 flex justify-end gap-3">
-              <button type="button" onClick={() => setPublishTarget(null)} disabled={isSubmitting} className="rounded-lg border border-outline-variant/60 px-4 py-2.5 text-sm font-bold text-on-surface-variant disabled:opacity-60">Cancel</button>
-              <button type="button" onClick={() => void handlePublishConfirmed()} disabled={isSubmitting} className="inline-flex items-center gap-2 rounded-lg bg-secondary px-4 py-2.5 text-sm font-bold text-white disabled:opacity-60">
-                <Send className="h-4 w-4" />
-                {isSubmitting ? 'Publishing...' : 'Publish'}
-              </button>
-            </div>
-          </section>
-        </div>
-      )}
+      <PublishConfirmModal
+        target={publishTarget}
+        isSubmitting={isSubmitting}
+        onClose={() => setPublishTarget(null)}
+        onConfirm={handlePublishConfirmed}
+      />
     </main>
   );
 };
 
+type PublishConfirmModalProps = {
+  target: RaceResultGroup | null;
+  isSubmitting: boolean;
+  onClose: () => void;
+  onConfirm: () => Promise<void>;
+};
+
+const PublishConfirmModal = ({
+  target,
+  isSubmitting,
+  onClose,
+  onConfirm,
+}: PublishConfirmModalProps) => {
+  if (!target) {
+    return null;
+  }
+
+  return createPortal(
+    <div
+      className="fixed inset-0 z-[1000] flex min-h-screen items-center justify-center bg-black/65 px-4 py-8"
+      role="presentation"
+      onClick={(event) => {
+        if (event.target === event.currentTarget && !isSubmitting) {
+          onClose();
+        }
+      }}
+    >
+      <section
+        className="relative z-[1001] w-full max-w-md rounded-lg border border-outline-variant bg-surface-container p-6 text-on-surface shadow-2xl shadow-black/30"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="publish-result-title"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <h2 id="publish-result-title" className="font-display text-xl font-bold text-on-surface">Publish race results?</h2>
+        <p className="mt-2 text-sm leading-6 text-on-surface-variant">
+          All {target.results.length} results for Race #{String(target.raceId ?? target.raceNumber ?? '-')} will become publicly available.
+        </p>
+        <div className="mt-6 flex justify-end gap-3">
+          <button type="button" onClick={onClose} disabled={isSubmitting} className="rounded-lg border border-outline-variant bg-surface-container-low px-4 py-2.5 text-sm font-bold text-on-surface-variant transition-colors hover:border-primary hover:text-primary disabled:opacity-60">Cancel</button>
+          <button type="button" onClick={() => void onConfirm()} disabled={isSubmitting} className="inline-flex items-center gap-2 rounded-lg bg-secondary px-4 py-2.5 text-sm font-bold text-on-secondary shadow-sm shadow-black/10 transition-colors hover:bg-secondary/90 disabled:opacity-60">
+            <Send className="h-4 w-4" />
+            {isSubmitting ? 'Publishing...' : 'Publish'}
+          </button>
+        </div>
+      </section>
+    </div>,
+    document.body,
+  );
+};
 const RaceResultGroupTable = ({
   group,
   onEdit,
@@ -807,17 +859,23 @@ const ResultEditorModal = ({
   onChange: (changes: Partial<ResultFormState>) => void;
   onClose: () => void;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
-}) => (
-  <div className="fixed inset-0 z-[170] flex items-center justify-center overflow-y-auto bg-black/60 px-4 py-8" role="presentation" onMouseDown={(event) => {
-    if (event.target === event.currentTarget) onClose();
-  }}>
-    <section className="max-h-[calc(100vh-4rem)] w-full max-w-2xl overflow-y-auto rounded-lg border border-outline-variant/60 bg-surface-container-low p-6 shadow-2xl" role="dialog" aria-modal="true" aria-labelledby="result-editor-title">
+}) => createPortal(
+  <div
+    className="fixed inset-0 z-[1000] flex min-h-screen items-center justify-center overflow-y-auto bg-black/65 px-4 py-8"
+    role="presentation"
+    onMouseDown={(event) => {
+      if (event.target === event.currentTarget && !isSubmitting) {
+        onClose();
+      }
+    }}
+  >
+    <section className="relative z-[1001] max-h-[calc(100vh-4rem)] w-full max-w-2xl overflow-y-auto rounded-lg border border-outline-variant bg-surface-container p-6 text-on-surface shadow-2xl shadow-black/30" role="dialog" aria-modal="true" aria-labelledby="result-editor-title" onMouseDown={(event) => event.stopPropagation()}>
       <div className="mb-5 flex items-start justify-between border-b border-outline-variant/40 pb-4">
         <div>
           <p className="text-xs font-bold uppercase tracking-[0.16em] text-secondary">Race result editor</p>
           <h2 id="result-editor-title" className="font-display mt-1 text-xl font-bold text-on-surface">Edit race result</h2>
         </div>
-        <button type="button" onClick={onClose} disabled={isSubmitting} className="rounded-lg border border-outline-variant/60 p-2 text-on-surface-variant hover:text-primary disabled:opacity-60" aria-label="Close result editor"><X className="h-5 w-5" /></button>
+        <button type="button" onClick={onClose} disabled={isSubmitting} className="rounded-lg border border-outline-variant/60 bg-surface-container-low p-2 text-on-surface-variant transition-colors hover:border-primary hover:text-primary disabled:opacity-60" aria-label="Close result editor"><X className="h-5 w-5" /></button>
       </div>
 
       {error && <div className="mb-4 rounded-lg border border-error/40 bg-error-container/25 px-4 py-3 text-sm font-semibold text-error">{error}</div>}
@@ -837,7 +895,7 @@ const ResultEditorModal = ({
           </label>
         )}
         <div className="flex justify-end gap-3 border-t border-outline-variant/40 pt-4 sm:col-span-2">
-          <button type="button" onClick={onClose} disabled={isSubmitting} className="rounded-lg border border-outline-variant/60 px-4 py-2.5 text-sm font-bold text-on-surface-variant disabled:opacity-60">Cancel</button>
+          <button type="button" onClick={onClose} disabled={isSubmitting} className="rounded-lg border border-outline-variant bg-surface-container-low px-4 py-2.5 text-sm font-bold text-on-surface-variant transition-colors hover:border-primary hover:text-primary disabled:opacity-60">Cancel</button>
           <button type="submit" disabled={isSubmitting} className="gold-gradient inline-flex items-center gap-2 rounded-lg px-4 py-2.5 text-sm font-bold text-on-primary disabled:opacity-60">
             <Edit3 className="h-4 w-4" />
             {isSubmitting ? 'Saving...' : 'Save result'}
@@ -845,7 +903,8 @@ const ResultEditorModal = ({
         </div>
       </form>
     </section>
-  </div>
+  </div>,
+  document.body,
 );
 
 const TextField = ({
