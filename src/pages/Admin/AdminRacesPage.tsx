@@ -8,7 +8,6 @@ import {
   Flag,
   Gauge,
   Pencil,
-  Play,
   Plus,
   RefreshCw,
   Search,
@@ -46,7 +45,7 @@ type PointRuleFormData = PointRuleRequest & {
   raceId?: number;
 };
 type PointRuleFormErrors = Partial<Record<keyof PointRuleRequest, string>>;
-type RaceAction = 'start' | 'openBetting' | 'cancel';
+type RaceAction = 'openBetting' | 'cancel';
 type ConfirmableRaceAction = Exclude<RaceAction, 'openBetting'>;
 type PendingRaceAction = {
   action: ConfirmableRaceAction;
@@ -157,10 +156,6 @@ const getStatusFilterValue = (status: string): Exclude<RaceStatusFilter, 'All'> 
   return 'scheduled';
 };
 
-const canStartRace = (status: string) => {
-  const value = normalizeStatus(status);
-  return value === 'ready' || isOpenForBettingStatus(status);
-};
 
 const canOpenBetting = (status: string) => normalizeStatus(status) === 'ready';
 
@@ -815,7 +810,6 @@ const AdminRacesPage = () => {
 
   const handleRaceAction = async (race: AdminRaceItem, action: RaceAction) => {
     const labels: Record<RaceAction, string> = {
-      start: 'start',
       openBetting: 'open betting for',
       cancel: 'cancel',
     };
@@ -833,15 +827,7 @@ const AdminRacesPage = () => {
     try {
       let successText: string;
 
-      if (action === 'start') {
-        const responseMessage = await adminScheduleRaceApi.startRace(race.raceId, {
-          forceCloseBetting: true,
-          note: `Admin started race "${race.name}" and closed betting.`,
-        });
-        successText = responseMessage
-          ? `Admin action completed for "${race.name}".\n${responseMessage}`
-          : `Race "${race.name}" is now in progress. Betting has been closed for this race.`;
-      } else if (action === 'openBetting') {
+      if (action === 'openBetting') {
         successText = await adminScheduleRaceApi.openBetting(race.raceId) || `Race "${race.name}" is now open for betting.`;
       } else {
         successText = await adminScheduleRaceApi.cancelRace(race.raceId) || `Race "${race.name}" cancelled successfully.`;
@@ -859,11 +845,9 @@ const AdminRacesPage = () => {
       const detail = getApiErrorMessage(error, `Unable to ${labels[action]} race.`);
       setNotice({
         tone: 'error',
-        text: action === 'start'
-          ? `Could not start race "${race.name}" as Admin.\n${detail}`
-          : action === 'openBetting'
-            ? `Could not open betting for "${race.name}".\n${detail}`
-            : detail,
+        text: action === 'openBetting'
+          ? `Could not open betting for "${race.name}".\n${detail}`
+          : detail,
       });
     } finally {
       setActionRaceId(null);
@@ -1043,13 +1027,7 @@ const AdminRacesPage = () => {
                         >
                           <BadgeDollarSign className="h-4 w-4" />
                         </IconButton>
-                        <IconButton
-                          label={canStartRace(race.status) ? `Start ${race.name}` : `${race.name} cannot be started from ${race.status}`}
-                          onClick={() => openRaceActionConfirmation(race, 'start')}
-                          disabled={actionRaceId === race.raceId || !canStartRace(race.status)}
-                        >
-                          <Play className="h-4 w-4" />
-                        </IconButton>
+
                         <IconButton label={`Cancel ${race.name}`} onClick={() => openRaceActionConfirmation(race, 'cancel')} disabled={actionRaceId === race.raceId} danger>
                           <Ban className="h-4 w-4" />
                         </IconButton>
@@ -1263,14 +1241,6 @@ const raceActionCopy: Record<ConfirmableRaceAction, {
   processingLabel: string;
   successTitle: string;
 }> = {
-  start: {
-    title: 'Start Race',
-    question: 'Start this race now?',
-    description: 'The race will move to in_progress and betting for this race will close immediately.',
-    confirmLabel: 'Start Race',
-    processingLabel: 'Starting...',
-    successTitle: 'Race Started',
-  },
   cancel: {
     title: 'Cancel Race',
     question: 'Cancel this race?',
@@ -1295,8 +1265,6 @@ const RaceActionConfirmationModal = ({
   onClose: () => void;
 }) => {
   const copy = raceActionCopy[action];
-  const ActionIcon = action === 'start' ? Play : Ban;
-  const isDanger = action === 'cancel';
 
   return (
     <Modal
@@ -1308,8 +1276,8 @@ const RaceActionConfirmationModal = ({
     >
       <div className="space-y-6 p-6">
         <div className="flex items-start gap-4">
-          <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-md ${isDanger ? 'bg-error-container/30 text-error' : 'bg-secondary/10 text-secondary'}`}>
-            <ActionIcon className="h-5 w-5" />
+          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-md bg-error-container/30 text-error">
+            <Ban className="h-5 w-5" />
           </div>
           <div className="min-w-0">
             <h3 className="text-body-lg font-bold text-on-surface">{copy.question}</h3>
@@ -1330,13 +1298,9 @@ const RaceActionConfirmationModal = ({
             type="button"
             onClick={onConfirm}
             disabled={isProcessing}
-            className={`inline-flex items-center justify-center gap-2 rounded-md px-6 py-3 text-body-sm font-bold transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${
-              isDanger
-                ? 'border border-error/40 text-error hover:border-error hover:bg-error-container/20'
-                : 'bg-secondary text-on-secondary hover:bg-opacity-90'
-            }`}
+            className="inline-flex items-center justify-center gap-2 rounded-md border border-error/40 px-6 py-3 text-body-sm font-bold text-error transition-colors hover:border-error hover:bg-error-container/20 disabled:cursor-not-allowed disabled:opacity-60"
           >
-            <ActionIcon className={`h-4 w-4 ${isProcessing ? 'animate-pulse' : ''}`} />
+            <Ban className={`h-4 w-4 ${isProcessing ? 'animate-pulse' : ''}`} />
             {isProcessing ? copy.processingLabel : copy.confirmLabel}
           </button>
         </div>

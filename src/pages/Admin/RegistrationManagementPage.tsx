@@ -16,6 +16,7 @@ import {
 import { getApiErrorMessage } from '../../services/apiClient';
 import { registrationService } from '../../services/registrationService';
 import type { RegistrationResponse } from '../../types/registration';
+import { findHorseScheduleConflict, isApprovedRegistration } from '../../utils/raceRegistrationConflicts';
 
 type Notice = {
   tone: 'success' | 'error';
@@ -106,19 +107,13 @@ const hasAssignedJockey = (registration: RegistrationResponse) =>
 const isOwnerConfirmed = (registration: RegistrationResponse) =>
   normalizeStatus(registration.ownerConfirmationStatus) === 'confirmed';
 
-const isRaceRegistrationClosed = (registration: RegistrationResponse) =>
-  normalizeStatus(registration.raceStatus) === 'registration_closed';
-
-const isChiefApproved = (registration: RegistrationResponse) =>
-  normalizeStatus(registration.chiefInspectionStatus) === 'approved';
-
-const isAdminFinalReviewCandidate = (registration: RegistrationResponse) =>
+const isAdminPreApprovalCandidate = (registration: RegistrationResponse) =>
   normalizeStatus(registration.status) === 'pending' &&
-  isChiefApproved(registration) &&
-  isRaceRegistrationClosed(registration);
+  hasAssignedJockey(registration) &&
+  isOwnerConfirmed(registration);
 
 const canApproveRegistration = (registration: RegistrationResponse) =>
-  isAdminFinalReviewCandidate(registration);
+  isAdminPreApprovalCandidate(registration);
 
 const getApprovalBlockReason = (registration: RegistrationResponse) => {
   if (canApproveRegistration(registration)) {
@@ -129,14 +124,6 @@ const getApprovalBlockReason = (registration: RegistrationResponse) => {
     return 'Only pending registrations can be approved.';
   }
 
-  if (!isRaceRegistrationClosed(registration)) {
-    return 'Registration can be finally approved only after registration is closed.';
-  }
-
-  if (!isChiefApproved(registration)) {
-    return 'Chief referee must approve the horse before admin approval.';
-  }
-
   if (!hasAssignedJockey(registration)) {
     return 'Waiting for a jockey to be assigned.';
   }
@@ -145,18 +132,17 @@ const getApprovalBlockReason = (registration: RegistrationResponse) => {
     return 'Waiting for owner confirmation after jockey acceptance.';
   }
 
-  return 'Registration is not ready for final review.';
+  return 'Registration is not ready for admin approval.';
 };
 
 const getReviewWorkflowLabel = (registration: RegistrationResponse) => {
   const registrationStatus = normalizeStatus(registration.status);
-  const chiefStatus = normalizeStatus(registration.chiefInspectionStatus);
 
-  if (registrationStatus === 'rejected' || chiefStatus === 'rejected') return 'Rejected';
+  if (registrationStatus === 'rejected') return 'Rejected';
   if (registrationStatus === 'approved') return 'Final approved';
-  if (chiefStatus === 'approved') return 'Chief approved - waiting admin';
+  if (isAdminPreApprovalCandidate(registration)) return 'Owner confirmed - waiting admin approval';
   if (!isOwnerConfirmed(registration) || !hasAssignedJockey(registration)) return 'Pending jockey confirmation';
-  return 'Waiting chief inspection';
+  return 'Waiting admin approval';
 };
 
 const getHorseImage = (registration: RegistrationResponse) => registration.horseAvatarUrl || fallbackHorseImage;
@@ -194,7 +180,7 @@ const RegistrationManagementPage = () => {
 
     try {
       const data = await registrationService.getPendingApprovalRegistrations();
-      setRegistrations(data.filter(isAdminFinalReviewCandidate));
+      setRegistrations(data);
     } catch (error) {
       setNotice({ tone: 'error', text: getApiErrorMessage(error, 'Unable to load race registrations.') });
     } finally {
@@ -203,7 +189,28 @@ const RegistrationManagementPage = () => {
   };
 
   useEffect(() => {
-    void loadRegistrations();
+    let isActive = true;
+
+    registrationService.getPendingApprovalRegistrations()
+      .then((data) => {
+        if (isActive) {
+          setRegistrations(data);
+        }
+      })
+      .catch((error) => {
+        if (isActive) {
+          setNotice({ tone: 'error', text: getApiErrorMessage(error, 'Unable to load race registrations.') });
+        }
+      })
+      .finally(() => {
+        if (isActive) {
+          setIsLoading(false);
+        }
+      });
+
+    return () => {
+      isActive = false;
+    };
   }, []);
 
   const statusOptions = useMemo(() => {
@@ -255,11 +262,9 @@ const RegistrationManagementPage = () => {
       .sort((first, second) => compareText(first.label, second.label));
   }, [registrations, tournamentFilter]);
 
-  useEffect(() => {
-    if (raceFilter !== allFilterValue && !raceOptions.some((option) => option.value === raceFilter)) {
-      setRaceFilter(allFilterValue);
-    }
-  }, [raceFilter, raceOptions]);
+  const selectedRaceFilter = raceFilter === allFilterValue || raceOptions.some((option) => option.value === raceFilter)
+    ? raceFilter
+    : allFilterValue;
 
   const filteredRegistrations = useMemo(() => {
     const query = searchTerm.trim().toLowerCase();
@@ -289,7 +294,7 @@ const RegistrationManagementPage = () => {
           ownerConfirmationFilter === allFilterValue ||
           registration.ownerConfirmationStatus === ownerConfirmationFilter;
         const matchesTournament = tournamentFilter === allFilterValue || String(registration.tournamentId) === tournamentFilter;
-        const matchesRace = raceFilter === allFilterValue || String(registration.raceId) === raceFilter;
+        const matchesRace = selectedRaceFilter === allFilterValue || String(registration.raceId) === selectedRaceFilter;
 
         return matchesSearch && matchesStatus && matchesOwnerConfirmation && matchesTournament && matchesRace;
       })
@@ -313,7 +318,7 @@ const RegistrationManagementPage = () => {
 
         return compareRegistrationDateDesc(first, second);
       });
-  }, [ownerConfirmationFilter, raceFilter, registrations, searchTerm, sortMode, statusFilter, tournamentFilter]);
+  }, [ownerConfirmationFilter, registrations, searchTerm, selectedRaceFilter, sortMode, statusFilter, tournamentFilter]);
 
   const stats = useMemo(() => {
     const approved = registrations.filter((registration) => normalizeStatus(registration.status) === 'approved').length;
@@ -387,6 +392,22 @@ const RegistrationManagementPage = () => {
     setNotice(null);
 
     try {
+      if (activeAction.type === 'approve') {
+        const allRegistrations = await registrationService.getAllRegistrations();
+        const conflict = findHorseScheduleConflict(
+          activeAction.registration,
+          allRegistrations,
+          isApprovedRegistration,
+        );
+
+        if (conflict) {
+          setActionError(
+            `Ngua bi trung gio dua voi ${conflict.raceName ?? `Race ${conflict.raceId ?? '-'}`} (${formatDateTime(conflict.scheduledAt)}).`,
+          );
+          return;
+        }
+      }
+
       const updatedRegistration = activeAction.type === 'approve'
         ? await registrationService.approveRegistration(registrationId, { note: trimmedNote || undefined })
         : await registrationService.rejectRegistration(registrationId, { reason: trimmedReason || undefined });
@@ -451,14 +472,21 @@ const RegistrationManagementPage = () => {
               ))}
             </select>
 
-            <select value={tournamentFilter} onChange={(event) => setTournamentFilter(event.target.value)} className={selectInputClassName}>
+            <select
+              value={tournamentFilter}
+              onChange={(event) => {
+                setTournamentFilter(event.target.value);
+                setRaceFilter(allFilterValue);
+              }}
+              className={selectInputClassName}
+            >
               <option value={allFilterValue}>All tournaments</option>
               {tournamentOptions.map((option) => (
                 <option key={option.value} value={option.value}>{option.label}</option>
               ))}
             </select>
 
-            <select value={raceFilter} onChange={(event) => setRaceFilter(event.target.value)} className={selectInputClassName}>
+            <select value={selectedRaceFilter} onChange={(event) => setRaceFilter(event.target.value)} className={selectInputClassName}>
               <option value={allFilterValue}>All races</option>
               {raceOptions.map((option) => (
                 <option key={option.value} value={option.value}>{option.label}</option>
@@ -581,7 +609,7 @@ const RegistrationsTable = ({
         </thead>
         <tbody className="divide-y divide-outline-variant">
           {!isLoading && registrations.map((registration) => {
-            const canProcess = isAdminFinalReviewCandidate(registration);
+            const canProcess = isAdminPreApprovalCandidate(registration);
             const canApprove = canApproveRegistration(registration);
             const approveBlockReason = getApprovalBlockReason(registration);
 
@@ -625,12 +653,7 @@ const RegistrationsTable = ({
                 <td className="px-5 py-4">
                   <div className="grid gap-2">
                     <ReviewWorkflowBadge label={getReviewWorkflowLabel(registration)} />
-                    <span className="text-label-sm font-semibold text-on-surface-variant">
-                      Chief: {formatStatusLabel(registration.chiefInspectionStatus)}
-                    </span>
-                    <span className="text-label-sm font-semibold text-on-surface-variant">
-                      Race: {formatStatusLabel(registration.raceStatus)}
-                    </span>
+                    <StatusBadge status={registration.status} />
                   </div>
                 </td>
                 <td className="px-5 py-4">
@@ -687,7 +710,7 @@ const RegistrationDetailModal = ({
   onApprove: (registration: RegistrationResponse) => void;
   onReject: (registration: RegistrationResponse) => void;
 }) => {
-  const canProcess = isAdminFinalReviewCandidate(registration);
+  const canProcess = isAdminPreApprovalCandidate(registration);
   const canApprove = canApproveRegistration(registration);
   const approveBlockReason = getApprovalBlockReason(registration);
 
@@ -733,11 +756,7 @@ const RegistrationDetailModal = ({
               label="Owner Confirmation"
               value={formatStatusLabel(registration.ownerConfirmationStatus)}
             />
-            <DetailItem icon={<ShieldCheck className="h-4 w-4" />} label="Race Status" value={formatStatusLabel(registration.raceStatus)} />
-            <DetailItem icon={<ShieldCheck className="h-4 w-4" />} label="Chief Inspection" value={formatStatusLabel(registration.chiefInspectionStatus)} />
-            <DetailItem icon={<UserRound className="h-4 w-4" />} label="Chief Referee" value={registration.chiefInspectedByFullName ?? '-'} />
-            <DetailItem icon={<Clock3 className="h-4 w-4" />} label="Chief Inspected At" value={formatDateTime(registration.chiefInspectedAt)} />
-            <DetailItem icon={<FileText className="h-4 w-4" />} label="Chief Note" value={registration.chiefInspectionNote ?? '-'} />
+
             <DetailItem icon={<UserRound className="h-4 w-4" />} label="Admin Reviewed By" value={registration.adminReviewedByFullName ?? registration.approvedByFullName ?? '-'} />
             <DetailItem icon={<Clock3 className="h-4 w-4" />} label="Admin Reviewed At" value={formatDateTime(registration.adminReviewedAt ?? registration.approvedAt)} />
             <DetailItem icon={<FileText className="h-4 w-4" />} label="Admin Review Note" value={registration.adminReviewNote ?? '-'} />
@@ -866,9 +885,9 @@ const ActionModal = ({
 const ReviewWorkflowBadge = ({ label }: { label: string }) => {
   const className = label === 'Rejected'
     ? 'border-error/30 bg-error-container/20 text-error'
-    : label === 'Final approved' || label === 'Chief approved - waiting admin'
+    : label === 'Final approved' || label === 'Owner confirmed - waiting admin approval'
       ? 'border-secondary/30 bg-secondary/10 text-secondary'
-      : label === 'Waiting chief inspection'
+      : label === 'Waiting admin approval'
         ? 'border-primary/30 bg-primary/10 text-primary'
         : 'border-tertiary/30 bg-tertiary/10 text-tertiary';
 

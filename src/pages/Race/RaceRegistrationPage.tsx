@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useId, useMemo, useState, type ReactNode } from 'react';
+import { createPortal } from 'react-dom';
 import { CheckCircle2, ChevronRight, ClipboardList, Search, Trophy, X, DoorOpen } from 'lucide-react';
 import { getApiErrorMessage } from '../../services/apiClient';
 import { authService } from '../../services/authService';
@@ -8,10 +9,14 @@ import { scheduleService, type RaceScheduleItem, type TournamentApiItem } from '
 import { useToastNotifications } from '../../hooks/useToastNotifications';
 import type { Horse } from '../../types/horse';
 import type { UserProfile } from '../../types/user';
+import { findHorseScheduleConflict } from '../../utils/raceRegistrationConflicts';
 
-const formatDateTime = (value?: string) => {
+const formatDateTime = (value?: string | null) => {
   if (!value) { return '-'; }
-  return new Date(value).toLocaleString('en-US', {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) { return '-'; }
+
+  return date.toLocaleString('en-US', {
     month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit',
   });
 };
@@ -89,7 +94,7 @@ const RaceRegistrationPage = () => {
     errorMessage ? { tone: 'error', text: errorMessage } : null,
   ]);
 
-  const loadRegistrations = async () => {
+  const loadRegistrations = useCallback(async () => {
     setIsLoading(true);
     setErrorMessage('');
     try {
@@ -116,30 +121,41 @@ const RaceRegistrationPage = () => {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [profile]);
 
-  useEffect(() => { void loadRegistrations(); }, []);
+  useEffect(() => {
+    const timeoutId = window.setTimeout(() => {
+      void loadRegistrations();
+    }, 0);
 
-  const getAvailableRacesForTournament = (tournamentId: number) =>
+    return () => window.clearTimeout(timeoutId);
+  }, [loadRegistrations]);
+
+  const getAvailableRacesForTournament = useCallback((tournamentId: number) =>
     races.filter((race) => race.tournamentId === tournamentId).filter(isRegistrationOpenFutureRace)
-      .sort((a, b) => new Date(a.scheduledAt).getTime() - new Date(b.scheduledAt).getTime());
+      .sort((a, b) => new Date(a.scheduledAt).getTime() - new Date(b.scheduledAt).getTime()), [races]);
 
   const openRegistrationTournaments = useMemo(
     () => tournaments.filter((tournament) => {
       const tournamentId = tournamentIdOf(tournament);
       return isRegistrationOpenTournament(tournament) && getAvailableRacesForTournament(tournamentId).length > 0;
-    }), [races, tournaments],
+    }), [getAvailableRacesForTournament, tournaments],
   );
 
   const selectedTournamentId = selectedTournament ? tournamentIdOf(selectedTournament) : 0;
-  const tournamentRaces = useMemo(() => getAvailableRacesForTournament(selectedTournamentId), [races, selectedTournamentId]);
+  const tournamentRaces = useMemo(() => getAvailableRacesForTournament(selectedTournamentId), [getAvailableRacesForTournament, selectedTournamentId]);
 
   const availableHorses = useMemo(() => {
     if (!selectedRace) { return horses; }
     return horses.filter((horse) => {
       const sameRankGroup = !selectedRace.rankGroup || selectedRace.rankGroup === '-' || horse.rankGroup === selectedRace.rankGroup;
       const notYetRegistered = !items.some((item) => item.raceId === selectedRace.raceId && item.horseId === horse.horseId);
-      return sameRankGroup && notYetRegistered;
+      const hasScheduleConflict = Boolean(findHorseScheduleConflict({
+        raceId: selectedRace.raceId,
+        horseId: horse.horseId,
+        scheduledAt: selectedRace.scheduledAt,
+      }, items));
+      return sameRankGroup && notYetRegistered && !hasScheduleConflict;
     });
   }, [horses, items, selectedRace]);
 
@@ -167,6 +183,17 @@ const RaceRegistrationPage = () => {
 
   const handleHorseSelect = async (horse: Horse) => {
     if (!selectedRace) { return; }
+    const conflict = findHorseScheduleConflict({
+      raceId: selectedRace.raceId,
+      horseId: horse.horseId,
+      scheduledAt: selectedRace.scheduledAt,
+    }, items);
+
+    if (conflict) {
+      setErrorMessage(`Ngua da co race trung gio dua voi ${conflict.raceName ?? `Race ${conflict.raceId ?? '-'}`} (${formatDateTime(conflict.scheduledAt)}).`);
+      return;
+    }
+
     setSelectedHorse(horse);
     setIsHorsePickerOpen(false);
     try {
@@ -453,7 +480,7 @@ const RaceRegistrationPage = () => {
               <InfoPill label="Race time" value={formatDateTime(selectedRace.scheduledAt)} />
             </div>
             {availableHorses.length === 0 ? (
-              <EmptyState title="No horse available" description="All matching horses are already registered or there is no horse in the same rank group." icon={<Trophy className="h-5 w-5" />} />
+              <EmptyState title="No horse available" description="All matching horses are already registered, busy at this race time, or there is no horse in the same rank group." icon={<Trophy className="h-5 w-5" />} />
             ) : (
               <div className="grid gap-4 md:grid-cols-2">
                 {availableHorses.map((horse) => (
@@ -644,22 +671,27 @@ const EmptyState = ({ title, description, icon }: { title: string; description: 
   </div>
 );
 
-const Modal = ({ title, subtitle, onClose, children }: { title: string; subtitle: string; onClose: () => void; children: ReactNode }) => (
-  <div className="fixed inset-0 z-[70] overflow-y-auto bg-black/55 px-4 py-8">
-    <div className="mx-auto max-w-5xl rounded-lg border border-outline-variant bg-white shadow-xl">
-      <div className="flex items-start justify-between gap-6 border-b border-outline-variant p-6">
-        <div>
-          <p className="mb-2 text-label-sm font-bold uppercase tracking-widest text-outline">{subtitle}</p>
-          <h2 className="text-headline-md font-bold text-primary">{title}</h2>
+const Modal = ({ title, subtitle, onClose, children }: { title: string; subtitle: string; onClose: () => void; children: ReactNode }) => {
+  const titleId = useId();
+
+  return createPortal(
+    <div className="fixed inset-0 z-[70] flex items-center justify-center overflow-hidden bg-black/55 p-4 sm:p-8" role="presentation">
+      <div className="flex max-h-[calc(100vh-2rem)] w-full max-w-5xl flex-col overflow-hidden rounded-xl border border-outline-variant bg-white shadow-xl" role="dialog" aria-modal="true" aria-labelledby={titleId}>
+        <div className="flex items-start justify-between gap-6 border-b border-outline-variant p-6">
+          <div className="min-w-0">
+            <p className="mb-2 text-label-sm font-bold uppercase tracking-widest text-outline">{subtitle}</p>
+            <h2 id={titleId} className="break-words text-headline-md font-bold text-primary">{title}</h2>
+          </div>
+          <button type="button" onClick={onClose}
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md border border-outline-variant text-on-surface-variant transition-colors hover:border-primary hover:text-primary" aria-label="Close modal">
+            <X className="h-5 w-5" />
+          </button>
         </div>
-        <button type="button" onClick={onClose}
-          className="flex h-10 w-10 items-center justify-center rounded-md border border-outline-variant text-on-surface-variant transition-colors hover:border-primary hover:text-primary" aria-label="Close modal">
-          <X className="h-5 w-5" />
-        </button>
+        <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden">{children}</div>
       </div>
-      {children}
-    </div>
-  </div>
-);
+    </div>,
+    document.body,
+  );
+};
 
 export default RaceRegistrationPage;

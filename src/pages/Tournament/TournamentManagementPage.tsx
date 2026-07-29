@@ -2452,9 +2452,9 @@ const Modal = ({
   onClose: () => void;
   children: ReactNode;
 }) => (
-  <div className="fixed inset-0 z-[60] overflow-y-auto bg-black/60 px-4 py-8">
-    <div className="mx-auto max-w-7xl rounded-lg border border-outline-variant bg-surface-container-low shadow-lg shadow-black/10" role="dialog" aria-modal="true" aria-label={title}>
-      <div className="flex items-start justify-between gap-6 border-b border-outline-variant p-8">
+  <div className="fixed inset-0 z-[60] overflow-hidden bg-black/60 px-4 py-4 md:py-8">
+    <div className="mx-auto flex max-h-[calc(100vh-2rem)] max-w-7xl flex-col overflow-hidden rounded-lg border border-outline-variant bg-surface-container-low shadow-lg shadow-black/10 md:max-h-[calc(100vh-4rem)]" role="dialog" aria-modal="true" aria-label={title}>
+      <div className="flex shrink-0 items-start justify-between gap-6 border-b border-outline-variant p-8">
         <div>
           <p className="mb-2 text-label-sm font-bold uppercase tracking-widest text-outline">{subtitle}</p>
           <h2 className="text-headline-md font-bold text-primary">{title}</h2>
@@ -2469,7 +2469,7 @@ const Modal = ({
           <X className="h-5 w-5" />
         </button>
       </div>
-      <div className="p-8">
+      <div className="min-h-0 overflow-y-auto overscroll-contain p-8">
         {children}
       </div>
     </div>

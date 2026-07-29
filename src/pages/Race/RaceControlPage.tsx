@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react';
 import { CheckCircle2, ClipboardCheck, ClipboardList, Eye, FileText, Flag, RefreshCw, Save, Send, ShieldCheck, Timer, Trophy, Users } from 'lucide-react';
+import { createPortal } from 'react-dom';
 import { useSearchParams } from 'react-router-dom';
 import { getApiErrorMessage } from '../../services/apiClient';
 import {
@@ -16,13 +17,14 @@ import { raceRoundService, type RaceRoundItem } from '../../services/raceRoundSe
 import { useToastNotifications } from '../../hooks/useToastNotifications';
 import { formatRefereeRoleLabel } from '../../utils/permissions';
 
-type DraftTimeMap = Record<string, string>;
+type LapTimeDraftMap = Record<string, string>;
 type DisqualificationReasonMap = Record<string, string>;
 type ResultView = 'overall' | string;
 type ChiefInspectionAction = {
   status: ChiefInspectionRequest['status'];
   registration: ChiefInspectionRegistrationItem;
 };
+type OverallDisqualificationTarget = RaceResultWorkflowItem;
 
 const initialReportForm: RefereeReportFormData = {
   reportType: 'inspection',
@@ -39,6 +41,8 @@ const getMainReportType = (verdict?: string) => (normalizeStatus(verdict) === 'v
 const getAssignmentId = (item: ChiefRaceParticipantItem | RaceResultWorkflowItem) => item.assignmentId ?? ('id' in item ? item.id : undefined) ?? 0;
 const getRegistrationId = (item: ChiefInspectionRegistrationItem) => item.registrationId ?? item.regId ?? item.id ?? 0;
 const getLapViewValue = (lap: number) => 'lap:' + lap;
+const getLapDraftKey = (lap: number, assignmentId: number) => lap + ':' + assignmentId;
+const TEMP_LAP_POSITION_OFFSET = 100000;
 
 const formatDateTime = (value?: string) => {
   if (!value) return '-';
@@ -168,7 +172,7 @@ const RaceControlPage = () => {
   const [approvedAssignmentIds, setApprovedAssignmentIds] = useState<Set<number>>(() => new Set());
   const [disqualifiedAssignmentIds, setDisqualifiedAssignmentIds] = useState<Set<number>>(() => new Set());
   const [disqualifyReasons, setDisqualifyReasons] = useState<DisqualificationReasonMap>({});
-  const [timeDrafts, setTimeDrafts] = useState<DraftTimeMap>({});
+  const [lapTimeDrafts, setLapTimeDrafts] = useState<LapTimeDraftMap>({});
   const [selectedView, setSelectedView] = useState<ResultView>('overall');
   const [reportForm, setReportForm] = useState<RefereeReportFormData>(initialReportForm);
   const [chiefFinalNotes, setChiefFinalNotes] = useState('');
@@ -177,6 +181,9 @@ const RaceControlPage = () => {
   const [isBusy, setIsBusy] = useState(false);
   const [isStartConfirmOpen, setIsStartConfirmOpen] = useState(false);
   const [isResultConfirmOpen, setIsResultConfirmOpen] = useState(false);
+  const [overallDisqualificationTarget, setOverallDisqualificationTarget] = useState<OverallDisqualificationTarget | null>(null);
+  const [overallDisqualificationNote, setOverallDisqualificationNote] = useState('');
+  const [overallDisqualificationError, setOverallDisqualificationError] = useState('');
   const [inspectionAction, setInspectionAction] = useState<ChiefInspectionAction | null>(null);
   const [inspectionNote, setInspectionNote] = useState('');
   const [inspectionError, setInspectionError] = useState('');
@@ -219,11 +226,100 @@ const RaceControlPage = () => {
     || first.assignmentId - second.assignmentId
   )), [draftResults]);
   const lapNumbers = useMemo(() => {
-    const numbers = Array.from(new Set(raceRounds.map((round) => round.roundNumber).filter((round) => round > 0))).sort((a, b) => a - b);
-    return numbers.length > 0 ? numbers : [1];
-  }, [raceRounds]);
+    const maxLap = Math.max(
+      0,
+      activeRace?.lapCount ?? 0,
+      ...raceRounds.map((round) => round.roundNumber).filter((round) => round > 0),
+      ...raceRounds.map((round) => round.lapCount ?? 0).filter((count) => count > 0),
+    );
+    return maxLap > 0 ? Array.from({ length: maxLap }, (_, index) => index + 1) : [1];
+  }, [activeRace?.lapCount, raceRounds]);
   const selectedLapNumber = selectedView.startsWith('lap:') ? Number(selectedView.replace('lap:', '')) : undefined;
-  const selectedLapRows = useMemo(() => selectedLapNumber ? raceRounds.filter((round) => round.roundNumber === selectedLapNumber).sort((first, second) => first.position - second.position) : [], [raceRounds, selectedLapNumber]);
+  const selectedLapRows = useMemo(() => {
+    if (!selectedLapNumber) return [];
+    const lapRows = raceRounds
+      .filter((round) => round.roundNumber === selectedLapNumber)
+      .sort((first, second) => first.position - second.position);
+
+    if (reviewedParticipants.length === 0) return lapRows;
+
+    const lapRowByAssignment = new Map(lapRows.map((round) => [round.assignmentId, round]));
+    return reviewedParticipants.map((participant) => {
+      const assignmentId = getAssignmentId(participant);
+      const savedRow = lapRowByAssignment.get(assignmentId);
+      if (savedRow) {
+        return {
+          ...savedRow,
+          horseId: savedRow.horseId ?? participant.horseId,
+          horseName: savedRow.horseName ?? participant.horseName,
+          jockeyId: savedRow.jockeyId ?? participant.jockeyId,
+          jockeyFullName: savedRow.jockeyFullName ?? participant.jockeyFullName,
+        };
+      }
+
+      return {
+        roundId: -assignmentId,
+        raceId: Number(normalizedRaceId) || participant.raceId || 0,
+        assignmentId,
+        horseId: participant.horseId,
+        horseName: participant.horseName,
+        jockeyId: participant.jockeyId,
+        jockeyFullName: participant.jockeyFullName,
+        roundNumber: selectedLapNumber,
+        position: 0,
+        lapTimeSec: undefined,
+        recordedAt: undefined,
+      };
+    });
+  }, [normalizedRaceId, raceRounds, reviewedParticipants, selectedLapNumber]);
+  const overallDraftResults = useMemo(() => {
+    if (reviewedParticipants.length === 0) return sortedDraftResults;
+
+    const lapTotals = new Map<number, number>();
+    raceRounds.forEach((round) => {
+      if (round.assignmentId > 0 && round.lapTimeSec !== undefined && round.lapTimeSec > 0) {
+        lapTotals.set(round.assignmentId, (lapTotals.get(round.assignmentId) ?? 0) + round.lapTimeSec);
+      }
+    });
+
+    Object.entries(lapTimeDrafts).forEach(([key, value]) => {
+      const [lapPart, assignmentPart] = key.split(':');
+      const lapNumber = Number(lapPart);
+      const assignmentId = Number(assignmentPart);
+      const parsedTime = parseSecondsInput(value);
+      const hasSavedRound = raceRounds.some((round) => round.roundNumber === lapNumber && round.assignmentId === assignmentId);
+      if (!hasSavedRound && assignmentId > 0 && parsedTime !== undefined && parsedTime > 0) {
+        lapTotals.set(assignmentId, (lapTotals.get(assignmentId) ?? 0) + parsedTime);
+      }
+    });
+
+    const baseRows = reviewedParticipants.map((participant) => {
+      const assignmentId = getAssignmentId(participant);
+      const saved = draftByAssignment.get(assignmentId);
+      const isDisqualified = disqualifiedAssignmentIds.has(assignmentId) || Boolean(saved?.isDisqualified);
+      return {
+        ...saved,
+        assignmentId,
+        raceId: participant.raceId ?? saved?.raceId,
+        horseId: participant.horseId ?? saved?.horseId,
+        horseName: participant.horseName ?? saved?.horseName,
+        jockeyId: participant.jockeyId ?? saved?.jockeyId,
+        jockeyFullName: participant.jockeyFullName ?? saved?.jockeyFullName,
+        gateNumber: participant.gateNumber ?? saved?.gateNumber,
+        finishPosition: saved?.finishPosition ?? null,
+        finishTimeSec: isDisqualified ? null : lapTotals.get(assignmentId) ?? saved?.finishTimeSec ?? null,
+        isDisqualified,
+        disqualifyReason: disqualifyReasons[String(assignmentId)] || saved?.disqualifyReason,
+        status: isDisqualified ? 'disqualified' : saved?.status ?? 'draft',
+      };
+    });
+    const qualifiedRows = baseRows
+      .filter((row) => !row.isDisqualified)
+      .sort((first, second) => (first.finishTimeSec ?? Number.MAX_SAFE_INTEGER) - (second.finishTimeSec ?? Number.MAX_SAFE_INTEGER) || first.assignmentId - second.assignmentId)
+      .map((row, index) => ({ ...row, finishPosition: row.finishTimeSec ? index + 1 : row.finishPosition ?? null }));
+    const disqualifiedRows = baseRows.filter((row) => row.isDisqualified).map((row) => ({ ...row, finishPosition: null, finishTimeSec: null }));
+    return [...qualifiedRows, ...disqualifiedRows];
+  }, [disqualifiedAssignmentIds, disqualifyReasons, draftByAssignment, lapTimeDrafts, raceRounds, reviewedParticipants, sortedDraftResults]);
   const mainReports = useMemo(() => reports.filter((report) => normalizeStatus(report.refereeRole) === 'main_referee'), [reports]);
   const submittedReports = mainReports.length > 0 ? mainReports : reports;
   const handleSelectRace = useCallback((raceId: string) => {
@@ -261,7 +357,7 @@ const RaceControlPage = () => {
       setRaceRounds([]);
       setDisqualifiedAssignmentIds(new Set());
       setDisqualifyReasons({});
-      setTimeDrafts({});
+      setLapTimeDrafts({});
       return;
     }
 
@@ -279,8 +375,8 @@ const RaceControlPage = () => {
         shouldLoadInspection ? raceOperationsService.getChiefInspectionRegistrations(raceId) : Promise.resolve([]),
       ]);
       const nextDraftResults = draftData?.results ?? [];
-      const nextTimeDrafts = nextDraftResults.reduce<DraftTimeMap>((draftMap, item) => {
-        draftMap[String(item.assignmentId)] = formatSecondsInput(item.finishTimeSec);
+      const nextLapTimeDrafts = roundData.reduce<LapTimeDraftMap>((draftMap, item) => {
+        draftMap[getLapDraftKey(item.roundNumber, item.assignmentId)] = formatSecondsInput(item.lapTimeSec);
         return draftMap;
       }, {});
       const storedApprovedIds = getStoredApprovedIds(raceId);
@@ -300,7 +396,7 @@ const RaceControlPage = () => {
       setRaceRounds(roundData);
       setParticipants(participantData);
       setInspectionRegistrations(inspectionData);
-      setTimeDrafts(nextTimeDrafts);
+      setLapTimeDrafts(nextLapTimeDrafts);
       setApprovedAssignmentIds(storedApprovedIds);
       setDisqualifiedAssignmentIds(storedDisqualifiedIds);
       setDisqualifyReasons(storedReasons);
@@ -379,28 +475,60 @@ const RaceControlPage = () => {
       return next;
     });
   };
+  const openOverallDisqualification = (result: RaceResultWorkflowItem) => {
+    if (result.isDisqualified) return;
+    setOverallDisqualificationTarget(result);
+    setOverallDisqualificationNote(disqualifyReasons[String(result.assignmentId)] || result.disqualifyReason || '');
+    setOverallDisqualificationError('');
+    setErrorMessage('');
+  };
 
-  const returnParticipantToInspection = (assignmentId: number) => {
-    if (!normalizedRaceId) return;
+  const closeOverallDisqualification = () => {
+    setOverallDisqualificationTarget(null);
+    setOverallDisqualificationNote('');
+    setOverallDisqualificationError('');
+  };
+
+  const confirmOverallDisqualification = () => {
+    if (!overallDisqualificationTarget || !normalizedRaceId) return;
+
+    const assignmentId = overallDisqualificationTarget.assignmentId;
+    const trimmedNote = overallDisqualificationNote.trim();
+    if (!assignmentId) {
+      setOverallDisqualificationError('Assignment id is missing.');
+      return;
+    }
+    if (!trimmedNote) {
+      setOverallDisqualificationError('Disqualified note is required.');
+      return;
+    }
+
+    setDisqualifiedAssignmentIds((current) => {
+      const next = new Set(current);
+      next.add(assignmentId);
+      persistDisqualifiedIds(normalizedRaceId, next);
+      return next;
+    });
     setApprovedAssignmentIds((current) => {
       const next = new Set(current);
       next.delete(assignmentId);
       persistApprovedIds(normalizedRaceId, next);
       return next;
     });
-    setDisqualifiedAssignmentIds((current) => {
-      const next = new Set(current);
-      next.delete(assignmentId);
-      persistDisqualifiedIds(normalizedRaceId, next);
-      return next;
-    });
     setDisqualifyReasons((current) => {
-      const next = { ...current };
-      delete next[String(assignmentId)];
+      const next = { ...current, [String(assignmentId)]: trimmedNote };
       persistDisqualifyReasons(normalizedRaceId, next);
       return next;
     });
+    setDraftResults((current) => current.map((result) => (
+      result.assignmentId === assignmentId
+        ? { ...result, isDisqualified: true, finishPosition: null, finishTimeSec: null, disqualifyReason: trimmedNote, status: 'disqualified' }
+        : result
+    )));
+    setMessage((overallDisqualificationTarget.horseName ?? 'Assignment #' + assignmentId) + ' marked as disqualified.');
+    closeOverallDisqualification();
   };
+
   const openInspectionAction = (status: ChiefInspectionRequest['status'], registration: ChiefInspectionRegistrationItem) => {
     setInspectionAction({ status, registration });
     setInspectionNote('');
@@ -494,20 +622,25 @@ const RaceControlPage = () => {
       setErrorMessage('Select a race before saving draft results.');
       return;
     }
-    if (reviewedParticipants.length === 0) {
-      setErrorMessage('Check at least one participant before saving results.');
+    if (!selectedLapNumber) {
+      setErrorMessage('Open a Lap view to enter lap times. Overall is read-only.');
       return;
     }
+    if (reviewedParticipants.length === 0) {
+      setErrorMessage('Check at least one participant before saving lap results.');
+      return;
+    }
+
     const parsedRows = reviewedParticipants.map((participant) => {
       const assignmentId = getAssignmentId(participant);
       const isDisqualified = disqualifiedAssignmentIds.has(assignmentId);
-      const finishTimeSec = isDisqualified ? undefined : parseSecondsInput(timeDrafts[String(assignmentId)] ?? '');
+      const lapTimeSec = isDisqualified ? undefined : parseSecondsInput(lapTimeDrafts[getLapDraftKey(selectedLapNumber, assignmentId)] ?? '');
       const disqualifyReason = disqualifyReasons[String(assignmentId)]?.trim();
-      return { assignmentId, finishTimeSec, horseName: participant.horseName, isDisqualified, disqualifyReason };
+      return { assignmentId, lapTimeSec, horseName: participant.horseName, isDisqualified, disqualifyReason };
     });
-    const invalidRow = parsedRows.find((row) => !row.isDisqualified && (!row.assignmentId || row.finishTimeSec === undefined || row.finishTimeSec <= 0));
+    const invalidRow = parsedRows.find((row) => !row.isDisqualified && (!row.assignmentId || row.lapTimeSec === undefined || row.lapTimeSec <= 0));
     if (invalidRow) {
-      setErrorMessage('Enter a valid total time for ' + (invalidRow.horseName ?? 'assignment #' + invalidRow.assignmentId) + '.');
+      setErrorMessage('Enter a valid Lap ' + selectedLapNumber + ' time for ' + (invalidRow.horseName ?? 'assignment #' + invalidRow.assignmentId) + '.');
       return;
     }
     const invalidDisqualifiedRow = parsedRows.find((row) => row.isDisqualified && !row.disqualifyReason);
@@ -515,10 +648,50 @@ const RaceControlPage = () => {
       setErrorMessage('Enter a disqualification reason for ' + (invalidDisqualifiedRow.horseName ?? 'assignment #' + invalidDisqualifiedRow.assignmentId) + '.');
       return;
     }
+
     await withBusy(async () => {
+      const existingSelectedLapRows = raceRounds.filter((round) => round.roundNumber === selectedLapNumber && round.roundId > 0);
+      const stagedLapRows = await Promise.all(existingSelectedLapRows.map((round) => (
+        raceRoundService.updateRound(round.roundId, { position: TEMP_LAP_POSITION_OFFSET + round.roundId })
+      )));
+      const existingLapAssignmentIds = new Set(existingSelectedLapRows.map((round) => round.assignmentId));
+      const stagedLapByAssignment = new Map(stagedLapRows.map((round) => [round.assignmentId, round]));
+      const savedLapRows = await Promise.all(parsedRows
+        .filter((row) => !row.isDisqualified && Boolean(row.assignmentId && row.lapTimeSec))
+        .map((row) => ({ assignmentId: row.assignmentId, lapTimeSec: row.lapTimeSec as number }))
+        .sort((first, second) => first.lapTimeSec - second.lapTimeSec)
+        .map((row, index) => {
+          const savedRound = raceRounds.find((round) => round.roundNumber === selectedLapNumber && round.assignmentId === row.assignmentId);
+          const payload = {
+            assignmentId: row.assignmentId,
+            roundNumber: selectedLapNumber,
+            position: index + 1,
+            lapTimeSec: row.lapTimeSec,
+          };
+          return savedRound?.roundId && savedRound.roundId > 0
+            ? raceRoundService.updateRound(savedRound.roundId, payload)
+            : raceRoundService.createRound(payload);
+        }));
+
+      const savedLapByAssignment = new Map(savedLapRows.map((round) => [round.assignmentId, round]));
+      const createdLapRows = savedLapRows.filter((round) => !existingLapAssignmentIds.has(round.assignmentId));
+      const nextRaceRounds = [
+        ...raceRounds.map((round) => {
+          if (round.roundNumber !== selectedLapNumber) return round;
+          return savedLapByAssignment.get(round.assignmentId) ?? stagedLapByAssignment.get(round.assignmentId) ?? round;
+        }),
+        ...createdLapRows,
+      ].sort((first, second) => first.roundNumber - second.roundNumber || first.position - second.position || first.assignmentId - second.assignmentId);
+
+      const totalTimes = new Map<number, number>();
+      nextRaceRounds.forEach((round) => {
+        if (round.assignmentId > 0 && round.lapTimeSec !== undefined && round.lapTimeSec > 0) {
+          totalTimes.set(round.assignmentId, (totalTimes.get(round.assignmentId) ?? 0) + round.lapTimeSec);
+        }
+      });
       const qualifiedResults = parsedRows
-        .filter((row) => !row.isDisqualified && Boolean(row.assignmentId && row.finishTimeSec))
-        .map((row) => ({ assignmentId: row.assignmentId, finishTimeSec: row.finishTimeSec as number }))
+        .filter((row) => !row.isDisqualified && Boolean(row.assignmentId && totalTimes.get(row.assignmentId)))
+        .map((row) => ({ assignmentId: row.assignmentId, finishTimeSec: totalTimes.get(row.assignmentId) as number }))
         .sort((first, second) => first.finishTimeSec - second.finishTimeSec)
         .map((row, index) => ({ assignmentId: row.assignmentId, finishPosition: index + 1, finishTimeSec: row.finishTimeSec, isDisqualified: false, disqualifyReason: undefined }));
       const disqualifiedResults = parsedRows
@@ -528,9 +701,10 @@ const RaceControlPage = () => {
       const nextDraft = draftResults.length > 0
         ? await raceOperationsService.updateDraft(normalizedRaceId, { results })
         : await raceOperationsService.createDraft(normalizedRaceId, { results });
+      setRaceRounds(nextRaceRounds);
       setDraftResults(nextDraft.results);
       setDraftStatus(nextDraft.status);
-      setMessage('Draft results saved with Chief review decisions.');
+      setMessage('Lap ' + selectedLapNumber + ' times saved. Overall draft was recalculated.');
       await loadRaceData(normalizedRaceId, refereeRole);
     });
   };
@@ -691,12 +865,12 @@ const RaceControlPage = () => {
                     <ResultViewSelect value={selectedView} lapNumbers={lapNumbers} onChange={setSelectedView} />
                   </div>
                   {selectedView === 'overall' ? (
-                    <ChiefDraftTable participants={reviewedParticipants} disqualifiedAssignmentIds={disqualifiedAssignmentIds} disqualifyReasons={disqualifyReasons} draftByAssignment={draftByAssignment} timeDrafts={timeDrafts} isBusy={isBusy || isLoadingRaceData} onReturn={returnParticipantToInspection} onTimeChange={(assignmentId, value) => setTimeDrafts((current) => ({ ...current, [String(assignmentId)]: value }))} />
+                    <ReadOnlyResultTable results={overallDraftResults} isActionDisabled={isBusy || isLoadingRaceData} onDisqualify={openOverallDisqualification} />
                   ) : (
-                    <LapResultTable rows={selectedLapRows} participantByAssignment={participantByAssignment} />
+                    <ChiefLapDraftTable rows={selectedLapRows} participantByAssignment={participantByAssignment} disqualifiedAssignmentIds={disqualifiedAssignmentIds} disqualifyReasons={disqualifyReasons} lapTimeDrafts={lapTimeDrafts} isBusy={isBusy || isLoadingRaceData} onLapTimeChange={(lapNumber, assignmentId, value) => setLapTimeDrafts((current) => ({ ...current, [getLapDraftKey(lapNumber, assignmentId)]: value }))} />
                   )}
                   <div className="mt-5 flex flex-wrap justify-end gap-3 border-t border-outline-variant pt-4">
-                    <button type="button" onClick={() => void handleSaveDraft()} disabled={isBusy || selectedView !== 'overall' || reviewedParticipants.length === 0} className="inline-flex cursor-pointer items-center gap-2 rounded-md bg-secondary px-5 py-3 text-body-sm font-bold text-white transition-opacity hover:bg-opacity-90 disabled:cursor-not-allowed disabled:opacity-50"><Save className="h-4 w-4" /> Save draft</button>
+                    <button type="button" onClick={() => void handleSaveDraft()} disabled={isBusy || !selectedLapNumber || reviewedParticipants.length === 0} className="inline-flex cursor-pointer items-center gap-2 rounded-md bg-secondary px-5 py-3 text-body-sm font-bold text-white transition-opacity hover:bg-opacity-90 disabled:cursor-not-allowed disabled:opacity-50"><Save className="h-4 w-4" /> Save draft</button>
                     <button type="button" onClick={handleRequestConfirmResults} disabled={isBusy || draftResults.length === 0} className="inline-flex cursor-pointer items-center gap-2 rounded-md border border-primary/40 px-5 py-3 text-body-sm font-bold text-primary transition-colors hover:bg-primary/10 disabled:cursor-not-allowed disabled:opacity-50"><CheckCircle2 className="h-4 w-4" /> Confirm result</button>
                   </div>
                 </section>
@@ -747,7 +921,7 @@ const RaceControlPage = () => {
           </div>
         )}
         {selectedReportDetail && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 px-4 py-6" role="presentation">
+          <ModalPortal>
             <section className="max-h-[calc(100vh-3rem)] w-full max-w-3xl overflow-y-auto rounded-lg border border-outline-variant bg-white p-6 shadow-2xl" role="dialog" aria-modal="true" aria-labelledby="submitted-report-detail-title">
               <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                 <SectionTitle icon={<Eye className="h-5 w-5" />} eyebrow="Submitted reports" title={'Report #' + selectedReportDetail.reportId} />
@@ -767,10 +941,10 @@ const RaceControlPage = () => {
                 <ReportDetailNote label="Result notes" value={selectedReportDetail.resultNotes} />
               </div>
             </section>
-          </div>
+          </ModalPortal>
         )}
         {isReportHistoryOpen && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 px-4 py-6" role="presentation">
+          <ModalPortal>
             <section className="max-h-[calc(100vh-3rem)] w-full max-w-4xl overflow-y-auto rounded-lg border border-outline-variant bg-white p-6 shadow-2xl" role="dialog" aria-modal="true" aria-labelledby="report-history-title">
               <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                 <SectionTitle icon={<FileText className="h-5 w-5" />} eyebrow="Report history" title="Recent reports" />
@@ -778,7 +952,7 @@ const RaceControlPage = () => {
               </div>
               <ReportTable reports={reports} />
             </section>
-          </div>
+          </ModalPortal>
         )}
 
         {inspectionAction && (
@@ -792,8 +966,19 @@ const RaceControlPage = () => {
             onClose={closeInspectionAction}
           />
         )}
+        {overallDisqualificationTarget && (
+          <OverallDisqualificationModal
+            target={overallDisqualificationTarget}
+            note={overallDisqualificationNote}
+            error={overallDisqualificationError}
+            isBusy={isBusy || isLoadingRaceData}
+            onNoteChange={setOverallDisqualificationNote}
+            onConfirm={confirmOverallDisqualification}
+            onClose={closeOverallDisqualification}
+          />
+        )}
         {isStartConfirmOpen && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 px-4 py-6" role="presentation">
+          <ModalPortal>
             <section className="w-full max-w-md rounded-lg border border-outline-variant bg-white p-6 shadow-2xl" role="dialog" aria-modal="true" aria-labelledby="start-race-confirm-title">
               <div className="flex items-start gap-3">
                 <span className="mt-1 inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary"><Flag className="h-5 w-5" /></span>
@@ -813,11 +998,11 @@ const RaceControlPage = () => {
                 <button type="button" onClick={() => void handleStartRace()} disabled={isBusy} className="inline-flex cursor-pointer items-center justify-center gap-2 rounded-md bg-primary px-5 py-2.5 text-body-sm font-bold text-on-primary transition-opacity hover:bg-opacity-90 disabled:cursor-not-allowed disabled:opacity-50"><Flag className="h-4 w-4" /> {isBusy ? 'Starting...' : 'Start race'}</button>
               </div>
             </section>
-          </div>
+          </ModalPortal>
         )}
 
         {isResultConfirmOpen && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 px-4 py-6" role="presentation">
+          <ModalPortal>
             <section className="w-full max-w-md rounded-lg border border-outline-variant bg-white p-6 shadow-2xl" role="dialog" aria-modal="true" aria-labelledby="confirm-result-title">
               <div className="flex items-start gap-3">
                 <span className="mt-1 inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-secondary/10 text-secondary"><CheckCircle2 className="h-5 w-5" /></span>
@@ -837,8 +1022,9 @@ const RaceControlPage = () => {
                 <button type="button" onClick={() => void handleConfirmResults()} disabled={isBusy} className="inline-flex cursor-pointer items-center justify-center gap-2 rounded-md bg-secondary px-5 py-2.5 text-body-sm font-bold text-white transition-opacity hover:bg-opacity-90 disabled:cursor-not-allowed disabled:opacity-50"><CheckCircle2 className="h-4 w-4" /> {isBusy ? 'Confirming...' : 'Confirm result'}</button>
               </div>
             </section>
-          </div>
-        )}      </div>
+          </ModalPortal>
+        )}
+      </div>
     </main>
   );
 };
@@ -915,6 +1101,59 @@ const InspectionWorkflowBadge = ({ label }: { label: string }) => {
   return <span className={['inline-flex rounded-md border px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider', className].join(' ')}>{label}</span>;
 };
 
+const ModalPortal = ({ children }: { children: ReactNode }) => {
+  const dialog = (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 px-4 py-6" role="presentation">
+      {children}
+    </div>
+  );
+
+  return typeof document === 'undefined' ? null : createPortal(dialog, document.body);
+};
+
+const OverallDisqualificationModal = ({
+  target,
+  note,
+  error,
+  isBusy,
+  onNoteChange,
+  onConfirm,
+  onClose,
+}: {
+  target: OverallDisqualificationTarget;
+  note: string;
+  error: string;
+  isBusy: boolean;
+  onNoteChange: (value: string) => void;
+  onConfirm: () => void;
+  onClose: () => void;
+}) => (
+  <ModalPortal>
+    <section className="max-h-[calc(100vh-3rem)] w-full max-w-xl overflow-y-auto rounded-lg border border-outline-variant bg-white p-6 shadow-2xl" role="dialog" aria-modal="true" aria-labelledby="overall-disqualification-title">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div className="flex min-w-0 items-start gap-3">
+          <span className="mt-1 inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-error-container/40 text-error"><Flag className="h-5 w-5" /></span>
+          <div className="min-w-0">
+            <h2 id="overall-disqualification-title" className="font-display text-title-large font-bold text-primary">Disqualify horse?</h2>
+            <p className="mt-2 text-body-sm text-on-surface-variant">This horse will be marked as disqualified in the Chief draft result.</p>
+          </div>
+        </div>
+        <button type="button" onClick={onClose} disabled={isBusy} className="cursor-pointer rounded-md border border-outline-variant px-4 py-2.5 text-body-sm font-bold text-on-surface-variant transition-colors hover:border-primary hover:text-primary disabled:cursor-not-allowed disabled:opacity-50">Close</button>
+      </div>
+      <form className="mt-5 grid gap-4" onSubmit={(event) => { event.preventDefault(); onConfirm(); }}>
+        <div className="rounded-md border border-outline-variant bg-surface-container-low p-4">
+          <HorseIdentity horseName={target.horseName} subtext={'Assignment #' + target.assignmentId} />
+        </div>
+        <TextArea label="Disqualified note" value={note} onChange={onNoteChange} placeholder="Required reason for disqualification" />
+        {error && <div className="rounded-md border border-error/30 bg-error-container/20 px-4 py-3 text-body-sm font-semibold text-error">{error}</div>}
+        <div className="flex flex-col-reverse gap-3 border-t border-outline-variant pt-4 sm:flex-row sm:justify-end">
+          <button type="button" onClick={onClose} disabled={isBusy} className="cursor-pointer rounded-md border border-outline-variant px-4 py-2.5 text-body-sm font-bold text-on-surface-variant transition-colors hover:border-primary hover:text-primary disabled:cursor-not-allowed disabled:opacity-50">Cancel</button>
+          <button type="submit" disabled={isBusy} className="inline-flex cursor-pointer items-center justify-center gap-2 rounded-md border border-error/40 px-5 py-2.5 text-body-sm font-bold text-error transition-colors hover:bg-error-container/20 disabled:cursor-not-allowed disabled:opacity-50"><Flag className="h-4 w-4" /> Confirm disqualified</button>
+        </div>
+      </form>
+    </section>
+  </ModalPortal>
+);
 const ChiefInspectionActionModal = ({
   action,
   note,
@@ -935,7 +1174,7 @@ const ChiefInspectionActionModal = ({
   const isApprove = action.status === 'approved';
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 px-4 py-6" role="presentation">
+    <ModalPortal>
       <section className="w-full max-w-xl rounded-lg border border-outline-variant bg-white p-6 shadow-2xl" role="dialog" aria-modal="true" aria-labelledby="chief-inspection-action-title">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <SectionTitle icon={isApprove ? <CheckCircle2 className="h-5 w-5" /> : <Flag className="h-5 w-5" />} eyebrow="Chief inspection" title={isApprove ? 'Approve inspection' : 'Reject inspection'} />
@@ -956,81 +1195,94 @@ const ChiefInspectionActionModal = ({
           </div>
         </form>
       </section>
-    </div>
+    </ModalPortal>
   );
 };
-const ChiefDraftTable = ({
-  participants,
+const ChiefLapDraftTable = ({
+  rows,
+  participantByAssignment,
   disqualifiedAssignmentIds,
   disqualifyReasons,
-  draftByAssignment,
-  timeDrafts,
+  lapTimeDrafts,
   isBusy,
-  onReturn,
-  onTimeChange,
+  onLapTimeChange,
 }: {
-  participants: ChiefRaceParticipantItem[];
+  rows: RaceRoundItem[];
+  participantByAssignment: Map<number, ChiefRaceParticipantItem>;
   disqualifiedAssignmentIds: Set<number>;
   disqualifyReasons: DisqualificationReasonMap;
-  draftByAssignment: Map<number, RaceResultWorkflowItem>;
-  timeDrafts: DraftTimeMap;
+  lapTimeDrafts: LapTimeDraftMap;
   isBusy: boolean;
-  onReturn: (assignmentId: number) => void;
-  onTimeChange: (assignmentId: number, value: string) => void;
+  onLapTimeChange: (lapNumber: number, assignmentId: number, value: string) => void;
 }) => (
   <div className="mt-5 overflow-x-auto rounded-lg border border-outline-variant bg-white">
-    <table className="w-full min-w-[840px] text-left">
-      <thead className="border-b border-outline-variant bg-surface-container"><tr><TableHead>Horse</TableHead><TableHead>Jockey</TableHead><TableHead>Gate</TableHead><TableHead>Review</TableHead><TableHead>Saved rank</TableHead><TableHead>Total time</TableHead><TableHead>Action</TableHead></tr></thead>
+    <table className="w-full min-w-[760px] text-left">
+      <thead className="border-b border-outline-variant bg-surface-container"><tr><TableHead>Lap rank</TableHead><TableHead>Horse</TableHead><TableHead>Jockey</TableHead><TableHead>Lap time</TableHead><TableHead>Recorded</TableHead></tr></thead>
       <tbody className="divide-y divide-outline-variant">
-        {participants.map((participant) => {
-          const assignmentId = getAssignmentId(participant);
-          const saved = draftByAssignment.get(assignmentId);
-          const isDisqualified = disqualifiedAssignmentIds.has(assignmentId) || Boolean(saved?.isDisqualified);
-          const reason = disqualifyReasons[String(assignmentId)] || saved?.disqualifyReason || '-';
+        {rows.map((row) => {
+          const participant = participantByAssignment.get(row.assignmentId);
+          const isDisqualified = disqualifiedAssignmentIds.has(row.assignmentId);
+          const reason = disqualifyReasons[String(row.assignmentId)] || '-';
           return (
-            <tr key={assignmentId} className="transition-colors hover:bg-surface-container-low/70">
-              <td className="px-4 py-4"><HorseIdentity horseName={participant.horseName} avatarUrl={participant.horseAvatarUrl} /></td>
-              <td className="px-4 py-4 text-body-sm font-semibold text-on-surface-variant">{participant.jockeyFullName ?? '-'}</td>
-              <td className="px-4 py-4 text-body-sm font-bold text-primary">{participant.gateNumber ?? '-'}</td>
-              <td className="px-4 py-4">{isDisqualified ? <StatusBadge status="disqualified" /> : <StatusBadge status="qualified" />}</td>
-              <td className="px-4 py-4 text-body-sm text-on-surface-variant">{isDisqualified ? 'DQ' : saved?.finishPosition ?? '-'}</td>
+            <tr key={row.roundId} className="transition-colors hover:bg-surface-container-low/70">
+              <td className="px-4 py-4 font-display text-xl font-extrabold text-primary">{row.position > 0 ? '#' + row.position : '-'}</td>
+              <td className="px-4 py-4"><HorseIdentity horseName={participant?.horseName ?? row.horseName} avatarUrl={participant?.horseAvatarUrl} subtext={'Assignment #' + row.assignmentId} /></td>
+              <td className="px-4 py-4 text-body-sm font-semibold text-on-surface-variant">{participant?.jockeyFullName ?? row.jockeyFullName ?? '-'}</td>
               <td className="px-4 py-4">
                 {isDisqualified ? (
                   <span className="block max-w-[220px] break-words text-body-sm font-semibold text-error">{reason}</span>
                 ) : (
-                  <input type="text" inputMode="decimal" value={timeDrafts[String(assignmentId)] ?? formatSecondsInput(saved?.finishTimeSec)} onChange={(event) => onTimeChange(assignmentId, event.target.value)} placeholder="92.35 or 1:32.35" disabled={isBusy} className="w-full rounded-md border border-outline-variant bg-surface-container-low px-3 py-2 text-body-sm font-semibold focus:border-primary focus:outline-none disabled:cursor-not-allowed disabled:opacity-60" aria-label={'Total time for ' + (participant.horseName ?? 'assignment ' + assignmentId)} />
+                  <input type="text" inputMode="decimal" value={lapTimeDrafts[getLapDraftKey(row.roundNumber, row.assignmentId)] ?? formatSecondsInput(row.lapTimeSec)} onChange={(event) => onLapTimeChange(row.roundNumber, row.assignmentId, event.target.value)} placeholder="23.45 or 0:23.45" disabled={isBusy} className="w-full rounded-md border border-outline-variant bg-surface-container-low px-3 py-2 text-body-sm font-semibold focus:border-primary focus:outline-none disabled:cursor-not-allowed disabled:opacity-60" aria-label={'Lap ' + row.roundNumber + ' time for ' + (participant?.horseName ?? row.horseName ?? 'assignment ' + row.assignmentId)} />
                 )}
               </td>
-              <td className="px-4 py-4"><button type="button" onClick={() => onReturn(assignmentId)} disabled={isBusy} className="cursor-pointer rounded-md border border-outline-variant px-3 py-2 text-label-sm font-bold text-on-surface-variant transition-colors hover:border-primary hover:text-primary disabled:cursor-not-allowed disabled:opacity-50">Back to check</button></td>
+              <td className="px-4 py-4 text-body-sm text-on-surface-variant">{formatDateTime(row.recordedAt)}</td>
             </tr>
           );
         })}
-        {participants.length === 0 && <TableEmpty colSpan={7} text="Checked horses will appear here." />}
-      </tbody>
-    </table>
-  </div>
-);
-const ReadOnlyResultTable = ({ results }: { results: RaceResultWorkflowItem[] }) => (
-  <div className="mt-5 overflow-x-auto rounded-lg border border-outline-variant bg-white">
-    <table className="w-full min-w-[720px] text-left">
-      <thead className="border-b border-outline-variant bg-surface-container"><tr><TableHead>Rank</TableHead><TableHead>Horse</TableHead><TableHead>Jockey</TableHead><TableHead>Gate</TableHead><TableHead>Total time</TableHead><TableHead>Status</TableHead></tr></thead>
-      <tbody className="divide-y divide-outline-variant">
-        {results.map((result, index) => (
-          <tr key={String(result.resultId ?? result.assignmentId) + '-' + index} className="transition-colors hover:bg-surface-container-low/70">
-            <td className="px-4 py-4 font-display text-xl font-extrabold text-primary">{result.isDisqualified ? 'DQ' : '#' + (result.finishPosition ?? index + 1)}</td>
-            <td className="px-4 py-4"><HorseIdentity horseName={result.horseName} subtext={'Assignment #' + result.assignmentId} /></td>
-            <td className="px-4 py-4 text-body-sm font-semibold text-on-surface-variant">{result.jockeyFullName ?? '-'}</td>
-            <td className="px-4 py-4 text-body-sm font-bold text-primary">{result.gateNumber ?? '-'}</td>
-            <td className="px-4 py-4 text-body-sm font-bold text-secondary">{formatSeconds(result.finishTimeSec)}</td>
-            <td className="px-4 py-4"><StatusBadge status={result.isDisqualified ? 'disqualified' : result.status} /></td>
-          </tr>
-        ))}
-        {results.length === 0 && <TableEmpty colSpan={6} text="Chief draft results are not available yet." />}
+        {rows.length === 0 && <TableEmpty colSpan={5} text="Checked horses will appear here." />}
       </tbody>
     </table>
   </div>
 );
 
+const ReadOnlyResultTable = ({
+  results,
+  isActionDisabled = false,
+  onDisqualify,
+}: {
+  results: RaceResultWorkflowItem[];
+  isActionDisabled?: boolean;
+  onDisqualify?: (result: RaceResultWorkflowItem) => void;
+}) => {
+  const hasAction = Boolean(onDisqualify);
+  return (
+    <div className="mt-5 overflow-x-auto rounded-lg border border-outline-variant bg-white">
+      <table className={['w-full text-left', hasAction ? 'min-w-[840px]' : 'min-w-[720px]'].join(' ')}>
+        <thead className="border-b border-outline-variant bg-surface-container"><tr><TableHead>Rank</TableHead><TableHead>Horse</TableHead><TableHead>Jockey</TableHead><TableHead>Gate</TableHead><TableHead>Total time</TableHead><TableHead>Status</TableHead>{hasAction && <TableHead>Action</TableHead>}</tr></thead>
+        <tbody className="divide-y divide-outline-variant">
+          {results.map((result, index) => (
+            <tr key={String(result.resultId ?? result.assignmentId) + '-' + index} className="transition-colors hover:bg-surface-container-low/70">
+              <td className="px-4 py-4 font-display text-xl font-extrabold text-primary">{result.isDisqualified ? 'DQ' : '#' + (result.finishPosition ?? index + 1)}</td>
+              <td className="px-4 py-4"><HorseIdentity horseName={result.horseName} subtext={'Assignment #' + result.assignmentId} /></td>
+              <td className="px-4 py-4 text-body-sm font-semibold text-on-surface-variant">{result.jockeyFullName ?? '-'}</td>
+              <td className="px-4 py-4 text-body-sm font-bold text-primary">{result.gateNumber ?? '-'}</td>
+              <td className="px-4 py-4 text-body-sm font-bold text-secondary">{formatSeconds(result.finishTimeSec)}</td>
+              <td className="px-4 py-4"><StatusBadge status={result.isDisqualified ? 'disqualified' : result.status} /></td>
+              {hasAction && (
+                <td className="px-4 py-4">
+                  <button type="button" onClick={() => onDisqualify?.(result)} disabled={isActionDisabled || result.isDisqualified} className="inline-flex cursor-pointer items-center justify-center gap-2 rounded-md border border-error/40 px-3 py-2 text-label-sm font-bold text-error transition-colors hover:bg-error-container/20 disabled:cursor-not-allowed disabled:opacity-50">
+                    <Flag className="h-4 w-4" /> Disqualified
+                  </button>
+                </td>
+              )}
+            </tr>
+          ))}
+          {results.length === 0 && <TableEmpty colSpan={hasAction ? 7 : 6} text="Chief draft results are not available yet." />}
+        </tbody>
+      </table>
+    </div>
+  );
+};
 const LapResultTable = ({ rows, participantByAssignment }: { rows: RaceRoundItem[]; participantByAssignment?: Map<number, ChiefRaceParticipantItem> }) => (
   <div className="mt-5 overflow-x-auto rounded-lg border border-outline-variant bg-white">
     <table className="w-full min-w-[680px] text-left">
@@ -1040,7 +1292,7 @@ const LapResultTable = ({ rows, participantByAssignment }: { rows: RaceRoundItem
           const participant = participantByAssignment?.get(row.assignmentId);
           return (
             <tr key={row.roundId} className="transition-colors hover:bg-surface-container-low/70">
-              <td className="px-4 py-4 font-display text-xl font-extrabold text-primary">#{row.position}</td>
+              <td className="px-4 py-4 font-display text-xl font-extrabold text-primary">{row.position > 0 ? '#' + row.position : '-'}</td>
               <td className="px-4 py-4"><HorseIdentity horseName={participant?.horseName ?? row.horseName} avatarUrl={participant?.horseAvatarUrl} subtext={'Assignment #' + row.assignmentId} /></td>
               <td className="px-4 py-4 text-body-sm font-semibold text-on-surface-variant">{participant?.jockeyFullName ?? row.jockeyFullName ?? '-'}</td>
               <td className="px-4 py-4 text-body-sm font-bold text-secondary">{formatSeconds(row.lapTimeSec)}</td>

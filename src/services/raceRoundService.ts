@@ -17,13 +17,15 @@ export type RaceRoundItem = {
   lapCount?: number;
 };
 
-export type RaceRoundSaveRequest = {
+export type RaceRoundCreateRequest = {
   assignmentId: number;
   roundNumber: number;
   position: number;
   lapTimeSec?: number;
   recordedAt?: string;
 };
+
+export type RaceRoundUpdateRequest = Partial<RaceRoundCreateRequest>;
 
 const asString = (value: unknown) => (
   value === null || value === undefined ? undefined : String(value)
@@ -67,12 +69,12 @@ const toApiInstant = (value?: string) => {
   return Number.isNaN(parsed.getTime()) ? value : parsed.toISOString();
 };
 
-const toPayload = (data: RaceRoundSaveRequest) => ({
-  assignmentId: Number(data.assignmentId),
-  roundNumber: Number(data.roundNumber),
-  position: Number(data.position),
-  lapTimeSec: data.lapTimeSec === undefined ? undefined : Number(data.lapTimeSec.toFixed(2)),
-  recordedAt: toApiInstant(data.recordedAt),
+const toPayload = (data: RaceRoundUpdateRequest) => ({
+  ...(data.assignmentId !== undefined ? { assignmentId: Number(data.assignmentId) } : {}),
+  ...(data.roundNumber !== undefined ? { roundNumber: Number(data.roundNumber) } : {}),
+  ...(data.position !== undefined ? { position: Number(data.position) } : {}),
+  ...(data.lapTimeSec !== undefined ? { lapTimeSec: Number(data.lapTimeSec.toFixed(2)) } : {}),
+  ...(data.recordedAt !== undefined ? { recordedAt: toApiInstant(data.recordedAt) } : {}),
 });
 
 export const raceRoundService = {
@@ -95,12 +97,12 @@ export const raceRoundService = {
     return mapRound(unwrapApiData<RawRecord>(response));
   },
 
-  async createRound(data: RaceRoundSaveRequest): Promise<RaceRoundItem> {
+  async createRound(data: RaceRoundCreateRequest): Promise<RaceRoundItem> {
     const response = await apiClient.post('/api/race-rounds/create', toPayload(data));
     return mapRound(unwrapApiData<RawRecord>(response));
   },
 
-  async updateRound(roundId: number | string, data: RaceRoundSaveRequest): Promise<RaceRoundItem> {
+  async updateRound(roundId: number | string, data: RaceRoundUpdateRequest): Promise<RaceRoundItem> {
     const response = await apiClient.put(`/api/race-rounds/update/${roundId}`, toPayload(data));
     return mapRound(unwrapApiData<RawRecord>(response));
   },

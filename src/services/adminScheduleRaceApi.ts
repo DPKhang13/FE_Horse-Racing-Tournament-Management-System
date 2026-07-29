@@ -445,18 +445,6 @@ export const adminScheduleRaceApi = {
     };
   },
 
-  async startRace(
-    raceId: number | string,
-    data: { forceCloseBetting?: boolean; note?: string } = {},
-  ): Promise<string> {
-    const response = await apiClient.patch(`/api/v1/admin/races/${raceId}/start`, {
-      forceCloseBetting: data.forceCloseBetting ?? true,
-      note: data.note?.trim() || undefined,
-    });
-
-    return getApiResponseMessage(response);
-  },
-
   async openBetting(raceId: number | string): Promise<string> {
     const response = await apiClient.patch(`/api/v1/admin/races/${raceId}/open-betting`);
     return getApiResponseMessage(response);

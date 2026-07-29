@@ -21,6 +21,7 @@ export type RefereeAssignedRaceItem = {
   status: string;
   scheduledAt?: string;
   predictionClosesAt?: string;
+  lapCount?: number;
   refereeRole?: string;
   assignmentId?: number;
   assignedAt?: string;
@@ -242,6 +243,7 @@ const mapAssignedRace = (raw: RawObject): RefereeAssignedRaceItem => ({
   status: asString(raw.status, 'scheduled'),
   scheduledAt: asString(raw.scheduledAt) || undefined,
   predictionClosesAt: asString(raw.predictionClosesAt) || undefined,
+  lapCount: asOptionalNumber(raw.lapCount),
   refereeRole: formatRefereeRoleLabel(raw.refereeRole, '') || undefined,
   assignmentId: asOptionalNumber(raw.assignmentId),
   assignedAt: asString(raw.assignedAt) || undefined,
