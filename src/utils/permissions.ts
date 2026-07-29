@@ -104,10 +104,12 @@ export const navigationItems: NavigationItem[] = [
   { label: 'Dashboard', to: '/owner-dashboard', allowedRoles: ['horse_owner'], requiresAuth: true },
   { label: 'Dashboard', to: '/jockey-dashboard', allowedRoles: ['jockey'], requiresAuth: true },
   { label: 'Tournaments', to: '/tournaments', allowedRoles: ['admin'], requiresAuth: true },
+  { label: 'Prize Awards', to: '/admin/prize-awards', allowedRoles: ['admin'], requiresAuth: true },
   { label: 'Schedule', to: '/admin/schedule', allowedRoles: ['admin'], requiresAuth: true },
   { label: 'Races', to: '/admin/races', allowedRoles: ['admin'], requiresAuth: true },
   { label: 'Race Results', to: '/admin/race-results', allowedRoles: ['admin'], requiresAuth: true },
   { label: 'Bet Management', to: '/admin/bets', allowedRoles: ['admin'], requiresAuth: true },
+  { label: 'Withdrawals', to: '/admin/withdrawals', allowedRoles: ['admin'], requiresAuth: true },
   { label: 'Horses', to: '/admin/horses', allowedRoles: ['admin'], requiresAuth: true },
   { label: 'Race Registrations', to: '/admin/registrations', allowedRoles: ['admin'], requiresAuth: true },
   { label: 'Race Control', to: '/race-control', allowedRoles: ['race_referee'], requiresAuth: true },
@@ -123,3 +125,4 @@ export const navigationItems: NavigationItem[] = [
   { label: 'Tracking', to: '/tracking', allowedRoles: ['spectator'], requiresAuth: true },
   { label: 'Notifications', to: '/notifications', allowedRoles: AUTHENTICATED_ROLES, requiresAuth: true },
 ];
+

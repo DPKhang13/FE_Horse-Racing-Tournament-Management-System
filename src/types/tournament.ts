@@ -53,6 +53,10 @@ export type Tournament = {
   createdAt?: string;
   updatedAt?: string;
   responseMessage?: string;
+  closeRegistrationSummary?: {
+    rejectedPendingRegistrations: number;
+    cancelledUnconfirmedRegistrations: number;
+  };
 };
 
 export type TournamentMutationData = {
@@ -97,4 +101,24 @@ export type UpdatePrizeRequest = {
   prizeName: string;
   amount: number;
   note: string;
+};
+
+export type PrizeAwardStatus = 'announced' | 'awarded';
+
+export type PrizeAwardResponse = {
+  awardId: number;
+  prizeId: number;
+  tournamentId: number;
+  raceId: number;
+  resultId: number;
+  horseId: number;
+  ownerId: number;
+  finishPosition: number;
+  amount: number;
+  status: PrizeAwardStatus;
+  awardedAt?: string;
+  horseName: string;
+  ownerFullName: string;
+  tournamentName: string;
+  prizeName: string;
 };

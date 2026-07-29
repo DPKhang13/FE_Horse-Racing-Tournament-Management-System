@@ -1,4 +1,4 @@
-import type { RankingEntry } from '../../../types/raceResult';
+import type { RankingEntry } from '../../types/raceResult';
 import RankBadge from './RankBadge';
 
 type RankingTableProps = {

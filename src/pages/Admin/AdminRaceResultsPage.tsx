@@ -1,8 +1,8 @@
-import { useEffect, useMemo, useState, type FormEvent } from 'react';
+import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
+import { createPortal } from 'react-dom';
 import {
   CheckCircle2,
   Edit3,
-  FilePlus2,
   Flag,
   RefreshCw,
   Search,
@@ -12,13 +12,12 @@ import {
   X,
 } from 'lucide-react';
 import { useAdminRaceResults } from '../../hooks/useAdminRaceResults';
-import { adminScheduleRaceApi, type AdminRaceItem, type AdminTournamentOption } from './adminScheduleRaceApi';
-import type {
-  AdminRaceResult,
-  AdminRaceResultCreatePayload,
-  AdminRaceResultDraftItem,
-  AdminRaceResultUpdatePayload,
-  RaceResultId,
+import { adminScheduleRaceApi, type AdminRaceItem, type AdminTournamentOption } from '../../services/adminScheduleRaceApi';
+import {
+  adminRaceResultService,
+  type AdminRaceResult,
+  type AdminRaceResultDraftItem,
+  type RaceResultId,
 } from '../../services/adminRaceResultService';
 
 type ResultFormState = {
@@ -68,12 +67,6 @@ const toOptionalNumber = (value: string) => {
   return Number.isFinite(number) ? number : undefined;
 };
 
-/** Converts a numeric ID when possible while retaining non-numeric backend IDs. */
-const toResultId = (value: string): RaceResultId => {
-  const normalized = value.trim();
-  const number = Number(normalized);
-  return normalized && Number.isFinite(number) ? number : normalized;
-};
 
 /** Maps an API result into editable form values. */
 const toFormState = (result: AdminRaceResult): ResultFormState => ({
@@ -92,15 +85,11 @@ const toFormState = (result: AdminRaceResult): ResultFormState => ({
   disqualifyReason: result.disqualifyReason ?? '',
 });
 
-/** Builds the payload shared by create and update requests. */
-const toUpdatePayload = (form: ResultFormState): AdminRaceResultUpdatePayload => ({
-  assignmentId: form.assignmentId.trim() ? toResultId(form.assignmentId) : undefined,
-  reportId: form.reportId.trim() ? toResultId(form.reportId) : undefined,
-  finalRound: toOptionalNumber(form.finalRound),
+type EditableResultPatch = Pick<AdminRaceResult, 'finishPosition' | 'finishTimeSec' | 'isDisqualified' | 'disqualifyReason'>;
+
+const toEditedResultPatch = (form: ResultFormState): EditableResultPatch => ({
   finishPosition: toOptionalNumber(form.finishPosition),
   finishTimeSec: toOptionalNumber(form.finishTimeSec),
-  pointsAwarded: toOptionalNumber(form.pointsAwarded),
-  status: form.status.trim() || undefined,
   isDisqualified: form.isDisqualified,
   disqualifyReason: form.isDisqualified ? form.disqualifyReason.trim() || undefined : undefined,
 });
@@ -220,9 +209,9 @@ const AdminRaceResultsPage = () => {
     resultList,
     isLoading,
     error,
+    setSelectedRaceId,
     fetchRaceResults,
-    handleCreate,
-    handleConfirm,
+    fetchAllResults,
     handlePublish,
     handleUpdateDraft,
   } = useAdminRaceResults();
@@ -235,17 +224,18 @@ const AdminRaceResultsPage = () => {
   const [raceIdFilter, setRaceIdFilter] = useState('');
   const [appliedRaceIdFilter, setAppliedRaceIdFilter] = useState('');
   const [form, setForm] = useState<ResultFormState>(initialForm);
-  const [editorMode, setEditorMode] = useState<'create' | 'edit' | null>(null);
+  const [editorMode, setEditorMode] = useState<'edit' | null>(null);
   const [editingResult, setEditingResult] = useState<AdminRaceResult | null>(null);
   const [editorError, setEditorError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [confirmTarget, setConfirmTarget] = useState<RaceResultGroup | null>(null);
   const [publishTarget, setPublishTarget] = useState<RaceResultGroup | null>(null);
 
   useEffect(() => {
     let isActive = true;
 
     queueMicrotask(() => {
+      void fetchAllResults();
+
       void adminScheduleRaceApi.getTournaments()
         .then((items) => {
           if (isActive) {
@@ -267,16 +257,20 @@ const AdminRaceResultsPage = () => {
     return () => {
       isActive = false;
     };
-  }, []);
+  }, [fetchAllResults]);
 
   useEffect(() => {
     if (!tournamentIdFilter) {
+      setTournamentRaces([]);
+      setIsTournamentRaceLoading(false);
       return undefined;
     }
 
     let isActive = true;
 
     queueMicrotask(() => {
+      setIsTournamentRaceLoading(true);
+
       void adminScheduleRaceApi.getRacesByTournament(tournamentIdFilter)
         .then((items) => {
           if (isActive) {
@@ -322,30 +316,14 @@ const AdminRaceResultsPage = () => {
 
   const groupedResults = useMemo(() => groupResultsByRace(filteredResults), [filteredResults]);
 
-  const raceOptions = useMemo(() => {
-    const options = new Map<string, string>();
-
-    resultList.forEach((result) => {
-      if (
-        result.raceId === undefined
-        || (tournamentIdFilter && (
-          result.tournamentId !== undefined
-            ? String(result.tournamentId) !== tournamentIdFilter
-            : !selectedTournamentRaceIds.has(String(result.raceId))
-        ))
-      ) {
-        return;
-      }
-
-      const value = String(result.raceId);
-      const displayNumber = result.raceNumber ?? result.raceId;
-      options.set(value, `Race #${String(displayNumber)}${result.raceName ? ` - ${result.raceName}` : ''}`);
-    });
-
-    return Array.from(options, ([value, label]) => ({ value, label }))
-      .sort((first, second) => first.label.localeCompare(second.label, undefined, { numeric: true }));
-  }, [resultList, selectedTournamentRaceIds, tournamentIdFilter]);
-
+  const raceOptions = useMemo(() => (
+    tournamentRaces
+      .map((race) => ({
+        value: String(race.raceId),
+        label: `Race #${String(race.raceNumber ?? race.raceId)}${race.name ? ` - ${race.name}` : ''}`,
+      }))
+      .sort((first, second) => first.label.localeCompare(second.label, undefined, { numeric: true }))
+  ), [tournamentRaces]);
   const selectedTournamentLabel = useMemo(
     () => tournaments.find((tournament) => String(tournament.tournamentId) === tournamentIdFilter)?.tournamentName,
     [tournamentIdFilter, tournaments],
@@ -358,35 +336,44 @@ const AdminRaceResultsPage = () => {
     disqualified: resultList.filter((item) => item.isDisqualified).length,
   }), [resultList]);
 
-  /** Applies the race filter to the already-loaded result records. */
+  const loadRaceResults = useCallback((raceId: string) => {
+    const normalizedRaceId = raceId.trim();
+    setRaceIdFilter(normalizedRaceId);
+    setAppliedRaceIdFilter(normalizedRaceId);
+  }, []);
+
   const handleFilterSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    setAppliedRaceIdFilter(raceIdFilter.trim());
+    loadRaceResults(raceIdFilter);
   };
 
-  /** Restores the unfiltered Admin result list. */
   const handleClearFilters = () => {
     setTournamentIdFilter('');
     setTournamentRaces([]);
     setIsTournamentRaceLoading(false);
     setRaceIdFilter('');
     setAppliedRaceIdFilter('');
+    setSelectedRaceId(null);
+    void fetchAllResults();
   };
-
   const handleTournamentChange = (tournamentId: string) => {
     setTournamentIdFilter(tournamentId);
     setTournamentRaces([]);
     setIsTournamentRaceLoading(Boolean(tournamentId));
     setRaceIdFilter('');
     setAppliedRaceIdFilter('');
+    setSelectedRaceId(null);
   };
 
-  /** Opens an empty create-result modal. */
-  const openCreateEditor = () => {
-    setForm(initialForm);
-    setEditingResult(null);
-    setEditorError('');
-    setEditorMode('create');
+  const handleRefreshResults = () => {
+    const normalizedRaceId = (appliedRaceIdFilter || raceIdFilter).trim();
+
+    if (normalizedRaceId) {
+      void fetchRaceResults(normalizedRaceId);
+      return;
+    }
+
+    void fetchAllResults();
   };
 
   /** Opens the selected result in the update modal. */
@@ -397,7 +384,7 @@ const AdminRaceResultsPage = () => {
     setEditorMode('edit');
   };
 
-  /** Closes and resets the create/update modal. */
+  /** Closes and resets the update modal. */
   const closeEditor = () => {
     if (isSubmitting) {
       return;
@@ -409,58 +396,71 @@ const AdminRaceResultsPage = () => {
     setForm(initialForm);
   };
 
-  /** Sends the create or update request represented by the active modal. */
+  /** Sends the race-level batch update represented by the active modal. */
   const handleEditorSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setEditorError('');
+
+    if (!editingResult) {
+      setEditorError('Select a result before saving.');
+      return;
+    }
 
     if (!form.assignmentId.trim()) {
       setEditorError('Assignment ID is required.');
       return;
     }
 
+    const raceId = editingResult.raceId;
+
+    if (raceId === undefined) {
+      setEditorError('This record does not contain a race ID.');
+      return;
+    }
+
     setIsSubmitting(true);
 
     try {
-      const payload = toUpdatePayload(form);
-      let succeeded = false;
+      const patch = toEditedResultPatch(form);
+      const latestResults = await adminRaceResultService.getResultsByRace(raceId);
+      const editingResultId = getResultId(editingResult);
+      let foundEditedResult = false;
+      let reportId: RaceResultId | undefined;
 
-      if (editorMode === 'create') {
-        const createPayload: AdminRaceResultCreatePayload = {
-          ...payload,
-          assignmentId: toResultId(form.assignmentId),
-        };
-        succeeded = await handleCreate(createPayload, null);
-      } else if (editingResult) {
-        const raceId = editingResult.raceId;
+      const draftItems = latestResults.map((result) => {
+        const isEditedResult = editingResultId !== undefined
+          ? String(getResultId(result)) === String(editingResultId)
+          : String(result.assignmentId) === String(editingResult.assignmentId);
+        const nextResult = isEditedResult ? { ...result, ...patch } : result;
 
-        if (raceId === undefined) {
-          setEditorError('This record does not contain a race ID.');
-          return;
+        if (isEditedResult) {
+          foundEditedResult = true;
         }
 
-        const editingResultId = getResultId(editingResult);
-        const draftItems = resultList
-          .filter((result) => String(result.raceId) === String(raceId))
-          .map((result) => {
-            const isEditedResult = editingResultId !== undefined
-              ? String(getResultId(result)) === String(editingResultId)
-              : String(result.assignmentId) === String(editingResult.assignmentId);
+        reportId = reportId ?? nextResult.reportId;
+        return toDraftItem(nextResult);
+      });
 
-            return toDraftItem(isEditedResult ? { ...result, ...payload } : result);
-          });
-
-        if (draftItems.length === 0 || draftItems.some((item) => item === null)) {
-          setEditorError('Every result in this race must contain an assignment ID.');
-          return;
-        }
-
-        succeeded = await handleUpdateDraft(raceId, {
-          results: draftItems.filter((item): item is AdminRaceResultDraftItem => item !== null),
-        }, null);
+      if (!foundEditedResult) {
+        setEditorError('The selected result no longer exists in this race. Reload and try again.');
+        return;
       }
 
+      if (draftItems.length === 0 || draftItems.some((item) => item === null)) {
+        setEditorError('Every result in this race must contain an assignment ID.');
+        return;
+      }
+
+      const succeeded = await handleUpdateDraft(raceId, {
+        reportId,
+        results: draftItems.filter((item): item is AdminRaceResultDraftItem => item !== null),
+      });
+
       if (succeeded) {
+        if (!appliedRaceIdFilter.trim()) {
+          void fetchAllResults();
+        }
+
         setEditorMode(null);
         setEditingResult(null);
         setForm(initialForm);
@@ -469,32 +469,6 @@ const AdminRaceResultsPage = () => {
       setIsSubmitting(false);
     }
   };
-
-  /** Confirms every draft result in the selected race. */
-  const handleConfirmDraft = async () => {
-    if (!confirmTarget || isSubmitting) {
-      return;
-    }
-
-    const raceId = confirmTarget.raceId;
-
-    if (raceId === undefined) {
-      return;
-    }
-
-    setIsSubmitting(true);
-
-    try {
-      const succeeded = await handleConfirm(raceId, null);
-
-      if (succeeded) {
-        setConfirmTarget(null);
-      }
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
   /** Publishes every draft result in the selected race after confirmation. */
   const handlePublishConfirmed = async () => {
     if (!publishTarget || isSubmitting) {
@@ -510,9 +484,13 @@ const AdminRaceResultsPage = () => {
     setIsSubmitting(true);
 
     try {
-      const succeeded = await handlePublish(raceId, null);
+      const succeeded = await handlePublish(raceId);
 
       if (succeeded) {
+        if (!appliedRaceIdFilter.trim()) {
+          await fetchAllResults();
+        }
+
         setPublishTarget(null);
       }
     } finally {
@@ -529,14 +507,6 @@ const AdminRaceResultsPage = () => {
               <p className="text-xs font-bold uppercase tracking-[0.18em] text-secondary">Admin operations</p>
               <h1 className="font-display mt-2 text-3xl font-extrabold text-primary md:text-4xl">Race Results</h1>
             </div>
-            <button
-              type="button"
-              onClick={openCreateEditor}
-              className="gold-gradient inline-flex items-center justify-center gap-2 rounded-lg px-5 py-3 text-sm font-bold text-on-primary"
-            >
-              <FilePlus2 className="h-4 w-4" />
-              Create result
-            </button>
           </div>
         </div>
       </section>
@@ -595,15 +565,12 @@ const AdminRaceResultsPage = () => {
                 <Flag className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-outline" />
                 <select
                   value={appliedRaceIdFilter}
-                  onChange={(event) => {
-                    setRaceIdFilter(event.target.value);
-                    setAppliedRaceIdFilter(event.target.value);
-                  }}
+                  onChange={(event) => loadRaceResults(event.target.value)}
                   disabled={isTournamentRaceLoading}
                   className="w-full appearance-none rounded-lg border border-outline-variant/60 bg-surface-container-lowest py-2.5 pl-10 pr-8 text-sm focus:border-primary focus:outline-none disabled:cursor-not-allowed disabled:opacity-60"
                   aria-label="Select race"
                 >
-                  <option value="">All races</option>
+                  <option value="">Select a race</option>
                   {appliedRaceIdFilter && !raceOptions.some((option) => option.value === appliedRaceIdFilter) && (
                     <option value={appliedRaceIdFilter}>Race #{appliedRaceIdFilter}</option>
                   )}
@@ -618,7 +585,7 @@ const AdminRaceResultsPage = () => {
                 Filter
               </button>
               {(tournamentIdFilter || appliedRaceIdFilter) && (
-                <button type="button" onClick={handleClearFilters} disabled={isLoading} className="rounded-lg border border-outline-variant/60 px-4 py-2.5 text-sm font-bold text-on-surface-variant disabled:opacity-60">
+                <button type="button" onClick={handleClearFilters} disabled={isLoading} className="rounded-lg border border-outline-variant bg-surface-container-low px-4 py-2.5 text-sm font-bold text-on-surface-variant transition-colors hover:border-primary hover:text-primary disabled:opacity-60">
                   Show all
                 </button>
               )}
@@ -638,7 +605,7 @@ const AdminRaceResultsPage = () => {
                   : `${groupedResults.length} race${groupedResults.length === 1 ? '' : 's'}`}
               </p>
             </div>
-            <button type="button" onClick={() => void fetchRaceResults(null)} disabled={isLoading} className="rounded-lg border border-outline-variant/60 p-2.5 text-on-surface-variant hover:text-primary disabled:opacity-60" aria-label="Refresh race results" title="Refresh">
+            <button type="button" onClick={handleRefreshResults} disabled={isLoading} className="rounded-lg border border-outline-variant/60 p-2.5 text-on-surface-variant hover:text-primary disabled:opacity-60" aria-label="Refresh race results" title={appliedRaceIdFilter || raceIdFilter ? 'Refresh selected race' : 'Refresh all race results'}>
               <RefreshCw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
             </button>
           </div>
@@ -646,7 +613,7 @@ const AdminRaceResultsPage = () => {
           {isLoading ? (
             <ResultListState isLoading title="Loading race results" description="Fetching result records from the API." />
           ) : groupedResults.length === 0 ? (
-            <ResultListState title="No race results found" description="No results match the selected race filter." />
+            <ResultListState title="No race results found" description={appliedRaceIdFilter || tournamentIdFilter ? 'No results match the selected filters.' : 'The full race results API did not return any records.'} />
           ) : (
             <div className="mt-5 space-y-5">
               {groupedResults.map((group) => (
@@ -654,7 +621,6 @@ const AdminRaceResultsPage = () => {
                   key={group.key}
                   group={group}
                   onEdit={openEditEditor}
-                  onConfirm={setConfirmTarget}
                   onPublish={setPublishTarget}
                 />
               ))}
@@ -665,7 +631,6 @@ const AdminRaceResultsPage = () => {
 
       {editorMode && (
         <ResultEditorModal
-          mode={editorMode}
           form={form}
           error={editorError}
           isSubmitting={isSubmitting}
@@ -675,73 +640,80 @@ const AdminRaceResultsPage = () => {
         />
       )}
 
-      {confirmTarget && (
-        <div className="fixed inset-0 z-[180] flex items-center justify-center bg-black/60 px-4 py-8" role="presentation" onMouseDown={(event) => {
-          if (event.target === event.currentTarget && !isSubmitting) setConfirmTarget(null);
-        }}>
-          <section className="w-full max-w-md rounded-lg border border-outline-variant/60 bg-surface-container-low p-6 shadow-2xl" role="dialog" aria-modal="true" aria-labelledby="confirm-result-title">
-            <div className="flex items-start gap-4">
-              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-secondary/10 text-secondary">
-                <CheckCircle2 className="h-5 w-5" />
-              </span>
-              <div>
-                <h2 id="confirm-result-title" className="font-display text-xl font-bold text-on-surface">Confirm draft results?</h2>
-                <p className="mt-2 text-sm leading-6 text-on-surface-variant">
-                  All {confirmTarget.results.length} draft results for Race #{String(confirmTarget.raceId ?? confirmTarget.raceNumber ?? '-')} will be confirmed and ready to publish.
-                </p>
-              </div>
-            </div>
-            <div className="mt-6 flex justify-end gap-3 border-t border-outline-variant/40 pt-5">
-              <button type="button" onClick={() => setConfirmTarget(null)} disabled={isSubmitting} className="rounded-lg border border-outline-variant/60 px-4 py-2.5 text-sm font-bold text-on-surface-variant disabled:opacity-60">Cancel</button>
-              <button type="button" onClick={() => void handleConfirmDraft()} disabled={isSubmitting} className="inline-flex items-center gap-2 rounded-lg bg-secondary px-4 py-2.5 text-sm font-bold text-white disabled:opacity-60">
-                <CheckCircle2 className={`h-4 w-4 ${isSubmitting ? 'animate-pulse' : ''}`} />
-                {isSubmitting ? 'Confirming...' : 'Confirm draft'}
-              </button>
-            </div>
-          </section>
-        </div>
-      )}
-
-      {publishTarget && (
-        <div className="fixed inset-0 z-[180] flex items-center justify-center bg-black/60 px-4 py-8" role="presentation" onMouseDown={(event) => {
-          if (event.target === event.currentTarget && !isSubmitting) setPublishTarget(null);
-        }}>
-          <section className="w-full max-w-md rounded-lg border border-outline-variant/60 bg-surface-container-low p-6 shadow-2xl" role="dialog" aria-modal="true" aria-labelledby="publish-result-title">
-            <h2 id="publish-result-title" className="font-display text-xl font-bold text-on-surface">Publish race results?</h2>
-            <p className="mt-2 text-sm leading-6 text-on-surface-variant">
-              All {publishTarget.results.length} results for Race #{String(publishTarget.raceId ?? publishTarget.raceNumber ?? '-')} will become publicly available.
-            </p>
-            <div className="mt-6 flex justify-end gap-3">
-              <button type="button" onClick={() => setPublishTarget(null)} disabled={isSubmitting} className="rounded-lg border border-outline-variant/60 px-4 py-2.5 text-sm font-bold text-on-surface-variant disabled:opacity-60">Cancel</button>
-              <button type="button" onClick={() => void handlePublishConfirmed()} disabled={isSubmitting} className="inline-flex items-center gap-2 rounded-lg bg-secondary px-4 py-2.5 text-sm font-bold text-white disabled:opacity-60">
-                <Send className="h-4 w-4" />
-                {isSubmitting ? 'Publishing...' : 'Publish'}
-              </button>
-            </div>
-          </section>
-        </div>
-      )}
+      <PublishConfirmModal
+        target={publishTarget}
+        isSubmitting={isSubmitting}
+        onClose={() => setPublishTarget(null)}
+        onConfirm={handlePublishConfirmed}
+      />
     </main>
   );
 };
 
+type PublishConfirmModalProps = {
+  target: RaceResultGroup | null;
+  isSubmitting: boolean;
+  onClose: () => void;
+  onConfirm: () => Promise<void>;
+};
+
+const PublishConfirmModal = ({
+  target,
+  isSubmitting,
+  onClose,
+  onConfirm,
+}: PublishConfirmModalProps) => {
+  if (!target) {
+    return null;
+  }
+
+  return createPortal(
+    <div
+      className="fixed inset-0 z-[1000] flex min-h-screen items-center justify-center bg-black/65 px-4 py-8"
+      role="presentation"
+      onClick={(event) => {
+        if (event.target === event.currentTarget && !isSubmitting) {
+          onClose();
+        }
+      }}
+    >
+      <section
+        className="relative z-[1001] w-full max-w-md rounded-lg border border-outline-variant bg-surface-container p-6 text-on-surface shadow-2xl shadow-black/30"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="publish-result-title"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <h2 id="publish-result-title" className="font-display text-xl font-bold text-on-surface">Publish race results?</h2>
+        <p className="mt-2 text-sm leading-6 text-on-surface-variant">
+          All {target.results.length} results for Race #{String(target.raceId ?? target.raceNumber ?? '-')} will become publicly available.
+        </p>
+        <div className="mt-6 flex justify-end gap-3">
+          <button type="button" onClick={onClose} disabled={isSubmitting} className="rounded-lg border border-outline-variant bg-surface-container-low px-4 py-2.5 text-sm font-bold text-on-surface-variant transition-colors hover:border-primary hover:text-primary disabled:opacity-60">Cancel</button>
+          <button type="button" onClick={() => void onConfirm()} disabled={isSubmitting} className="inline-flex items-center gap-2 rounded-lg bg-secondary px-4 py-2.5 text-sm font-bold text-on-secondary shadow-sm shadow-black/10 transition-colors hover:bg-secondary/90 disabled:opacity-60">
+            <Send className="h-4 w-4" />
+            {isSubmitting ? 'Publishing...' : 'Publish'}
+          </button>
+        </div>
+      </section>
+    </div>,
+    document.body,
+  );
+};
 const RaceResultGroupTable = ({
   group,
   onEdit,
-  onConfirm,
   onPublish,
 }: {
   group: RaceResultGroup;
   onEdit: (result: AdminRaceResult) => void;
-  onConfirm: (group: RaceResultGroup) => void;
   onPublish: (group: RaceResultGroup) => void;
 }) => {
   const statuses = group.results.map((result) => String(result.status ?? 'draft').trim().toLowerCase());
-  const draftCount = statuses.filter((status) => status === 'draft').length;
   const confirmedCount = statuses.filter((status) => status === 'confirmed').length;
   const publishedCount = statuses.filter((status) => status === 'published').length;
+  const cancelledCount = statuses.filter((status) => status === 'cancelled').length;
   const isPublished = group.results.length > 0 && publishedCount === group.results.length;
-  const canConfirm = group.raceId !== undefined && draftCount > 0 && publishedCount === 0;
   const canPublish = group.raceId !== undefined
     && group.results.length > 0
     && confirmedCount === group.results.length;
@@ -771,17 +743,7 @@ const RaceResultGroupTable = ({
             <span className="h-4 w-px bg-outline-variant" />
             <span className="text-secondary">{publishedCount} published</span>
           </div>
-          <button
-            type="button"
-            onClick={() => onConfirm(group)}
-            disabled={!canConfirm}
-            className="inline-flex items-center gap-2 rounded-lg bg-secondary px-3 py-2 text-xs font-bold text-white hover:bg-opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
-            title={isPublished ? 'Already published' : draftCount === 0 ? 'No draft results to confirm' : 'Confirm draft results'}
-          >
-            <CheckCircle2 className="h-4 w-4" />
-            Confirm draft
-          </button>
-          <button type="button" onClick={() => onPublish(group)} disabled={!canPublish} className="inline-flex items-center gap-2 rounded-lg border border-secondary/50 px-3 py-2 text-xs font-bold text-secondary hover:bg-secondary-container/20 disabled:cursor-not-allowed disabled:opacity-40" title={isPublished ? 'Already published' : canPublish ? 'Publish race results' : 'Confirm all draft results before publishing'}>
+          <button type="button" onClick={() => onPublish(group)} disabled={!canPublish} className="inline-flex items-center gap-2 rounded-lg border border-secondary/50 px-3 py-2 text-xs font-bold text-secondary hover:bg-secondary-container/20 disabled:cursor-not-allowed disabled:opacity-40" title={isPublished ? 'Already published' : cancelledCount > 0 ? 'Cancelled results cannot be published' : canPublish ? 'Publish race results' : 'All results must be confirmed before publishing'}>
             <Send className="h-4 w-4" />
             Publish
           </button>
@@ -805,7 +767,7 @@ const RaceResultGroupTable = ({
             {group.results.map((result, index) => {
               const resultId = getResultId(result);
               const resultStatus = String(result.status ?? 'draft').trim().toLowerCase();
-              const isResultEditable = resultStatus === 'draft';
+              const isResultEditable = resultStatus === 'draft' || resultStatus === 'confirmed';
 
               return (
                 <tr key={String(resultId ?? `${result.assignmentId}-${index}`)} className="hover:bg-surface-container-low/60">
@@ -834,7 +796,7 @@ const RaceResultGroupTable = ({
                   <td className="px-4 py-4 text-xs text-on-surface-variant">{formatDateTime(result.recordedAt)}</td>
                   <td className="px-4 py-4">
                     <div className="flex justify-end gap-2">
-                      <button type="button" onClick={() => onEdit(result)} disabled={result.assignmentId === undefined || result.raceId === undefined || !isResultEditable} className="rounded-lg border border-outline-variant/60 p-2 text-on-surface-variant hover:border-primary hover:text-primary disabled:cursor-not-allowed disabled:opacity-40" aria-label="Edit draft race result" title={isResultEditable ? 'Edit draft' : 'Only draft results can be edited'}>
+                      <button type="button" onClick={() => onEdit(result)} disabled={result.assignmentId === undefined || result.raceId === undefined || !isResultEditable} className="rounded-lg border border-outline-variant/60 p-2 text-on-surface-variant hover:border-primary hover:text-primary disabled:cursor-not-allowed disabled:opacity-40" aria-label="Edit race result" title={resultStatus === 'draft' ? 'Edit draft result' : resultStatus === 'confirmed' ? 'Edit chief-confirmed result' : resultStatus === 'published' ? 'Published results cannot be edited' : 'Cancelled results cannot be edited'}>
                         <Edit3 className="h-4 w-4" />
                       </button>
                     </div>
@@ -884,7 +846,6 @@ const Field = ({ label, children }: { label: string; children: React.ReactNode }
 );
 
 const ResultEditorModal = ({
-  mode,
   form,
   error,
   isSubmitting,
@@ -892,44 +853,37 @@ const ResultEditorModal = ({
   onClose,
   onSubmit,
 }: {
-  mode: 'create' | 'edit';
   form: ResultFormState;
   error: string;
   isSubmitting: boolean;
   onChange: (changes: Partial<ResultFormState>) => void;
   onClose: () => void;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
-}) => (
-  <div className="fixed inset-0 z-[170] flex items-center justify-center overflow-y-auto bg-black/60 px-4 py-8" role="presentation" onMouseDown={(event) => {
-    if (event.target === event.currentTarget) onClose();
-  }}>
-    <section className="max-h-[calc(100vh-4rem)] w-full max-w-2xl overflow-y-auto rounded-lg border border-outline-variant/60 bg-surface-container-low p-6 shadow-2xl" role="dialog" aria-modal="true" aria-labelledby="result-editor-title">
+}) => createPortal(
+  <div
+    className="fixed inset-0 z-[1000] flex min-h-screen items-center justify-center overflow-y-auto bg-black/65 px-4 py-8"
+    role="presentation"
+    onMouseDown={(event) => {
+      if (event.target === event.currentTarget && !isSubmitting) {
+        onClose();
+      }
+    }}
+  >
+    <section className="relative z-[1001] max-h-[calc(100vh-4rem)] w-full max-w-2xl overflow-y-auto rounded-lg border border-outline-variant bg-surface-container p-6 text-on-surface shadow-2xl shadow-black/30" role="dialog" aria-modal="true" aria-labelledby="result-editor-title" onMouseDown={(event) => event.stopPropagation()}>
       <div className="mb-5 flex items-start justify-between border-b border-outline-variant/40 pb-4">
         <div>
           <p className="text-xs font-bold uppercase tracking-[0.16em] text-secondary">Race result editor</p>
-          <h2 id="result-editor-title" className="font-display mt-1 text-xl font-bold text-on-surface">{mode === 'create' ? 'Create result' : 'Edit draft result'}</h2>
+          <h2 id="result-editor-title" className="font-display mt-1 text-xl font-bold text-on-surface">Edit race result</h2>
         </div>
-        <button type="button" onClick={onClose} disabled={isSubmitting} className="rounded-lg border border-outline-variant/60 p-2 text-on-surface-variant hover:text-primary disabled:opacity-60" aria-label="Close result editor"><X className="h-5 w-5" /></button>
+        <button type="button" onClick={onClose} disabled={isSubmitting} className="rounded-lg border border-outline-variant/60 bg-surface-container-low p-2 text-on-surface-variant transition-colors hover:border-primary hover:text-primary disabled:opacity-60" aria-label="Close result editor"><X className="h-5 w-5" /></button>
       </div>
 
       {error && <div className="mb-4 rounded-lg border border-error/40 bg-error-container/25 px-4 py-3 text-sm font-semibold text-error">{error}</div>}
 
       <form onSubmit={onSubmit} className="grid gap-4 sm:grid-cols-2">
-        <TextField label="Assignment ID" value={form.assignmentId} onChange={(value) => onChange({ assignmentId: value })} required readOnly={mode === 'edit'} />
-        {mode === 'create' && <TextField label="Report ID" value={form.reportId} onChange={(value) => onChange({ reportId: value })} />}
-        {mode === 'create' && <TextField label="Final round" type="number" value={form.finalRound} onChange={(value) => onChange({ finalRound: value })} min="1" />}
+        <TextField label="Assignment ID" value={form.assignmentId} onChange={(value) => onChange({ assignmentId: value })} required readOnly />
         <TextField label="Finish position" type="number" value={form.finishPosition} onChange={(value) => onChange({ finishPosition: value })} min="1" />
         <TextField label="Finish time (seconds)" type="number" value={form.finishTimeSec} onChange={(value) => onChange({ finishTimeSec: value })} min="0" step="0.001" />
-        {mode === 'create' && <TextField label="Points awarded" type="number" value={form.pointsAwarded} onChange={(value) => onChange({ pointsAwarded: value })} min="0" />}
-        {mode === 'create' && (
-          <Field label="Status">
-            <select value={form.status} onChange={(event) => onChange({ status: event.target.value })} className="rounded-lg border border-outline-variant/60 bg-surface-container-lowest px-3 py-2.5 text-sm normal-case tracking-normal focus:border-primary focus:outline-none">
-              <option value="draft">Draft</option>
-              <option value="confirmed">Confirmed</option>
-              <option value="published">Published</option>
-            </select>
-          </Field>
-        )}
         <label className="flex items-center gap-3 self-end rounded-lg border border-outline-variant/60 bg-surface-container-lowest px-3 py-2.5 text-sm font-semibold text-on-surface">
           <input type="checkbox" checked={form.isDisqualified} onChange={(event) => onChange({ isDisqualified: event.target.checked })} className="h-4 w-4 accent-error" />
           Disqualified
@@ -941,15 +895,16 @@ const ResultEditorModal = ({
           </label>
         )}
         <div className="flex justify-end gap-3 border-t border-outline-variant/40 pt-4 sm:col-span-2">
-          <button type="button" onClick={onClose} disabled={isSubmitting} className="rounded-lg border border-outline-variant/60 px-4 py-2.5 text-sm font-bold text-on-surface-variant disabled:opacity-60">Cancel</button>
+          <button type="button" onClick={onClose} disabled={isSubmitting} className="rounded-lg border border-outline-variant bg-surface-container-low px-4 py-2.5 text-sm font-bold text-on-surface-variant transition-colors hover:border-primary hover:text-primary disabled:opacity-60">Cancel</button>
           <button type="submit" disabled={isSubmitting} className="gold-gradient inline-flex items-center gap-2 rounded-lg px-4 py-2.5 text-sm font-bold text-on-primary disabled:opacity-60">
-            {mode === 'create' ? <FilePlus2 className="h-4 w-4" /> : <Edit3 className="h-4 w-4" />}
-            {isSubmitting ? 'Saving...' : mode === 'create' ? 'Create result' : 'Save draft'}
+            <Edit3 className="h-4 w-4" />
+            {isSubmitting ? 'Saving...' : 'Save result'}
           </button>
         </div>
       </form>
     </section>
-  </div>
+  </div>,
+  document.body,
 );
 
 const TextField = ({

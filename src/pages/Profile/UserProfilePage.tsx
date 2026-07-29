@@ -1,44 +1,102 @@
-import { useEffect, useState } from 'react';
-import { 
-  User, 
-  Mail, 
-  Phone, 
-  MapPin, 
-  Calendar, 
-  ShieldCheck, 
-  ArrowUpRight, 
-  ArrowDownLeft, 
-  Settings,
-  LogOut,
-  CreditCard,
-  Plus
+import { useEffect, useMemo, useState } from 'react';
+import type { ReactNode } from 'react';
+import {
+  AtSign,
+  BadgeCheck,
+  Building2,
+  Calendar,
+  CheckCircle2,
+  Clock,
+  Hash,
+  IdCard,
+  Mail,
+  MapPin,
+  Medal,
+  Phone,
+  ShieldCheck,
+  Trophy,
+  User,
 } from 'lucide-react';
-import { Link } from 'react-router-dom';
 import { getAccessToken } from '../../services/apiClient';
 import { authService } from '../../services/authService';
-import type { UserProfile } from '../../types/user';
+import type { UserProfile, UserRoleType } from '../../types/user';
 
-const guestUser: UserProfile = {
-  id: 'guest',
-  fullName: 'Guest',
+const roleLabels: Record<UserRoleType, string> = {
+  admin: 'Administrator',
+  horse_owner: 'Horse Owner',
+  jockey: 'Jockey',
+  race_referee: 'Race Referee',
+  spectator: 'Spectator',
+};
+
+const fallbackUser: UserProfile = {
+  id: 'current-user',
+  fullName: 'Current User',
   email: '',
-  role: 'Guest',
+  role: 'User',
   joinedDate: new Date().toISOString(),
-  status: 'Active',
+  status: 'Pending',
+};
+
+const formatDate = (value?: string) => {
+  if (!value) {
+    return '-';
+  }
+
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return '-';
+  }
+
+  return date.toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  });
+};
+
+const formatNumber = (value?: number | null) => {
+  if (value === null || value === undefined) {
+    return '-';
+  }
+
+  return new Intl.NumberFormat('en-US').format(value);
+};
+
+const displayValue = (value?: string | number | null) => {
+  if (value === null || value === undefined || value === '') {
+    return '-';
+  }
+
+  return String(value);
+};
+
+const getRoleLabel = (user: UserProfile) => (user.roleType ? roleLabels[user.roleType] : user.role);
+
+const getInitials = (name: string) => {
+  const initials = name
+    .split(' ')
+    .map((part) => part.trim()[0])
+    .filter(Boolean)
+    .slice(0, 2)
+    .join('')
+    .toUpperCase();
+
+  return initials || 'U';
 };
 
 const UserProfilePage = () => {
-  const [user, setUser] = useState<UserProfile>(guestUser);
+  const [user, setUser] = useState<UserProfile>(() => authService.getStoredUserProfile() ?? fallbackUser);
   const [isLoading, setIsLoading] = useState(Boolean(getAccessToken()));
   const [errorMessage, setErrorMessage] = useState('');
-  const isLoggedIn = user.role !== 'Guest';
 
   useEffect(() => {
     let isMounted = true;
 
     const loadProfile = async () => {
       if (!getAccessToken()) {
-        setUser(guestUser);
+        setUser(fallbackUser);
         setIsLoading(false);
         return;
       }
@@ -54,7 +112,8 @@ const UserProfilePage = () => {
         }
       } catch (error) {
         if (isMounted) {
-          setUser(guestUser);
+          const storedProfile = authService.getStoredUserProfile();
+          setUser(storedProfile ?? fallbackUser);
           setErrorMessage(error instanceof Error ? error.message : 'Unable to load profile.');
         }
       } finally {
@@ -71,210 +130,203 @@ const UserProfilePage = () => {
     };
   }, []);
 
-  const handleLogout = async () => {
-    await authService.logout();
-    setUser(guestUser);
-  };
+  const roleSpecificFields = useMemo(() => getRoleSpecificFields(user), [user]);
+  const hasRoleSpecificProfile = roleSpecificFields.length > 0;
 
   return (
-    <div className="min-h-screen bg-surface py-12">
-      <div className="max-w-container mx-auto px-4 md:px-margin-desktop">
-        
+    <div className="min-h-screen bg-surface py-8 md:py-10">
+      <div className="mx-auto flex w-full max-w-7xl flex-col gap-6 px-4 sm:px-6 lg:px-8">
+        <section className="admin-surface-panel overflow-hidden rounded-2xl">
+          <div className="relative p-6 sm:p-8 lg:p-10">
+            <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-primary via-secondary to-transparent" />
+            <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
+              <div className="flex flex-col gap-5 sm:flex-row sm:items-center">
+                <div className="relative h-24 w-24 shrink-0 overflow-hidden rounded-2xl border border-primary/25 bg-surface-container-low shadow-xl shadow-black/20">
+                  {user.avatarUrl ? (
+                    <img src={user.avatarUrl} alt={user.fullName} className="h-full w-full object-cover" />
+                  ) : (
+                    <div className="flex h-full w-full items-center justify-center bg-primary/10 text-2xl font-black text-primary">
+                      {getInitials(user.fullName)}
+                    </div>
+                  )}
+                </div>
+
+                <div className="min-w-0">
+                  <div className="mb-3 flex flex-wrap items-center gap-2">
+                    <StatusBadge status={user.status} />
+                    <span className="inline-flex items-center gap-2 rounded-full border border-secondary/20 bg-secondary/10 px-3 py-1 text-xs font-bold uppercase tracking-[0.12em] text-secondary">
+                      <ShieldCheck className="h-3.5 w-3.5" />
+                      {getRoleLabel(user)}
+                    </span>
+                  </div>
+                  <h1 className="break-words font-display text-3xl font-black text-primary sm:text-4xl">
+                    {user.fullName}
+                  </h1>
+                  <p className="mt-2 text-sm font-semibold text-on-surface-variant">
+                    Profile information loaded from your authenticated HTMS account.
+                  </p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3 sm:min-w-80">
+                <MiniStat icon={Calendar} label="Joined" value={formatDate(user.joinedDate)} />
+                <MiniStat icon={Hash} label="User ID" value={displayValue(user.userId ?? user.id)} />
+              </div>
+            </div>
+          </div>
+        </section>
+
         {errorMessage && (
-          <div className="mb-8 rounded-md border border-error/30 bg-error-container/20 px-4 py-3 text-body-sm font-semibold text-error">
+          <div className="rounded-xl border border-error/35 bg-error-container/20 px-4 py-3 text-sm font-semibold text-error">
             {errorMessage}
           </div>
         )}
 
         {isLoading && (
-          <div className="mb-8 rounded-md border border-outline-variant bg-white px-4 py-3 text-body-sm font-semibold text-on-surface-variant">
+          <div className="rounded-xl border border-outline-variant bg-surface-container-low px-4 py-3 text-sm font-semibold text-on-surface-variant">
             Loading profile...
           </div>
         )}
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          
-          {/* Left Column: Profile Card */}
-          <div className="lg:col-span-1 space-y-6">
-            <div className="bg-white border border-outline-variant rounded-xl overflow-hidden shadow-sm">
-              <div className="h-32 bg-primary-container relative">
-                <div className="absolute -bottom-12 left-8">
-                  <div className="w-24 h-24 rounded-xl border-4 border-white overflow-hidden bg-surface-container-highest">
-                    {user.avatarUrl ? (
-                      <img src={user.avatarUrl} alt={user.fullName} className="w-full h-full object-cover" />
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center text-outline">
-                        <User className="w-12 h-12" />
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>
-              <div className="pt-16 pb-8 px-8">
-                <div className="flex items-center gap-2 mb-1">
-                  <h1 className="text-headline-md font-bold text-primary">{user.fullName}</h1>
-                  {isLoggedIn && <ShieldCheck className="w-5 h-5 text-secondary" />}
-                </div>
-                <p className="text-body-sm text-on-surface-variant mb-6">
-                  {isLoggedIn ? `Member since ${new Date(user.joinedDate).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}` : 'Welcome to Horace'}
-                </p>
+        <div className="grid gap-6 xl:grid-cols-[1.05fr_0.95fr]">
+          <ProfileSection title="Account Information" description="Core identity and contact details.">
+            <InfoItem icon={User} label="Full name" value={user.fullName} />
+            <InfoItem icon={AtSign} label="Username" value={user.username} />
+            <InfoItem icon={Mail} label="Email" value={user.email} />
+            <InfoItem icon={Phone} label="Phone" value={user.phone} />
+            <InfoItem icon={MapPin} label="Address" value={user.address} />
+            <InfoItem icon={Clock} label="Created at" value={formatDate(user.createdAt ?? user.joinedDate)} />
+          </ProfileSection>
 
-                {isLoggedIn ? (
-                  <div className="space-y-4 pt-4 border-t border-outline-variant">
-                    <div className="flex items-center gap-3 text-body-sm text-on-surface-variant">
-                      <Mail className="w-4 h-4" />
-                      <span>{user.email}</span>
-                    </div>
-                    {user.phone && (
-                      <div className="flex items-center gap-3 text-body-sm text-on-surface-variant">
-                        <Phone className="w-4 h-4" />
-                        <span>{user.phone}</span>
-                      </div>
-                    )}
-                    {user.address && (
-                      <div className="flex items-center gap-3 text-body-sm text-on-surface-variant">
-                        <MapPin className="w-4 h-4" />
-                        <span>{user.address}</span>
-                      </div>
-                    )}
-                  </div>
-                ) : (
-                  <div className="pt-4 border-t border-outline-variant">
-                    <p className="text-body-sm text-on-surface-variant mb-6 leading-relaxed">
-                      Sign up for a professional account to access institutional-grade racing data, 
-                      manage your portfolio, and track performance analytics.
-                    </p>
-                    <Link 
-                      to="/login" 
-                      state={{ mode: 'signup' }}
-                      className="w-full bg-primary text-on-primary py-3 rounded-md font-bold flex items-center justify-center gap-2 hover:bg-opacity-90 transition-all mb-3"
-                    >
-                      Sign Up for Free
-                      <Plus className="w-4 h-4" />
-                    </Link>
-                    <Link 
-                      to="/login" 
-                      state={{ mode: 'login' }}
-                      className="w-full border border-outline text-primary py-3 rounded-md font-bold flex items-center justify-center gap-2 hover:bg-surface-container transition-all"
-                    >
-                      Sign In
-                    </Link>
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {isLoggedIn && (
-              <div className="bg-white border border-outline-variant rounded-xl p-6 shadow-sm">
-                <h3 className="text-label-sm text-outline uppercase tracking-wider font-bold mb-4">Account Settings</h3>
-                <nav className="space-y-1">
-                  <button className="w-full flex items-center justify-between p-3 rounded-md hover:bg-surface-container transition-colors text-body-sm font-semibold text-primary">
-                    <div className="flex items-center gap-3">
-                      <Settings className="w-4 h-4" />
-                      <span>Profile Settings</span>
-                    </div>
-                  </button>
-                  <button className="w-full flex items-center justify-between p-3 rounded-md hover:bg-surface-container transition-colors text-body-sm font-semibold text-primary">
-                    <div className="flex items-center gap-3">
-                      <CreditCard className="w-4 h-4" />
-                      <span>Payment Methods</span>
-                    </div>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleLogout}
-                    className="w-full flex items-center justify-between p-3 rounded-md hover:bg-error-container/10 transition-colors text-body-sm font-semibold text-error"
-                  >
-                    <div className="flex items-center gap-3">
-                      <LogOut className="w-4 h-4" />
-                      <span>Log Out</span>
-                    </div>
-                  </button>
-                </nav>
+          <ProfileSection
+            title="Role Profile"
+            description={hasRoleSpecificProfile ? `${getRoleLabel(user)} details available from the backend profile.` : 'No extra role profile fields are available for this account.'}
+          >
+            {hasRoleSpecificProfile ? (
+              roleSpecificFields.map((field) => (
+                <InfoItem key={field.label} icon={field.icon} label={field.label} value={field.value} />
+              ))
+            ) : (
+              <div className="rounded-xl border border-outline-variant/60 bg-surface-container-lowest/60 p-5 text-sm font-semibold text-on-surface-variant">
+                This role does not currently expose additional profile data through <span className="font-mono text-primary">GET /api/auth/me</span>.
               </div>
             )}
-          </div>
-
-          {/* Right Column: Activity & Details */}
-          <div className="lg:col-span-2 space-y-8">
-
-            {/* Recent Activity / Benefits */}
-            <div className="bg-white border border-outline-variant rounded-xl p-8 shadow-sm">
-              <h2 className="text-title-large font-bold text-primary mb-6">
-                {isLoggedIn ? 'Recent Activity' : 'Why join Horace?'}
-              </h2>
-              
-              {isLoggedIn ? (
-                <div className="space-y-6">
-                  {[1, 2, 3].map((i) => (
-                    <div key={i} className="flex items-center justify-between pb-6 border-b border-outline-variant last:border-0 last:pb-0">
-                      <div className="flex items-center gap-4">
-                        <div className={`w-10 h-10 rounded-full flex items-center justify-center ${i === 2 ? 'bg-error-container/10 text-error' : 'bg-secondary-container/10 text-secondary'}`}>
-                          {i === 2 ? <ArrowUpRight className="w-5 h-5" /> : <ArrowDownLeft className="w-5 h-5" />}
-                        </div>
-                        <div>
-                          <p className="text-body-sm font-bold text-primary">
-                            {i === 1 ? 'Deposit via Bank Transfer' : i === 2 ? 'Prediction: Kentucky Derby' : 'Reward: Triple Crown Bonus'}
-                          </p>
-                          <p className="text-label-sm text-outline">
-                            {i === 1 ? 'June 08, 2026 • 10:45 AM' : i === 2 ? 'June 07, 2026 • 04:20 PM' : 'June 05, 2026 • 09:00 AM'}
-                          </p>
-                        </div>
-                      </div>
-                      <p className={`text-body-sm font-bold ${i === 2 ? 'text-error' : 'text-secondary'}`}>
-                        {i === 2 ? '- $500.00' : '+ $2,500.00'}
-                      </p>
-                    </div>
-                  ))}
-                  <button className="w-full text-center text-label-sm font-bold text-secondary hover:underline pt-4">
-                    View All Activity
-                  </button>
-                </div>
-              ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                  <div className="flex gap-4">
-                    <div className="w-12 h-12 shrink-0 rounded-lg bg-primary-container/5 flex items-center justify-center">
-                      <Calendar className="w-6 h-6 text-primary" />
-                    </div>
-                    <div>
-                      <h4 className="text-body-md font-bold text-primary mb-1">Race Scheduling</h4>
-                      <p className="text-body-sm text-on-surface-variant">Stay updated with real-time tournament schedules and events.</p>
-                    </div>
-                  </div>
-                  <div className="flex gap-4">
-                    <div className="w-12 h-12 shrink-0 rounded-lg bg-primary-container/5 flex items-center justify-center">
-                      <ShieldCheck className="w-6 h-6 text-primary" />
-                    </div>
-                    <div>
-                      <h4 className="text-body-md font-bold text-primary mb-1">Secure Transactions</h4>
-                      <p className="text-body-sm text-on-surface-variant">Institutional-grade security for all your financial operations.</p>
-                    </div>
-                  </div>
-                  <div className="flex gap-4">
-                    <div className="w-12 h-12 shrink-0 rounded-lg bg-primary-container/5 flex items-center justify-center">
-                      <ArrowUpRight className="w-6 h-6 text-primary" />
-                    </div>
-                    <div>
-                      <h4 className="text-body-md font-bold text-primary mb-1">Live Tracking</h4>
-                      <p className="text-body-sm text-on-surface-variant">Track horse performance and race results as they happen.</p>
-                    </div>
-                  </div>
-                  <div className="flex gap-4">
-                    <div className="w-12 h-12 shrink-0 rounded-lg bg-primary-container/5 flex items-center justify-center">
-                      <Plus className="w-6 h-6 text-primary" />
-                    </div>
-                    <div>
-                      <h4 className="text-body-md font-bold text-primary mb-1">Advanced Analytics</h4>
-                      <p className="text-body-sm text-on-surface-variant">Deep insights and predictive modeling for better outcomes.</p>
-                    </div>
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
+          </ProfileSection>
         </div>
       </div>
     </div>
+  );
+};
+
+type ProfileField = {
+  icon: typeof User;
+  label: string;
+  value?: string | number | null;
+};
+
+const getRoleSpecificFields = (user: UserProfile): ProfileField[] => {
+  if (user.roleType === 'horse_owner') {
+    const profile = user.ownerProfile;
+
+    return [
+      { icon: Building2, label: 'Stable name', value: profile?.stableName },
+      { icon: IdCard, label: 'License number', value: profile?.licenseNumber },
+      { icon: MapPin, label: 'Stable address', value: profile?.address },
+      { icon: Hash, label: 'Owner ID', value: profile?.ownerId },
+      { icon: BadgeCheck, label: 'Profile status', value: profile?.status },
+      { icon: Calendar, label: 'Profile created', value: formatDate(profile?.createdAt) },
+    ];
+  }
+
+  if (user.roleType === 'jockey') {
+    const profile = user.jockeyProfile;
+
+    return [
+      { icon: IdCard, label: 'License number', value: profile?.licenseNumber },
+      { icon: Trophy, label: 'Ranking points', value: formatNumber(profile?.rankingPoints) },
+      { icon: Medal, label: 'Total wins', value: formatNumber(profile?.totalWins) },
+      { icon: Hash, label: 'Total races', value: formatNumber(profile?.totalRaces) },
+      { icon: Calendar, label: 'Experience', value: profile?.experienceYears === undefined ? undefined : `${profile.experienceYears} years` },
+      { icon: BadgeCheck, label: 'Profile status', value: profile?.status },
+    ];
+  }
+
+  if (user.roleType === 'race_referee') {
+    const profile = user.refereeProfile;
+
+    return [
+      { icon: IdCard, label: 'License number', value: profile?.licenseNumber },
+      { icon: MapPin, label: 'Address', value: profile?.address },
+      { icon: Hash, label: 'Referee ID', value: profile?.refereeId },
+      { icon: BadgeCheck, label: 'Profile status', value: profile?.status },
+      { icon: Calendar, label: 'Profile created', value: formatDate(profile?.createdAt) },
+    ];
+  }
+
+  if (user.roleType === 'admin' || user.roleType === 'spectator') {
+    return [
+      { icon: BadgeCheck, label: 'Account status', value: user.status },
+      { icon: ShieldCheck, label: 'Role type', value: user.roleType },
+    ];
+  }
+
+  return [];
+};
+
+const ProfileSection = ({
+  title,
+  description,
+  children,
+}: {
+  title: string;
+  description: string;
+  children: ReactNode;
+}) => (
+  <section className="admin-surface-panel rounded-2xl p-5 sm:p-6 lg:p-7">
+    <div className="mb-6 flex items-start justify-between gap-4">
+      <div>
+        <p className="text-xs font-black uppercase tracking-[0.18em] text-secondary">Profile</p>
+        <h2 className="mt-2 font-display text-2xl font-black text-primary">{title}</h2>
+        <p className="mt-2 max-w-2xl text-sm font-semibold text-on-surface-variant">{description}</p>
+      </div>
+    </div>
+    <div className="grid gap-3 sm:grid-cols-2">{children}</div>
+  </section>
+);
+
+const InfoItem = ({ icon: Icon, label, value }: ProfileField) => (
+  <div className="rounded-xl border border-outline-variant/70 bg-surface-container-lowest/70 p-4 transition-all duration-300 hover:border-primary/35 hover:bg-surface-container-low">
+    <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-lg border border-primary/20 bg-primary/10 text-primary">
+      <Icon className="h-5 w-5" />
+    </div>
+    <p className="text-xs font-black uppercase tracking-[0.14em] text-outline">{label}</p>
+    <p className="mt-1 break-words text-sm font-bold text-on-surface">{displayValue(value)}</p>
+  </div>
+);
+
+const MiniStat = ({ icon: Icon, label, value }: ProfileField) => (
+  <div className="rounded-xl border border-outline-variant/70 bg-surface-container-lowest/70 p-4">
+    <div className="mb-2 flex items-center gap-2 text-primary">
+      <Icon className="h-4 w-4" />
+      <span className="text-xs font-black uppercase tracking-[0.12em]">{label}</span>
+    </div>
+    <p className="break-words text-sm font-bold text-on-surface">{displayValue(value)}</p>
+  </div>
+);
+
+const StatusBadge = ({ status }: { status: UserProfile['status'] }) => {
+  const isActive = status === 'Active';
+  const className = isActive
+    ? 'border-secondary/25 bg-secondary/10 text-secondary'
+    : status === 'Pending'
+      ? 'border-primary/25 bg-primary/10 text-primary'
+      : 'border-error/25 bg-error-container/20 text-error';
+
+  return (
+    <span className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-bold uppercase tracking-[0.12em] ${className}`}>
+      <CheckCircle2 className="h-3.5 w-3.5" />
+      {status}
+    </span>
   );
 };
 

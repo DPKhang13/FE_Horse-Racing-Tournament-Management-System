@@ -1,6 +1,4 @@
 import { apiClient, unwrapApiData, unwrapApiList } from './apiClient';
-import { tournamentService } from './tournamentService';
-import type { MatchStatus, TournamentMatch } from '../types/tournament';
 
 export type RaceCrudItem = {
   raceId: number;
@@ -77,13 +75,6 @@ const asNumber = (value: unknown, fallback = 0) => {
   return Number.isFinite(numericValue) ? numericValue : fallback;
 };
 
-const toDateTimeLocal = (date: string, time: string) => {
-  if (!date) {
-    return '';
-  }
-
-  return `${date}T${time || '09:00'}`;
-};
 
 const toScheduledAtValue = (value: unknown) => {
   const text = asString(value);
@@ -110,24 +101,49 @@ const toApiInstant = (value?: string) => {
   return Number.isNaN(date.getTime()) ? undefined : date.toISOString();
 };
 
-const normalizeRaceStatus = (value: unknown): MatchStatus => {
-  const text = asString(value, 'Scheduled').toLowerCase();
+const normalizeRaceStatus = (value: unknown) => {
+  const text = asString(value, 'ready').trim().toLowerCase().replace(/[\s-]+/g, '_');
 
-  if (text.includes('ongoing') || text === 'live') {
-    return 'Ongoing';
+  if (text === 'open_for_betting' || text === 'betting_open' || (text.includes('open') && text.includes('betting'))) {
+    return 'open_for_betting';
+  }
+
+  if (text.includes('progress') || text.includes('ongoing') || text.includes('running') || text === 'live') {
+    return 'in_progress';
   }
 
   if (text.includes('finish') || text.includes('complete')) {
-    return 'Finished';
+    return 'completed';
   }
 
   if (text.includes('cancel')) {
-    return 'Cancelled';
+    return 'cancelled';
   }
 
-  return 'Scheduled';
+  return 'ready';
 };
 
+const getRawMaxReferees = (raw: RawRecord) =>
+  raw.maxReferees ?? raw.maxReferee ?? raw.maxRefereeCount ?? raw.refereeLimit ?? raw.maxRefs;
+
+const hasRawMaxReferees = (raw: RawRecord) => {
+  const value = getRawMaxReferees(raw);
+  return value !== undefined && value !== null && value !== '';
+};
+
+const mergeRaceDetail = (race: RaceCrudItem, detail: RaceCrudItem): RaceCrudItem => ({
+  ...race,
+  ...detail,
+  tournamentId: race.tournamentId ?? detail.tournamentId,
+  tournamentName: race.tournamentName ?? detail.tournamentName,
+  scheduleId: race.scheduleId ?? detail.scheduleId,
+  scheduleTitle: race.scheduleTitle ?? detail.scheduleTitle,
+  dayNumber: race.dayNumber ?? detail.dayNumber,
+  location: race.location ?? detail.location,
+  registeredHorseCount: race.registeredHorseCount ?? detail.registeredHorseCount,
+  acceptedJockeyCount: race.acceptedJockeyCount ?? detail.acceptedJockeyCount,
+  assignedRefereeCount: race.assignedRefereeCount ?? detail.assignedRefereeCount,
+});
 const mapRace = (raw: RawRecord, index = 0): RaceCrudItem => ({
   raceId: asNumber(raw.raceId ?? raw.id, index + 1),
   tournamentId: raw.tournamentId === undefined ? undefined : asNumber(raw.tournamentId),
@@ -144,8 +160,8 @@ const mapRace = (raw: RawRecord, index = 0): RaceCrudItem => ({
   distanceM: asNumber(raw.distanceM),
   trackType: asString(raw.trackType ?? raw.arenaLocation ?? raw.location, '-'),
   maxHorses: asNumber(raw.maxHorses, 8),
-  maxReferees: asNumber(raw.maxReferees, 3),
-  status: asString(raw.status ?? raw.matchStatus, 'scheduled'),
+  maxReferees: asNumber(getRawMaxReferees(raw), 3),
+  status: asString(raw.status ?? raw.matchStatus, 'ready'),
   location: raw.location ? asString(raw.location) : undefined,
   registeredHorseCount: raw.registeredHorseCount === undefined ? undefined : asNumber(raw.registeredHorseCount),
   acceptedJockeyCount: raw.acceptedJockeyCount === undefined ? undefined : asNumber(raw.acceptedJockeyCount),
@@ -171,11 +187,9 @@ const toRacePayload = (data: RaceFormData) => ({
   trackType: data.trackType.trim(),
   maxHorses: Number(data.maxHorses),
   maxReferees: Number(data.maxReferees),
-  status: data.status.trim(),
+  status: normalizeRaceStatus(data.status),
 });
 
-
-const mockRacesByTournament = new Map<string, RaceCrudItem[]>();
 
 const resolveScheduleId = async (tournamentId: number | string, scheduleId?: number) => {
   if (scheduleId) {
@@ -194,68 +208,42 @@ const resolveScheduleId = async (tournamentId: number | string, scheduleId?: num
 };
 
 const getScheduleOptions = async (tournamentId: number | string): Promise<RaceScheduleOption[]> => {
-  try {
-    const response = await apiClient.get(`/api/v1/admin/tournaments/${tournamentId}/get-schedule-list`);
-    return unwrapApiList<RawRecord>(response)
-      .map(mapScheduleOption)
-      .filter((schedule) => schedule.scheduleId > 0)
-      .sort((first, second) => first.raceDate.localeCompare(second.raceDate) || first.dayNumber - second.dayNumber);
-  } catch {
-    const tournament = await tournamentService.getTournamentById(tournamentId);
-    return tournament.schedule
-      .map((schedule, index) => mapScheduleOption({
-        scheduleId: schedule.matchId.replace(/\D/g, ''),
-        raceDate: schedule.matchDate,
-        dayNumber: index + 1,
-        title: schedule.round || schedule.matchName,
-      }, index))
-      .filter((schedule) => schedule.scheduleId > 0);
-  }
+  const response = await apiClient.get(`/api/v1/admin/tournaments/${tournamentId}/get-schedule-list`);
+  return unwrapApiList<RawRecord>(response)
+    .map(mapScheduleOption)
+    .filter((schedule) => schedule.scheduleId > 0)
+    .sort((first, second) => first.raceDate.localeCompare(second.raceDate) || first.dayNumber - second.dayNumber);
 };
-
-const raceFromMatch = (match: TournamentMatch, tournamentId: number | string, index: number): RaceCrudItem => ({
-  raceId: asNumber(match.matchId.replace(/\D/g, ''), index + 1),
-  tournamentId: Number(tournamentId),
-  name: match.matchName,
-  raceNumber: index + 1,
-  rankGroup: match.round,
-  lapCount: 1,
-  scheduledAt: toDateTimeLocal(match.matchDate, match.startTime),
-  distanceM: 0,
-  trackType: match.arenaLocation,
-  maxHorses: 8,
-  maxReferees: 3,
-  status: normalizeRaceStatus(match.matchStatus).toLowerCase(),
-});
-
-const ensureMockRaces = async (tournamentId: number | string) => {
-  const key = String(tournamentId);
-
-  if (!mockRacesByTournament.has(key)) {
-    const tournament = await tournamentService.getTournamentById(tournamentId);
-    mockRacesByTournament.set(key, tournament.schedule.map((match, index) => raceFromMatch(match, tournamentId, index)));
-  }
-
-  return mockRacesByTournament.get(key) ?? [];
+const getRaceDetail = async (raceId: number | string): Promise<RaceCrudItem> => {
+  const response = await apiClient.get(`/api/v1/admin/races/get-race/${raceId}`);
+  return mapRace(unwrapApiData<RawRecord>(response));
 };
 
 export const raceCrudService = {
   getScheduleOptions,
   async getRaceById(raceId: number | string): Promise<RaceCrudItem> {
-    const response = await apiClient.get(`/api/v1/admin/races/get-race/${raceId}`);
-    return mapRace(unwrapApiData<RawRecord>(response));
+    return getRaceDetail(raceId);
   },
 
 
   async getRacesByTournament(tournamentId: number | string): Promise<RaceCrudItem[]> {
-    try {
-      const response = await apiClient.get(`/api/tournaments/${tournamentId}/get-race-list`);
-      return unwrapApiList<RawRecord>(response).map(mapRace);
-    } catch {
-      return ensureMockRaces(tournamentId);
-    }
-  },
+    const response = await apiClient.get(`/api/tournaments/${tournamentId}/get-race-list`);
+    const rawItems = unwrapApiList<RawRecord>(response);
 
+    return Promise.all(rawItems.map(async (item, index) => {
+      const race = mapRace(item, index);
+
+      if (race.raceId <= 0 || hasRawMaxReferees(item)) {
+        return race;
+      }
+
+      try {
+        return mergeRaceDetail(race, await getRaceDetail(race.raceId));
+      } catch {
+        return race;
+      }
+    }));
+  },
   async createRace(tournamentId: number | string, data: RaceFormData): Promise<RaceCrudItem> {
     const scheduleId = await resolveScheduleId(tournamentId, data.scheduleId);
     const response = await apiClient.post(`/api/v1/admin/schedules/${scheduleId}/create-race`, toRacePayload(data));
@@ -267,20 +255,7 @@ export const raceCrudService = {
     return mapRace(unwrapApiData<RawRecord>(response));
   },
 
-  async deleteRace(raceId: number | string, tournamentId: number | string): Promise<void> {
-    try {
-      await apiClient.patch(`/api/v1/admin/races/cancel-race/${raceId}`);
-    } catch {
-      const races = await ensureMockRaces(tournamentId);
-      mockRacesByTournament.set(
-        String(tournamentId),
-        races.map((race) =>
-          String(race.raceId) === String(raceId)
-            ? { ...race, status: 'cancelled' }
-            : race,
-        ),
-      );
-    }
+  async deleteRace(raceId: number | string): Promise<void> {
+    await apiClient.patch(`/api/v1/admin/races/cancel-race/${raceId}`);
   },
-
 };

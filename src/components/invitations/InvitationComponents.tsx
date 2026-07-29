@@ -178,7 +178,6 @@ export const InvitationDetailModal = ({
 }) => {
   const status = getEffectiveInvitationStatus(assignment);
   const invitationId = assignment.assignmentId ?? assignment.id;
-  const registrationId = assignment.regId ?? assignment.registrationId;
 
   return (
     <InvitationModal
@@ -219,13 +218,6 @@ export const InvitationDetailModal = ({
           <DetailItem label="Expired at" value={formatInvitationDateTime(assignment.expiredAt)} />
         </DetailSection>
 
-        <DetailSection title="References">
-          <DetailItem label="Invitation ID" value={invitationId ?? '-'} />
-          <DetailItem label="Registration ID" value={registrationId ?? '-'} />
-          <DetailItem label="Race ID" value={assignment.raceId ?? '-'} />
-          <DetailItem label="Horse ID" value={assignment.horseId ?? '-'} />
-          <DetailItem label="Jockey ID" value={assignment.jockeyId ?? '-'} />
-        </DetailSection>
       </div>
     </InvitationModal>
   );

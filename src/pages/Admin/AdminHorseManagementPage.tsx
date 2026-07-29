@@ -20,7 +20,7 @@ import {
   XCircle,
 } from 'lucide-react';
 import ImageUploadField from '../../components/forms/ImageUploadField';
-import { apiClient, getApiErrorMessage, getApiResponseMessage, unwrapApiList } from '../../services/apiClient';
+import { apiClient, getApiErrorMessage, getApiResponseMessage, unwrapApiData, unwrapApiList } from '../../services/apiClient';
 import { HorseService } from '../../services/HorseService';
 import { getUploadedImageUrl, uploadService } from '../../services/uploadService';
 import { useToastNotifications } from '../../hooks/useToastNotifications';
@@ -40,6 +40,10 @@ type RankedHorse = Horse & {
 };
 type RawRankedHorse = Record<string, unknown>;
 type RawHorseOwner = Record<string, unknown>;
+type CreatedAdminHorse = {
+  horseId?: number;
+  message: string;
+};
 type HorseOwner = {
   userId: number;
   username: string;
@@ -311,7 +315,7 @@ const getHorseOwners = async () => {
   return normalizedOwners.map(mapHorseOwner).filter((owner) => owner.userId > 0);
 };
 
-const createAdminHorse = async (data: AdminHorseFormData) => {
+const createAdminHorse = async (data: AdminHorseFormData): Promise<CreatedAdminHorse> => {
   const response = await apiClient.post(`/api/horses/admin/owners/${Number(data.ownerId)}/create`, {
     name: data.name.trim(),
     breed: data.breed.trim(),
@@ -321,7 +325,16 @@ const createAdminHorse = async (data: AdminHorseFormData) => {
     avatarUrl: data.avatarUrl.trim() || fallbackHorseImage,
   });
 
-  return getApiResponseMessage(response, 'Horse created successfully.');
+  const createdHorse = unwrapApiData<unknown>(response);
+  const rawCreatedHorse = createdHorse && typeof createdHorse === 'object'
+    ? createdHorse as RawRankedHorse
+    : undefined;
+  const horseId = rawCreatedHorse ? asNumber(rawCreatedHorse.horseId ?? rawCreatedHorse.id) : 0;
+
+  return {
+    horseId: horseId > 0 ? horseId : undefined,
+    message: getApiResponseMessage(response, 'Horse created successfully.'),
+  };
 };
 
 const updateAdminHorse = async (horseId: number, data: AdminHorseFormData) => {
@@ -551,14 +564,12 @@ const AdminHorseManagementPage = () => {
     try {
       let avatarUrl = formData.avatarUrl.trim() || fallbackHorseImage;
 
-      if (selectedImageFile) {
-        const uploadResponse = selectedHorse
-          ? await uploadService.uploadHorseImage(getHorseKey(selectedHorse), selectedImageFile)
-          : await uploadService.uploadNewHorseImage(selectedImageFile);
+      if (selectedHorse && selectedImageFile) {
+        const uploadResponse = await uploadService.uploadHorseImage(getHorseKey(selectedHorse), selectedImageFile);
         const uploadedImageUrl = getUploadedImageUrl(uploadResponse);
 
         if (!uploadedImageUrl) {
-          throw new Error('The image upload did not return an image URL.');
+          throw new Error('Cloudinary did not return an image URL.');
         }
 
         avatarUrl = uploadedImageUrl;
@@ -577,8 +588,31 @@ const AdminHorseManagementPage = () => {
         const message = await updateAdminHorse(getHorseKey(selectedHorse), payload);
         setNotice({ tone: 'success', text: message });
       } else {
-        const message = await createAdminHorse(payload);
-        setNotice({ tone: 'success', text: message });
+        const createdHorse = await createAdminHorse(payload);
+
+        if (selectedImageFile) {
+          try {
+            if (!createdHorse.horseId) {
+              throw new Error('The server did not return the horse ID required for the Cloudinary image upload.');
+            }
+
+            const uploadResponse = await uploadService.uploadHorseImage(createdHorse.horseId, selectedImageFile);
+
+            if (!getUploadedImageUrl(uploadResponse)) {
+              throw new Error('Cloudinary did not return an image URL.');
+            }
+          } catch (uploadError) {
+            closeFormModal();
+            await refreshAfterMutation();
+            setNotice({
+              tone: 'error',
+              text: `${createdHorse.message}\nHorse was created, but its image could not be uploaded. ${getApiErrorMessage(uploadError, 'Please edit the horse and try the image upload again.')}`,
+            });
+            return;
+          }
+        }
+
+        setNotice({ tone: 'success', text: createdHorse.message });
       }
 
       closeFormModal();
@@ -654,7 +688,7 @@ const AdminHorseManagementPage = () => {
   return (
     <div className="min-h-screen bg-surface py-8">
       <div className="mx-auto max-w-[1440px] px-4 md:px-8">
-        <div className="glass-panel mb-6 rounded-2xl p-6">
+        <div className="admin-surface-panel mb-6 rounded-2xl p-6">
           <div className="flex flex-col gap-6 xl:flex-row xl:items-end xl:justify-between">
             <div className="min-w-0 flex-1">
               <p className="mb-3 text-label-sm font-bold uppercase tracking-[0.18em] text-secondary">Admin Horse Management</p>
@@ -675,7 +709,7 @@ const AdminHorseManagementPage = () => {
         </div>
 
         <div className="mb-6 flex flex-col gap-4 xl:flex-row xl:items-stretch xl:justify-between">
-          <div className="glass-panel flex-1 rounded-xl p-4">
+          <div className="admin-surface-panel flex-1 rounded-xl p-4">
             <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(260px,1fr)_180px_180px]">
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-outline" />
@@ -856,7 +890,7 @@ const HorseTable = ({
   onEdit: (horse: Horse) => void;
   onDelete: (horse: Horse) => void;
 }) => (
-  <div className="glass-panel overflow-hidden rounded-lg">
+  <div className="admin-surface-panel overflow-hidden rounded-lg">
     <div className="overflow-x-auto">
       <table className="w-full min-w-[1040px] text-left">
         <thead className="border-b border-outline-variant bg-surface-container">
@@ -954,7 +988,7 @@ const HorseRequestsTable = ({
   onAccept: (horse: Horse) => void;
   onDecline: (horse: Horse) => void;
 }) => (
-  <div className="glass-panel overflow-hidden rounded-lg">
+  <div className="admin-surface-panel overflow-hidden rounded-lg">
     <div className="overflow-x-auto">
       <table className="w-full min-w-[1080px] text-left">
         <thead className="border-b border-outline-variant bg-surface-container">
@@ -1042,7 +1076,7 @@ const HorseRequestsTable = ({
 );
 
 const RankingTable = ({ rankedHorses, isLoading }: { rankedHorses: RankedHorse[]; isLoading: boolean }) => (
-  <div className="glass-panel overflow-hidden rounded-lg">
+  <div className="admin-surface-panel overflow-hidden rounded-lg">
     <div className="overflow-x-auto">
       <table className="w-full min-w-[920px] text-left">
         <thead className="border-b border-outline-variant bg-surface-container">
@@ -1143,7 +1177,7 @@ const HorseFormModal = ({
           onFileChange={onImageFileChange}
           disabled={isSaving}
           label="Horse image"
-          helpText="JPG, PNG or WebP, up to 5 MB. The image is uploaded when you save."
+          helpText="JPG, PNG or WebP, up to 5 MB. The image is uploaded to Cloudinary when you save."
         />
       </div>
 

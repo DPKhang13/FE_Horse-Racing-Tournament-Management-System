@@ -4,6 +4,7 @@ import {
   ClipboardCheck,
   Clock3,
   Eye,
+  FileText,
   RefreshCw,
   Search,
   ShieldCheck,
@@ -105,10 +106,19 @@ const hasAssignedJockey = (registration: RegistrationResponse) =>
 const isOwnerConfirmed = (registration: RegistrationResponse) =>
   normalizeStatus(registration.ownerConfirmationStatus) === 'confirmed';
 
-const canApproveRegistration = (registration: RegistrationResponse) =>
+const isRaceRegistrationClosed = (registration: RegistrationResponse) =>
+  normalizeStatus(registration.raceStatus) === 'registration_closed';
+
+const isChiefApproved = (registration: RegistrationResponse) =>
+  normalizeStatus(registration.chiefInspectionStatus) === 'approved';
+
+const isAdminFinalReviewCandidate = (registration: RegistrationResponse) =>
   normalizeStatus(registration.status) === 'pending' &&
-  hasAssignedJockey(registration) &&
-  isOwnerConfirmed(registration);
+  isChiefApproved(registration) &&
+  isRaceRegistrationClosed(registration);
+
+const canApproveRegistration = (registration: RegistrationResponse) =>
+  isAdminFinalReviewCandidate(registration);
 
 const getApprovalBlockReason = (registration: RegistrationResponse) => {
   if (canApproveRegistration(registration)) {
@@ -119,11 +129,34 @@ const getApprovalBlockReason = (registration: RegistrationResponse) => {
     return 'Only pending registrations can be approved.';
   }
 
+  if (!isRaceRegistrationClosed(registration)) {
+    return 'Registration can be finally approved only after registration is closed.';
+  }
+
+  if (!isChiefApproved(registration)) {
+    return 'Chief referee must approve the horse before admin approval.';
+  }
+
   if (!hasAssignedJockey(registration)) {
     return 'Waiting for a jockey to be assigned.';
   }
 
-  return 'Waiting for owner confirmation after jockey acceptance.';
+  if (!isOwnerConfirmed(registration)) {
+    return 'Waiting for owner confirmation after jockey acceptance.';
+  }
+
+  return 'Registration is not ready for final review.';
+};
+
+const getReviewWorkflowLabel = (registration: RegistrationResponse) => {
+  const registrationStatus = normalizeStatus(registration.status);
+  const chiefStatus = normalizeStatus(registration.chiefInspectionStatus);
+
+  if (registrationStatus === 'rejected' || chiefStatus === 'rejected') return 'Rejected';
+  if (registrationStatus === 'approved') return 'Final approved';
+  if (chiefStatus === 'approved') return 'Chief approved - waiting admin';
+  if (!isOwnerConfirmed(registration) || !hasAssignedJockey(registration)) return 'Pending jockey confirmation';
+  return 'Waiting chief inspection';
 };
 
 const getHorseImage = (registration: RegistrationResponse) => registration.horseAvatarUrl || fallbackHorseImage;
@@ -160,7 +193,8 @@ const RegistrationManagementPage = () => {
     setNotice(null);
 
     try {
-      setRegistrations(await registrationService.getPendingApprovalRegistrations());
+      const data = await registrationService.getPendingApprovalRegistrations();
+      setRegistrations(data.filter(isAdminFinalReviewCandidate));
     } catch (error) {
       setNotice({ tone: 'error', text: getApiErrorMessage(error, 'Unable to load race registrations.') });
     } finally {
@@ -243,6 +277,9 @@ const RegistrationManagementPage = () => {
           registration.jockeyFullName,
           registration.status,
           registration.ownerConfirmationStatus,
+          registration.chiefInspectionStatus,
+          registration.chiefInspectionNote,
+          registration.chiefInspectedByFullName,
         ];
         const matchesSearch = !query || searchableValues
           .filter((value) => value !== null && value !== undefined)
@@ -344,10 +381,6 @@ const RegistrationManagementPage = () => {
     const trimmedNote = actionNote.trim();
     const trimmedReason = actionReason.trim();
 
-    if (activeAction.type === 'reject' && !trimmedReason) {
-      setActionError('Reject reason is required.');
-      return;
-    }
 
     setIsSavingAction(true);
     setActionError('');
@@ -355,8 +388,8 @@ const RegistrationManagementPage = () => {
 
     try {
       const updatedRegistration = activeAction.type === 'approve'
-        ? await registrationService.approveRegistration(registrationId, { note: trimmedNote })
-        : await registrationService.rejectRegistration(registrationId, { reason: trimmedReason });
+        ? await registrationService.approveRegistration(registrationId, { note: trimmedNote || undefined })
+        : await registrationService.rejectRegistration(registrationId, { reason: trimmedReason || undefined });
 
       setNotice({
         tone: 'success',
@@ -379,7 +412,7 @@ const RegistrationManagementPage = () => {
   return (
     <div className="min-h-screen bg-surface py-8">
       <div className="mx-auto max-w-[1440px] px-4 md:px-8">
-        <div className="glass-panel mb-6 rounded-2xl p-6">
+        <div className="admin-surface-panel mb-6 rounded-2xl p-6">
           <div className="flex flex-col gap-6 xl:flex-row xl:items-end xl:justify-between">
             <div className="min-w-0 flex-1">
               <p className="mb-3 text-label-sm font-bold uppercase tracking-[0.18em] text-secondary">Admin Race Registration</p>
@@ -398,7 +431,7 @@ const RegistrationManagementPage = () => {
           </div>
         </div>
 
-        <div className="glass-panel mb-6 rounded-xl p-4">
+        <div className="admin-surface-panel mb-6 rounded-xl p-4">
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-[minmax(280px,1.4fr)_repeat(5,minmax(150px,1fr))_150px]">
             <div className="relative">
               <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-outline" />
@@ -531,7 +564,7 @@ const RegistrationsTable = ({
   onApprove: (registration: RegistrationResponse) => void;
   onReject: (registration: RegistrationResponse) => void;
 }) => (
-  <div className="glass-panel overflow-hidden rounded-xl">
+  <div className="admin-surface-panel overflow-hidden rounded-xl">
     <div className="overflow-x-auto">
       <table className="w-full min-w-[1180px] text-left">
         <thead className="border-b border-outline-variant bg-surface-container">
@@ -548,7 +581,7 @@ const RegistrationsTable = ({
         </thead>
         <tbody className="divide-y divide-outline-variant">
           {!isLoading && registrations.map((registration) => {
-            const canProcess = !isTerminalRegistrationStatus(registration.status);
+            const canProcess = isAdminFinalReviewCandidate(registration);
             const canApprove = canApproveRegistration(registration);
             const approveBlockReason = getApprovalBlockReason(registration);
 
@@ -591,9 +624,12 @@ const RegistrationsTable = ({
                 <td className="px-5 py-4 text-body-sm font-medium text-on-surface-variant">{registration.jockeyFullName ?? '-'}</td>
                 <td className="px-5 py-4">
                   <div className="grid gap-2">
-                    <StatusBadge status={registration.status} />
+                    <ReviewWorkflowBadge label={getReviewWorkflowLabel(registration)} />
                     <span className="text-label-sm font-semibold text-on-surface-variant">
-                      Owner: {formatStatusLabel(registration.ownerConfirmationStatus)}
+                      Chief: {formatStatusLabel(registration.chiefInspectionStatus)}
+                    </span>
+                    <span className="text-label-sm font-semibold text-on-surface-variant">
+                      Race: {formatStatusLabel(registration.raceStatus)}
                     </span>
                   </div>
                 </td>
@@ -651,7 +687,7 @@ const RegistrationDetailModal = ({
   onApprove: (registration: RegistrationResponse) => void;
   onReject: (registration: RegistrationResponse) => void;
 }) => {
-  const canProcess = !isTerminalRegistrationStatus(registration.status);
+  const canProcess = isAdminFinalReviewCandidate(registration);
   const canApprove = canApproveRegistration(registration);
   const approveBlockReason = getApprovalBlockReason(registration);
 
@@ -677,7 +713,8 @@ const RegistrationDetailModal = ({
             <div className="mt-4">
               <h3 className="text-title-large font-bold text-primary">{registration.horseName ?? '-'}</h3>
               <p className="mt-1 text-body-sm text-on-surface-variant">{registration.tournamentName ?? '-'}</p>
-              <div className="mt-4">
+              <div className="mt-4 grid gap-2">
+                <ReviewWorkflowBadge label={getReviewWorkflowLabel(registration)} />
                 <StatusBadge status={registration.status} />
               </div>
             </div>
@@ -696,6 +733,14 @@ const RegistrationDetailModal = ({
               label="Owner Confirmation"
               value={formatStatusLabel(registration.ownerConfirmationStatus)}
             />
+            <DetailItem icon={<ShieldCheck className="h-4 w-4" />} label="Race Status" value={formatStatusLabel(registration.raceStatus)} />
+            <DetailItem icon={<ShieldCheck className="h-4 w-4" />} label="Chief Inspection" value={formatStatusLabel(registration.chiefInspectionStatus)} />
+            <DetailItem icon={<UserRound className="h-4 w-4" />} label="Chief Referee" value={registration.chiefInspectedByFullName ?? '-'} />
+            <DetailItem icon={<Clock3 className="h-4 w-4" />} label="Chief Inspected At" value={formatDateTime(registration.chiefInspectedAt)} />
+            <DetailItem icon={<FileText className="h-4 w-4" />} label="Chief Note" value={registration.chiefInspectionNote ?? '-'} />
+            <DetailItem icon={<UserRound className="h-4 w-4" />} label="Admin Reviewed By" value={registration.adminReviewedByFullName ?? registration.approvedByFullName ?? '-'} />
+            <DetailItem icon={<Clock3 className="h-4 w-4" />} label="Admin Reviewed At" value={formatDateTime(registration.adminReviewedAt ?? registration.approvedAt)} />
+            <DetailItem icon={<FileText className="h-4 w-4" />} label="Admin Review Note" value={registration.adminReviewNote ?? '-'} />
           </div>
         </div>
 
@@ -787,7 +832,7 @@ const ActionModal = ({
               }
             }}
             rows={5}
-            placeholder={isApprove ? 'Add an approval note for this registration.' : 'Explain why this registration is rejected.'}
+            placeholder={isApprove ? 'Optional approval note for this registration.' : 'Optional reason for rejecting this registration.'}
             className={formInputClassName}
           />
         </Field>
@@ -818,6 +863,17 @@ const ActionModal = ({
   );
 };
 
+const ReviewWorkflowBadge = ({ label }: { label: string }) => {
+  const className = label === 'Rejected'
+    ? 'border-error/30 bg-error-container/20 text-error'
+    : label === 'Final approved' || label === 'Chief approved - waiting admin'
+      ? 'border-secondary/30 bg-secondary/10 text-secondary'
+      : label === 'Waiting chief inspection'
+        ? 'border-primary/30 bg-primary/10 text-primary'
+        : 'border-tertiary/30 bg-tertiary/10 text-tertiary';
+
+  return <span className={`inline-flex rounded-full border px-3 py-1 text-[10px] font-bold uppercase tracking-wider ${className}`}>{label}</span>;
+};
 const StatusBadge = ({ status }: { status?: string | null }) => (
   <span className={`inline-flex rounded-full border px-3 py-1 text-[10px] font-bold uppercase tracking-wider ${getStatusClassName(status)}`}>
     {formatStatusLabel(status)}

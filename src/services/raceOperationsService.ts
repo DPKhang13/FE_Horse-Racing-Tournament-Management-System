@@ -26,6 +26,67 @@ export type RefereeAssignedRaceItem = {
   assignedAt?: string;
 };
 
+export type ChiefRaceParticipantItem = {
+  assignmentId?: number;
+  id?: number;
+  regId?: number;
+  ownerConfirmationStatus?: string;
+  raceId?: number;
+  jockeyId?: number;
+  gateNumber?: number;
+  status?: string;
+  invitedAt?: string;
+  responseDeadline?: string;
+  respondedAt?: string;
+  cancelledAt?: string;
+  expiredAt?: string;
+  raceName?: string;
+  tournamentName?: string;
+  raceNumber?: number;
+  scheduledAt?: string;
+  horseId?: number;
+  horseName?: string;
+  horseAvatarUrl?: string;
+  ownerId?: number;
+  ownerFullName?: string;
+  ownerStableName?: string;
+  jockeyFullName?: string;
+  jockeyAvatarUrl?: string;
+};
+
+export type ChiefInspectionRegistrationItem = {
+  id?: number;
+  regId?: number;
+  registrationId?: number;
+  raceId?: number;
+  raceName?: string;
+  raceStatus?: string;
+  tournamentName?: string;
+  raceNumber?: number;
+  scheduledAt?: string;
+  horseId?: number;
+  horseName?: string;
+  horseAvatarUrl?: string;
+  ownerId?: number;
+  ownerFullName?: string;
+  ownerStableName?: string;
+  jockeyId?: number;
+  jockeyFullName?: string;
+  jockeyStatus?: string;
+  gateNumber?: number;
+  status?: string;
+  ownerConfirmationStatus?: string;
+  chiefInspectionStatus?: string;
+  chiefInspectionNote?: string;
+  chiefInspectedByFullName?: string;
+  chiefInspectedAt?: string;
+};
+
+export type ChiefInspectionRequest = {
+  status: 'approved' | 'rejected';
+  note: string;
+};
+
 export type RefereeReportFormData = {
   reportType?: string;
   inspectionNotes?: string;
@@ -186,6 +247,62 @@ const mapAssignedRace = (raw: RawObject): RefereeAssignedRaceItem => ({
   assignedAt: asString(raw.assignedAt) || undefined,
 });
 
+const mapChiefParticipant = (raw: RawObject): ChiefRaceParticipantItem => ({
+  assignmentId: asOptionalNumber(raw.assignmentId),
+  id: asOptionalNumber(raw.id),
+  regId: asOptionalNumber(raw.regId),
+  ownerConfirmationStatus: asString(raw.ownerConfirmationStatus) || undefined,
+  raceId: asOptionalNumber(raw.raceId),
+  jockeyId: asOptionalNumber(raw.jockeyId),
+  gateNumber: asOptionalNumber(raw.gateNumber),
+  status: asString(raw.status) || undefined,
+  invitedAt: asString(raw.invitedAt) || undefined,
+  responseDeadline: asString(raw.responseDeadline) || undefined,
+  respondedAt: asString(raw.respondedAt) || undefined,
+  cancelledAt: asString(raw.cancelledAt) || undefined,
+  expiredAt: asString(raw.expiredAt) || undefined,
+  raceName: asString(raw.raceName) || undefined,
+  tournamentName: asString(raw.tournamentName) || undefined,
+  raceNumber: asOptionalNumber(raw.raceNumber),
+  scheduledAt: asString(raw.scheduledAt) || undefined,
+  horseId: asOptionalNumber(raw.horseId),
+  horseName: asString(raw.horseName) || undefined,
+  horseAvatarUrl: asString(raw.horseAvatarUrl) || undefined,
+  ownerId: asOptionalNumber(raw.ownerId),
+  ownerFullName: asString(raw.ownerFullName) || undefined,
+  ownerStableName: asString(raw.ownerStableName) || undefined,
+  jockeyFullName: asString(raw.jockeyFullName) || undefined,
+  jockeyAvatarUrl: asString(raw.jockeyAvatarUrl) || undefined,
+});
+
+const mapChiefInspectionRegistration = (raw: RawObject): ChiefInspectionRegistrationItem => ({
+  id: asOptionalNumber(raw.id),
+  regId: asOptionalNumber(raw.regId),
+  registrationId: asOptionalNumber(raw.registrationId ?? raw.regId ?? raw.id),
+  raceId: asOptionalNumber(raw.raceId),
+  raceName: asString(raw.raceName) || undefined,
+  raceStatus: asString(raw.raceStatus ?? raw.statusRace) || undefined,
+  tournamentName: asString(raw.tournamentName) || undefined,
+  raceNumber: asOptionalNumber(raw.raceNumber),
+  scheduledAt: asString(raw.scheduledAt) || undefined,
+  horseId: asOptionalNumber(raw.horseId),
+  horseName: asString(raw.horseName) || undefined,
+  horseAvatarUrl: asString(raw.horseAvatarUrl) || undefined,
+  ownerId: asOptionalNumber(raw.ownerId),
+  ownerFullName: asString(raw.ownerFullName) || undefined,
+  ownerStableName: asString(raw.ownerStableName) || undefined,
+  jockeyId: asOptionalNumber(raw.jockeyId),
+  jockeyFullName: asString(raw.jockeyFullName) || undefined,
+  jockeyStatus: asString(raw.jockeyStatus ?? raw.assignmentStatus) || undefined,
+  gateNumber: asOptionalNumber(raw.gateNumber),
+  status: asString(raw.status) || undefined,
+  ownerConfirmationStatus: asString(raw.ownerConfirmationStatus) || undefined,
+  chiefInspectionStatus: asString(raw.chiefInspectionStatus) || undefined,
+  chiefInspectionNote: asString(raw.chiefInspectionNote) || undefined,
+  chiefInspectedByFullName: asString(raw.chiefInspectedByFullName) || undefined,
+  chiefInspectedAt: asString(raw.chiefInspectedAt) || undefined,
+});
+
 const mapReport = (raw: RawObject): RefereeReportItem => ({
   reportId: asNumber(raw.reportId ?? raw.id),
   raceId: asNumber(raw.raceId),
@@ -318,18 +435,55 @@ export const raceOperationsService = {
     };
   },
 
+  async startChiefRace(raceId: number | string, data: { forceCloseBetting?: boolean; note?: string } = {}): Promise<RaceStartData> {
+    const response = await apiClient.patch(`/api/v1/referee/chief/races/${raceId}/start`, {
+      forceCloseBetting: data.forceCloseBetting ?? true,
+      note: data.note?.trim() || undefined,
+    });
+    const raceStart = mapRaceStart(unwrapApiData<RawObject>(response));
+    return {
+      ...raceStart,
+      message: getApiResponseMessage(response) || raceStart.message,
+    };
+  },
+
   async getAssignedRaces(): Promise<RefereeAssignedRaceItem[]> {
     const response = await apiClient.get('/api/v1/referee/races/get-my-assigned');
     return unwrapApiList<RawObject>(response).map(mapAssignedRace);
   },
 
+  async getChiefParticipants(raceId: number | string): Promise<ChiefRaceParticipantItem[]> {
+    const response = await apiClient.get(`/api/v1/referee/chief/races/${raceId}/participants`);
+    return unwrapApiList<RawObject>(response).map(mapChiefParticipant);
+  },
+
+  async getChiefInspectionRegistrations(raceId: number | string): Promise<ChiefInspectionRegistrationItem[]> {
+    const response = await apiClient.get(`/api/v1/referee/chief/races/${raceId}/registrations/inspection`);
+    return unwrapApiList<RawObject>(response).map(mapChiefInspectionRegistration);
+  },
+
+  async inspectRegistration(
+    raceId: number | string,
+    registrationId: number | string,
+    data: ChiefInspectionRequest,
+  ): Promise<ChiefInspectionRegistrationItem> {
+    const response = await apiClient.patch(
+      `/api/v1/referee/chief/races/${raceId}/registrations/${registrationId}/inspection`,
+      {
+        status: data.status,
+        note: data.note.trim(),
+      },
+    );
+    return mapChiefInspectionRegistration(unwrapApiData<RawObject>(response));
+  },
+
   async createReport(raceId: number | string, data: RefereeReportFormData): Promise<RefereeReportItem> {
     const response = await apiClient.post(`/api/v1/referee/races/${raceId}/reports/create`, {
-      reportType: data.reportType?.trim() || undefined,
-      inspectionNotes: data.inspectionNotes?.trim() || undefined,
-      violationNotes: data.violationNotes?.trim() || undefined,
-      resultNotes: data.resultNotes?.trim() || undefined,
-      verdict: data.verdict?.trim() || undefined,
+      reportType: data.reportType?.trim() ?? '',
+      inspectionNotes: data.inspectionNotes?.trim() ?? '',
+      violationNotes: data.violationNotes?.trim() ?? '',
+      resultNotes: data.resultNotes?.trim() ?? '',
+      verdict: data.verdict?.trim() ?? '',
     });
     return mapReport(unwrapApiData<RawObject>(response));
   },
@@ -339,19 +493,35 @@ export const raceOperationsService = {
     return unwrapApiList<RawObject>(response).map(mapReport);
   },
 
+  async createChiefFinalReport(raceId: number | string, resultNotes: string): Promise<RefereeReportItem> {
+    const response = await apiClient.post(`/api/v1/referee/races/${raceId}/reports/create`, {
+      reportType: 'final',
+      inspectionNotes: '',
+      violationNotes: '',
+      resultNotes: resultNotes.trim(),
+      verdict: 'clean',
+    });
+    return mapReport(unwrapApiData<RawObject>(response));
+  },
+
   async createDraft(raceId: number | string, data: { reportId?: number; results: RaceDraftResultItemInput[] }): Promise<RaceResultDraftData> {
-    const response = await apiClient.post(`/api/v1/referee/races/${raceId}/results/draft/create`, toDraftPayload(data));
+    const response = await apiClient.post(`/api/v1/referee/chief/races/${raceId}/results/draft`, toDraftPayload(data));
     return mapDraft(unwrapApiData<RawObject>(response));
   },
 
   async updateDraft(raceId: number | string, data: { reportId?: number; results: RaceDraftResultItemInput[] }): Promise<RaceResultDraftData> {
-    const response = await apiClient.put(`/api/v1/referee/races/${raceId}/results/draft/update`, toDraftPayload(data));
+    const response = await apiClient.put(`/api/v1/referee/chief/races/${raceId}/results/draft`, toDraftPayload(data));
     return mapDraft(unwrapApiData<RawObject>(response));
   },
 
   async getDraft(raceId: number | string): Promise<RaceResultDraftData> {
-    const response = await apiClient.get(`/api/v1/referee/races/${raceId}/results/draft/get`);
+    const response = await apiClient.get(`/api/v1/referee/races/${raceId}/results/draft`);
     return mapDraft(unwrapApiData<RawObject>(response));
+  },
+
+  async confirmChiefResults(raceId: number | string): Promise<RaceResultWorkflowItem[]> {
+    const response = await apiClient.patch(`/api/v1/referee/chief/races/${raceId}/results/confirm`);
+    return unwrapApiList<RawObject>(response).map(mapWorkflowResult);
   },
 
   async getAdminResults(raceId: number | string): Promise<RaceResultWorkflowItem[]> {

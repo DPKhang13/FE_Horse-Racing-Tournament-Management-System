@@ -1,6 +1,6 @@
 import { ChevronRight } from 'lucide-react';
 import { Link } from 'react-router-dom';
-import type { RaceResultListItem } from '../../../types/raceResult';
+import type { RaceResultListItem } from '../../types/raceResult';
 import ResultStatusChip from './ResultStatusChip';
 import RankBadge from './RankBadge';
 
@@ -25,23 +25,23 @@ const formatDate = (dateString: string) => {
 const RaceResultCard = ({ result }: RaceResultCardProps) => {
   return (
     <article className="bg-white border border-outline-variant rounded-lg overflow-hidden shadow-sm hover:border-secondary transition-all group">
-      <div className="bg-primary-container p-6 text-white flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4">
+      <div className="bg-cyan-700 p-6 text-white flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4">
         <div>
           <div className="flex flex-wrap items-center gap-3 mb-2">
             <h3 className="text-body-lg font-bold">{result.raceName}</h3>
             <ResultStatusChip status={result.status} />
           </div>
-          <p className="text-label-md text-on-primary-container uppercase tracking-widest">
+          <p className="text-label-md text-cyan-50 uppercase tracking-widest">
             R{result.raceNumber} • {result.track} • {formatDate(result.date)}
           </p>
-          <p className="text-body-sm text-on-primary-container/80 mt-1">{result.tournamentName}</p>
+          <p className="text-body-sm text-cyan-50/80 mt-1">{result.tournamentName}</p>
         </div>
         <div className="flex flex-col items-start sm:items-end gap-2 shrink-0">
-          <p className="text-label-sm text-on-primary-container uppercase tracking-wider">Prize Pool</p>
-          <p className="text-body-lg font-bold text-secondary-container">{result.totalPrizePool}</p>
+          <p className="text-label-sm text-cyan-50 uppercase tracking-wider">Prize Pool</p>
+          <p className="text-body-lg font-bold text-cyan-100">{result.totalPrizePool}</p>
           <Link
             to={`/results/${result.raceId}`}
-            className="flex items-center gap-2 text-label-md font-bold text-secondary-container hover:text-white transition-colors mt-1"
+            className="flex items-center gap-2 text-label-md font-bold text-cyan-100 hover:text-white transition-colors mt-1"
           >
             FULL REPORT <ChevronRight className="w-4 h-4" />
           </Link>
@@ -65,7 +65,7 @@ const RaceResultCard = ({ result }: RaceResultCardProps) => {
                   <RankBadge rank={finisher.rank} />
                 </td>
                 <td className="px-6 py-4">
-                  <span className="text-body-sm font-bold text-primary">{finisher.horseName}</span>
+                  <span className="text-body-sm font-bold text-cyan-300">{finisher.horseName}</span>
                 </td>
                 <td className="px-6 py-4">
                   <span className="text-body-sm text-on-surface-variant font-medium">{finisher.jockeyName}</span>

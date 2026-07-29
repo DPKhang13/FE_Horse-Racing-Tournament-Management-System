@@ -152,6 +152,7 @@ const toUpdatePayload = (data: UserFormData): AdminUpdateUserRequest => ({
   licenseNumber: data.licenseNumber,
   experienceYears: data.experienceYears,
   address: data.address,
+  avatarUrl: data.avatarUrl,
 });
 
 const UserManagementPage = () => {
@@ -369,26 +370,41 @@ const UserManagementPage = () => {
     setErrorMessage('');
 
     try {
-      let nextFormData = formData;
+      if (selectedUser) {
+        let nextFormData = formData;
 
-      if (selectedImageFile) {
-        const uploadResponse = selectedUser
-          ? await uploadService.uploadUserImage(selectedUser.userId, selectedImageFile)
-          : await uploadService.uploadNewUserImage(selectedImageFile);
-        const avatarUrl = getUploadedImageUrl(uploadResponse);
+        if (selectedImageFile) {
+          const uploadResponse = await uploadService.uploadUserImage(selectedUser.userId, selectedImageFile);
+          const avatarUrl = getUploadedImageUrl(uploadResponse);
 
-        if (!avatarUrl) {
-          throw new Error('The image upload did not return an image URL.');
+          if (!avatarUrl) {
+            throw new Error('Cloudinary did not return an image URL.');
+          }
+
+          nextFormData = { ...formData, avatarUrl };
         }
 
-        nextFormData = { ...formData, avatarUrl };
-      }
-
-      if (selectedUser) {
         await adminUserService.updateUser(selectedUser.userId, toUpdatePayload(nextFormData));
         setMessage('User updated.');
       } else {
-        await adminUserService.createUser(nextFormData);
+        const createdUser = await adminUserService.createUser(formData);
+
+        if (selectedImageFile) {
+          try {
+            const uploadResponse = await uploadService.uploadUserImage(createdUser.userId, selectedImageFile);
+
+            if (!getUploadedImageUrl(uploadResponse)) {
+              throw new Error('Cloudinary did not return an image URL.');
+            }
+          } catch (uploadError) {
+            closeFormModal();
+            await loadUsers();
+            await loadStats();
+            setErrorMessage(`User was created, but the avatar could not be uploaded. ${getApiErrorMessage(uploadError, 'Please edit the user and try the avatar upload again.')}`);
+            return;
+          }
+        }
+
         setMessage('User created.');
       }
 
@@ -464,14 +480,14 @@ const UserManagementPage = () => {
   };
 
   return (
-    <div className="min-h-screen bg-slate-900 py-8">
+    <div className="min-h-screen bg-surface py-8">
       <div className="mx-auto max-w-[1440px] px-4 md:px-8">
-        <div className="glass-panel mb-6 rounded-2xl border border-slate-700 p-6">
+        <div className="admin-surface-panel mb-6 rounded-2xl border border-outline-variant/60 p-6">
           <div className="flex flex-col gap-6 xl:flex-row xl:items-end xl:justify-between">
             <div>
               <p className="mb-3 text-label-sm font-bold uppercase tracking-[0.18em] text-secondary">User Management</p>
               <h1 className="font-display mb-2 text-headline-lg font-extrabold text-primary">User Management</h1>
-              <p className="max-w-2xl text-body-md text-gray-300">
+              <p className="max-w-2xl text-body-md text-on-surface-variant">
                 Manage account access, role profiles, and security actions across the racing platform.
               </p>
             </div>
@@ -485,7 +501,7 @@ const UserManagementPage = () => {
           </div>
         </div>
 
-        <div className="mb-6 rounded-xl border border-slate-700 bg-slate-800/80 p-4 shadow-xl shadow-black/20">
+        <div className="mb-6 rounded-xl border border-outline-variant/60 bg-surface-container-low/70 p-4 shadow-lg shadow-black/10">
           <div className="flex min-w-0 flex-row items-center gap-4 overflow-x-auto">
             <div className="relative min-w-[280px] flex-1">
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-outline" />
@@ -542,10 +558,10 @@ const UserManagementPage = () => {
         {message && <StatusBanner tone="success" text={message} />}
         {errorMessage && <StatusBanner tone="error" text={errorMessage} />}
 
-        <div className="glass-panel overflow-hidden rounded-xl border border-slate-700">
+        <div className="admin-surface-panel overflow-hidden rounded-xl border border-outline-variant/60">
           <div className="overflow-x-auto">
             <table className="w-full min-w-[1120px] text-left">
-              <thead className="border-b border-slate-700 bg-slate-800">
+              <thead className="border-b border-outline-variant/60 bg-surface-container-low">
                 <tr>
                   <th className="px-5 py-4 text-label-sm uppercase tracking-wider text-outline">Avatar</th>
                   <th className="px-5 py-4 text-label-sm uppercase tracking-wider text-outline">Username</th>
@@ -556,17 +572,17 @@ const UserManagementPage = () => {
                   <th className="px-5 py-4 text-label-sm uppercase tracking-wider text-outline text-right">Actions</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-700">
+              <tbody className="divide-y divide-outline-variant/60">
                 {!isLoading && users.map((user) => (
-                  <tr key={String(user.userId)} className="transition-colors hover:bg-slate-800/70">
+                  <tr key={String(user.userId)} className="transition-colors hover:bg-surface-container-low/60">
                     <td className="px-5 py-4">
                       <Avatar user={user} />
                     </td>
                     <td className="px-5 py-4 text-body-sm font-bold text-primary">{user.username}</td>
-                    <td className="px-5 py-4 text-body-sm font-medium text-gray-300">{user.fullName}</td>
-                    <td className="px-5 py-4 text-body-sm font-medium text-gray-300">{user.email}</td>
+                    <td className="px-5 py-4 text-body-sm font-medium text-on-surface-variant">{user.fullName}</td>
+                    <td className="px-5 py-4 text-body-sm font-medium text-on-surface-variant">{user.email}</td>
                     <td className="px-5 py-4">
-                      <span className="inline-flex rounded-full bg-slate-700/80 px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-gray-300">
+                      <span className="inline-flex rounded-full bg-surface-container-high px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-on-surface-variant">
                         {formatRoleLabel(user.roleType)}
                       </span>
                     </td>
@@ -657,13 +673,13 @@ const UserManagementPage = () => {
 };
 
 const filterInputClassName =
-  'h-12 w-full appearance-none rounded-lg border border-slate-700 bg-slate-900 px-4 py-3 pl-10 text-body-sm text-gray-300 transition-colors focus:border-primary focus:outline-none';
+  'h-12 w-full appearance-none rounded-lg border border-outline-variant/60 bg-surface px-4 py-3 pl-10 text-body-sm text-on-surface-variant transition-colors focus:border-primary focus:outline-none';
 
 const inputClassName =
-  'w-full rounded-md border border-slate-700 bg-slate-900 px-4 py-3 text-body-sm text-gray-300 transition-colors focus:border-primary focus:outline-none';
+  'w-full rounded-md border border-outline-variant/60 bg-surface px-4 py-3 text-body-sm text-on-surface-variant transition-colors focus:border-primary focus:outline-none';
 
 const MetricCard = ({ icon, label, value }: { icon: ReactNode; label: string; value: string }) => (
-  <div className="rounded-lg border border-slate-700 bg-slate-800/80 p-4">
+  <div className="rounded-lg border border-outline-variant/60 bg-surface-container-low/70 p-4">
     <div className="mb-3 flex items-center justify-between text-outline">
       <span className="text-label-sm font-bold uppercase tracking-wider">{label}</span>
       {icon}
@@ -673,7 +689,7 @@ const MetricCard = ({ icon, label, value }: { icon: ReactNode; label: string; va
 );
 
 const Avatar = ({ user }: { user: AdminUser }) => (
-  <div className="flex h-11 w-11 items-center justify-center overflow-hidden rounded-lg border border-slate-700 bg-slate-800 text-label-md font-extrabold text-primary">
+  <div className="flex h-11 w-11 items-center justify-center overflow-hidden rounded-lg border border-outline-variant/60 bg-surface-container-low text-label-md font-extrabold text-primary">
     {user.avatarUrl ? (
       <img src={user.avatarUrl} alt={`${user.username} avatar`} className="h-full w-full object-cover" />
     ) : (
@@ -708,7 +724,7 @@ const IconButton = ({
     className={`flex h-9 w-9 items-center justify-center rounded-md border transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
       danger
         ? 'border-error-container/60 text-error hover:border-error hover:bg-error-container/20'
-        : 'border-slate-700 text-gray-300 hover:border-primary hover:text-primary'
+        : 'border-outline-variant/60 text-on-surface-variant hover:border-primary hover:text-primary'
     }`}
     aria-label={label}
     title={label}
@@ -739,11 +755,11 @@ const EmptyTableState = ({
   description: string;
 }) => (
   <div className="px-6 py-16 text-center">
-    <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-slate-800">
+    <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-surface-container-low">
       {isLoading ? <Users className="h-6 w-6 text-outline" /> : <Search className="h-6 w-6 text-outline" />}
     </div>
     <h3 className="mb-2 text-body-lg font-bold text-primary">{title}</h3>
-    <p className="text-body-sm text-gray-300">{description}</p>
+    <p className="text-body-sm text-on-surface-variant">{description}</p>
   </div>
 );
 
@@ -768,15 +784,15 @@ const PaginationBar = ({
   const endItem = Math.min(totalElements, (page + 1) * size);
 
   return (
-    <div className="flex flex-col gap-4 border-t border-slate-700 px-5 py-4 md:flex-row md:items-center md:justify-between">
-      <div className="flex items-center gap-3 text-body-sm text-gray-300">
+    <div className="flex flex-col gap-4 border-t border-outline-variant/60 px-5 py-4 md:flex-row md:items-center md:justify-between">
+      <div className="flex items-center gap-3 text-body-sm text-on-surface-variant">
         <span>
           Showing {startItem}-{endItem} of {totalElements}
         </span>
         <select
           value={size}
           onChange={(event) => onPageSizeChange(Number(event.target.value))}
-          className="rounded-md border border-slate-700 bg-slate-900 px-3 py-2 text-body-sm text-gray-300 focus:border-primary focus:outline-none"
+          className="rounded-md border border-outline-variant/60 bg-surface px-3 py-2 text-body-sm text-on-surface-variant focus:border-primary focus:outline-none"
           aria-label="Rows per page"
         >
           {pageSizeOptions.map((option) => (
@@ -790,7 +806,7 @@ const PaginationBar = ({
           type="button"
           onClick={() => onPageChange(Math.max(0, page - 1))}
           disabled={page <= 0}
-          className="rounded-md border border-slate-700 px-4 py-2 text-body-sm font-bold text-gray-300 transition-colors hover:border-primary hover:text-primary disabled:cursor-not-allowed disabled:opacity-50"
+          className="rounded-md border border-outline-variant/60 px-4 py-2 text-body-sm font-bold text-on-surface-variant transition-colors hover:border-primary hover:text-primary disabled:cursor-not-allowed disabled:opacity-50"
         >
           Previous
         </button>
@@ -803,7 +819,7 @@ const PaginationBar = ({
             className={`flex h-9 min-w-9 items-center justify-center rounded-md border px-3 text-body-sm font-bold transition-colors ${
               pageNumber === page
                 ? 'border-primary bg-primary text-on-primary'
-                : 'border-slate-700 text-gray-300 hover:border-primary hover:text-primary'
+                : 'border-outline-variant/60 text-on-surface-variant hover:border-primary hover:text-primary'
             }`}
             aria-label={`Page ${pageNumber + 1}`}
           >
@@ -815,7 +831,7 @@ const PaginationBar = ({
           type="button"
           onClick={() => onPageChange(Math.min(Math.max(totalPages - 1, 0), page + 1))}
           disabled={totalPages === 0 || page >= totalPages - 1}
-          className="rounded-md border border-slate-700 px-4 py-2 text-body-sm font-bold text-gray-300 transition-colors hover:border-primary hover:text-primary disabled:cursor-not-allowed disabled:opacity-50"
+          className="rounded-md border border-outline-variant/60 px-4 py-2 text-body-sm font-bold text-on-surface-variant transition-colors hover:border-primary hover:text-primary disabled:cursor-not-allowed disabled:opacity-50"
         >
           Next
         </button>
@@ -838,8 +854,8 @@ const Modal = ({
   maxWidthClassName?: string;
 }) => (
   <div className="fixed inset-0 z-[60] overflow-y-auto bg-black/60 px-4 py-8">
-    <div className={`mx-auto ${maxWidthClassName} rounded-lg border border-slate-700 bg-slate-800 shadow-xl`}>
-      <div className="flex items-start justify-between gap-6 border-b border-slate-700 p-6">
+    <div className={`mx-auto ${maxWidthClassName} rounded-lg border border-outline-variant/60 bg-surface-container-low shadow-xl`}>
+      <div className="flex items-start justify-between gap-6 border-b border-outline-variant/60 p-6">
         <div>
           <p className="mb-2 text-label-sm font-bold uppercase tracking-widest text-outline">{subtitle}</p>
           <h2 className="text-headline-md font-bold text-primary">{title}</h2>
@@ -847,7 +863,7 @@ const Modal = ({
         <button
           type="button"
           onClick={onClose}
-          className="flex h-10 w-10 items-center justify-center rounded-md border border-slate-700 text-gray-300 transition-colors hover:border-primary hover:text-primary"
+          className="flex h-10 w-10 items-center justify-center rounded-md border border-outline-variant/60 text-on-surface-variant transition-colors hover:border-primary hover:text-primary"
           aria-label="Close modal"
           title="Close modal"
         >
@@ -898,6 +914,7 @@ const UserForm = ({
       shape="circle"
       label="User avatar"
       tone="dark"
+      helpText="JPG, PNG or WebP, up to 5 MB. The avatar is uploaded to Cloudinary when you save."
     />
     <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
       <Field label="Username" error={formErrors.username}>
@@ -919,7 +936,7 @@ const UserForm = ({
       </Field>
       <Field label="Role Type">
         {isEditing ? (
-          <div className="flex min-h-12 items-center rounded-md border border-slate-700 bg-slate-900/60 px-4 py-3 text-body-sm font-semibold text-gray-300">
+          <div className="flex min-h-12 items-center rounded-md border border-outline-variant/60 bg-surface/60 px-4 py-3 text-body-sm font-semibold text-on-surface-variant">
             {roleLabels[formData.roleType]}
           </div>
         ) : (
@@ -974,11 +991,11 @@ const UserForm = ({
       )}
     </div>
 
-    <div className="flex flex-col-reverse gap-3 border-t border-slate-700 pt-4 sm:flex-row sm:justify-end">
+    <div className="flex flex-col-reverse gap-3 border-t border-outline-variant/60 pt-4 sm:flex-row sm:justify-end">
       <button
         type="button"
         onClick={onCancel}
-        className="rounded-md border border-slate-700 px-6 py-3 text-body-sm font-bold text-gray-300 transition-colors hover:border-primary hover:text-primary"
+        className="rounded-md border border-outline-variant/60 px-6 py-3 text-body-sm font-bold text-on-surface-variant transition-colors hover:border-primary hover:text-primary"
       >
         Cancel
       </button>
@@ -1017,11 +1034,11 @@ const ResetPasswordForm = ({
       />
     </Field>
 
-    <div className="flex flex-col-reverse gap-3 border-t border-slate-700 pt-4 sm:flex-row sm:justify-end">
+    <div className="flex flex-col-reverse gap-3 border-t border-outline-variant/60 pt-4 sm:flex-row sm:justify-end">
       <button
         type="button"
         onClick={onCancel}
-        className="rounded-md border border-slate-700 px-6 py-3 text-body-sm font-bold text-gray-300 transition-colors hover:border-primary hover:text-primary"
+        className="rounded-md border border-outline-variant/60 px-6 py-3 text-body-sm font-bold text-on-surface-variant transition-colors hover:border-primary hover:text-primary"
       >
         Cancel
       </button>

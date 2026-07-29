@@ -1,147 +1,189 @@
-import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react';
-import { ArrowDown, ArrowUp, CheckCircle2, ChevronDown, ClipboardList, Flag, Gauge, Layers, RefreshCw, ShieldCheck, Users } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react';
+import { CheckCircle2, ClipboardCheck, ClipboardList, Eye, FileText, Flag, RefreshCw, Save, Send, ShieldCheck, Timer, Trophy, Users } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
 import { getApiErrorMessage } from '../../services/apiClient';
-import { authService } from '../../services/authService';
-import { jockeyAssignmentService, type JockeyAssignmentItem } from '../../services/jockeyAssignmentService';
 import {
   raceOperationsService,
-  type RaceDraftResultItemInput,
-  type RacePointRuleItem,
-  type RaceResultDraftData,
+  type ChiefInspectionRegistrationItem,
+  type ChiefInspectionRequest,
+  type ChiefRaceParticipantItem,
   type RaceResultWorkflowItem,
   type RefereeAssignedRaceItem,
   type RefereeReportFormData,
   type RefereeReportItem,
 } from '../../services/raceOperationsService';
 import { raceRoundService, type RaceRoundItem } from '../../services/raceRoundService';
-import { scheduleService, type RaceParticipantItem } from '../../services/scheduleService';
-import { raceCrudService, type RaceCrudItem } from '../../services/raceCrudService';
 import { useToastNotifications } from '../../hooks/useToastNotifications';
-import { useAdminRaceResults } from '../../hooks/useAdminRaceResults';
 import { formatRefereeRoleLabel } from '../../utils/permissions';
 
-const normalizeStatus = (value?: string) => value?.trim().toLowerCase().replace(/[\s-]+/g, '_') ?? '';
-const toDateTimeInputValue = (value?: string) => {
-  if (!value) {
-    return '';
-  }
-
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) {
-    return '';
-  }
-
-  const localDate = new Date(date.getTime() - date.getTimezoneOffset() * 60_000);
-  return localDate.toISOString().slice(0, 16);
+type DraftTimeMap = Record<string, string>;
+type DisqualificationReasonMap = Record<string, string>;
+type ResultView = 'overall' | string;
+type ChiefInspectionAction = {
+  status: ChiefInspectionRequest['status'];
+  registration: ChiefInspectionRegistrationItem;
 };
-
-type LapEntryDraft = {
-  position: string;
-  lapTimeSec: string;
-  recordedAt: string;
-};
-
-type ParticipantLapStats = {
-  completedLaps: number;
-  bestLapSec?: number;
-  averageLapSec?: number;
-};
-
-const getLapDraftKey = (lapNumber: number, assignmentId: number) => `${lapNumber}:${assignmentId}`;
-
-const formatSeconds = (value?: number | null) => {
-  if (value === null || value === undefined || !Number.isFinite(value)) return '-';
-  return `${value.toFixed(2)}s`;
-};
-
-const roundSeconds = (value?: number | null) => {
-  if (value === null || value === undefined || !Number.isFinite(value)) return undefined;
-  return Number(value.toFixed(2));
-};
-
-const formatSecondsInput = (value?: number | null) => {
-  const rounded = roundSeconds(value);
-  return rounded === undefined ? '' : rounded.toFixed(2);
-};
-
-const normalizeDraftPositions = (items: RaceDraftResultItemInput[]) => {
-  let nextPosition = 1;
-  return items.map((item) => ({
-    ...item,
-    finishPosition: item.isDisqualified ? undefined : nextPosition++,
-  }));
-};
-
-const sortDraftItems = (items: RaceDraftResultItemInput[]) => [...items].sort((a, b) => {
-  if (a.isDisqualified !== b.isDisqualified) return a.isDisqualified ? 1 : -1;
-  return (a.finishPosition ?? Number.MAX_SAFE_INTEGER) - (b.finishPosition ?? Number.MAX_SAFE_INTEGER);
-});
-
-const createEmptyPointRule = (): RacePointRuleItem => ({
-  finishPosition: 1,
-  points: 0,
-  note: '',
-});
 
 const initialReportForm: RefereeReportFormData = {
-  reportType: 'final',
+  reportType: 'inspection',
   inspectionNotes: '',
   violationNotes: '',
   resultNotes: '',
   verdict: 'clean',
 };
 
-const reportTypeOptions = [
-  { value: 'final', label: 'Final report' },
-  { value: 'incident', label: 'Incident report' },
-  { value: 'inspection', label: 'Inspection report' },
-];
+const normalizeStatus = (value?: string) => value?.trim().toLowerCase().replace(/[\s-]+/g, '_') ?? '';
+const MAIN_INSPECTION_REPORT_TYPE = 'inspection';
+const MAIN_VIOLATION_REPORT_TYPE = 'violation';
+const getMainReportType = (verdict?: string) => (normalizeStatus(verdict) === 'violation' ? MAIN_VIOLATION_REPORT_TYPE : MAIN_INSPECTION_REPORT_TYPE);
+const getAssignmentId = (item: ChiefRaceParticipantItem | RaceResultWorkflowItem) => item.assignmentId ?? ('id' in item ? item.id : undefined) ?? 0;
+const getRegistrationId = (item: ChiefInspectionRegistrationItem) => item.registrationId ?? item.regId ?? item.id ?? 0;
+const getLapViewValue = (lap: number) => 'lap:' + lap;
 
-const verdictOptions = [
-  { value: 'clean', label: 'Clean - no violation' },
-  { value: 'violation', label: 'Violation detected' },
-];
+const formatDateTime = (value?: string) => {
+  if (!value) return '-';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return date.toLocaleString('en-GB', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' });
+};
 
+const formatRaceOptionLabel = (race: RefereeAssignedRaceItem) => {
+  const tournament = race.tournamentName?.trim() || 'Tournament -';
+  const scheduleDay = race.dayNumber
+    ? 'Day ' + race.dayNumber
+    : race.scheduleTitle?.trim() || (race.scheduleId ? 'Schedule #' + race.scheduleId : '') || formatDateTime(race.scheduledAt);
+  return tournament + ' - ' + scheduleDay + ' - ' + race.raceName;
+};
+
+const formatSeconds = (value?: number | null) => {
+  if (value === null || value === undefined || !Number.isFinite(value)) return '-';
+  const minutes = Math.floor(value / 60);
+  const seconds = value - minutes * 60;
+  return minutes > 0 ? minutes + ':' + seconds.toFixed(2).padStart(5, '0') : value.toFixed(2) + 's';
+};
+
+const formatSecondsInput = (value?: number | null) => (
+  value === null || value === undefined || !Number.isFinite(value) ? '' : Number(value.toFixed(2)).toString()
+);
+
+const parseSecondsInput = (value: string) => {
+  const trimmed = value.trim();
+  if (!trimmed) return undefined;
+  if (trimmed.includes(':')) {
+    const [minutesPart, secondsPart] = trimmed.split(':');
+    const minutes = Number(minutesPart);
+    const seconds = Number(secondsPart);
+    return Number.isFinite(minutes) && Number.isFinite(seconds) ? Number((minutes * 60 + seconds).toFixed(2)) : undefined;
+  }
+  const seconds = Number(trimmed);
+  return Number.isFinite(seconds) && seconds > 0 ? Number(seconds.toFixed(2)) : undefined;
+};
+
+const formatStatusLabel = (status?: string) => {
+  if (!status?.trim()) return '-';
+  return status.trim().replace(/[_-]+/g, ' ').replace(/\s+/g, ' ').replace(/\b\w/g, (character) => character.toUpperCase());
+};
+
+const statusClassName = (status?: string) => {
+  const normalized = normalizeStatus(status);
+  if (normalized === 'completed' || normalized === 'published') return 'border-secondary/30 bg-secondary/10 text-secondary';
+  if (normalized === 'in_progress' || normalized === 'confirmed') return 'border-primary/30 bg-primary/10 text-primary';
+  if (normalized === 'draft' || normalized === 'ready') return 'border-tertiary/30 bg-tertiary/10 text-tertiary';
+  if (normalized === 'cancelled' || normalized === 'rejected' || normalized === 'disqualified') return 'border-error/30 bg-error-container/20 text-error';
+  if (normalized === 'qualified' || normalized === 'approved') return 'border-secondary/30 bg-secondary/10 text-secondary';
+  return 'border-outline-variant bg-surface-container text-on-surface-variant';
+};
+
+const isRegistrationClosedStatus = (status?: string) => normalizeStatus(status) === 'registration_closed';
+const isOpenForBettingStatus = (status?: string) => ['open_for_betting', 'betting_open'].includes(normalizeStatus(status));
+const isConfirmedStatus = (status?: string) => normalizeStatus(status) === 'confirmed';
+
+const getInspectionWorkflowLabel = (registration: ChiefInspectionRegistrationItem) => {
+  const registrationStatus = normalizeStatus(registration.status);
+  const chiefStatus = normalizeStatus(registration.chiefInspectionStatus);
+
+  if (registrationStatus === 'rejected' || chiefStatus === 'rejected') return 'Rejected';
+  if (registrationStatus === 'approved') return 'Final approved';
+  if (chiefStatus === 'approved') return 'Chief approved - waiting admin';
+  if (!isConfirmedStatus(registration.ownerConfirmationStatus) || !isConfirmedStatus(registration.jockeyStatus)) return 'Pending jockey confirmation';
+  return 'Waiting chief inspection';
+};
+const getStoredApprovedIds = (raceId: string) => {
+  if (typeof window === 'undefined') return new Set<number>();
+  try {
+    const raw = window.localStorage.getItem('chief-participant-inspection:' + raceId);
+    const ids = raw ? JSON.parse(raw) as unknown : [];
+    return new Set(Array.isArray(ids) ? ids.map(Number).filter(Number.isFinite) : []);
+  } catch {
+    return new Set<number>();
+  }
+};
+
+const persistApprovedIds = (raceId: string, ids: Set<number>) => {
+  if (typeof window === 'undefined' || !raceId) return;
+  window.localStorage.setItem('chief-participant-inspection:' + raceId, JSON.stringify(Array.from(ids)));
+};
+
+const getStoredDisqualifiedIds = (raceId: string) => {
+  if (typeof window === 'undefined') return new Set<number>();
+  try {
+    const raw = window.localStorage.getItem('chief-participant-disqualified:' + raceId);
+    const ids = raw ? JSON.parse(raw) as unknown : [];
+    return new Set(Array.isArray(ids) ? ids.map(Number).filter(Number.isFinite) : []);
+  } catch {
+    return new Set<number>();
+  }
+};
+
+const persistDisqualifiedIds = (raceId: string, ids: Set<number>) => {
+  if (typeof window === 'undefined' || !raceId) return;
+  window.localStorage.setItem('chief-participant-disqualified:' + raceId, JSON.stringify(Array.from(ids)));
+};
+
+const getStoredDisqualifyReasons = (raceId: string): DisqualificationReasonMap => {
+  if (typeof window === 'undefined') return {};
+  try {
+    const raw = window.localStorage.getItem('chief-participant-disqualify-reasons:' + raceId);
+    const reasons = raw ? JSON.parse(raw) as unknown : {};
+    return reasons && typeof reasons === 'object' && !Array.isArray(reasons) ? reasons as DisqualificationReasonMap : {};
+  } catch {
+    return {};
+  }
+};
+
+const persistDisqualifyReasons = (raceId: string, reasons: DisqualificationReasonMap) => {
+  if (typeof window === 'undefined' || !raceId) return;
+  window.localStorage.setItem('chief-participant-disqualify-reasons:' + raceId, JSON.stringify(reasons));
+};
 const RaceControlPage = () => {
   const [searchParams, setSearchParams] = useSearchParams();
-  const profile = authService.getStoredUserProfile();
-  const roleType = profile?.roleType;
-  const isAdmin = roleType === 'admin';
-  const isReferee = roleType === 'race_referee';
-
   const [selectedRaceId, setSelectedRaceId] = useState(() => searchParams.get('raceId') ?? '');
-  const [isAssignedRaceDropdownOpen, setIsAssignedRaceDropdownOpen] = useState(false);
   const [assignedRaces, setAssignedRaces] = useState<RefereeAssignedRaceItem[]>([]);
-  const [participants, setParticipants] = useState<JockeyAssignmentItem[]>([]);
+  const [inspectionRegistrations, setInspectionRegistrations] = useState<ChiefInspectionRegistrationItem[]>([]);
+  const [participants, setParticipants] = useState<ChiefRaceParticipantItem[]>([]);
   const [reports, setReports] = useState<RefereeReportItem[]>([]);
-  const [draft, setDraft] = useState<RaceResultDraftData | null>(null);
-  const [raceSnapshot, setRaceSnapshot] = useState<RaceCrudItem | null>(null);
+  const [draftResults, setDraftResults] = useState<RaceResultWorkflowItem[]>([]);
+  const [draftStatus, setDraftStatus] = useState('');
   const [raceRounds, setRaceRounds] = useState<RaceRoundItem[]>([]);
-  const [lapRanking, setLapRanking] = useState<RaceResultWorkflowItem[]>([]);
-  const [lapParticipants, setLapParticipants] = useState<RaceParticipantItem[]>([]);
-  const [selectedLapNumber, setSelectedLapNumber] = useState(1);
-  const [lapEntryDrafts, setLapEntryDrafts] = useState<Record<string, LapEntryDraft>>({});
-  const [savingLapAssignmentId, setSavingLapAssignmentId] = useState<number | null>(null);
-  const [pointRules, setPointRules] = useState<RacePointRuleItem[]>([createEmptyPointRule()]);
+  const [approvedAssignmentIds, setApprovedAssignmentIds] = useState<Set<number>>(() => new Set());
+  const [disqualifiedAssignmentIds, setDisqualifiedAssignmentIds] = useState<Set<number>>(() => new Set());
+  const [disqualifyReasons, setDisqualifyReasons] = useState<DisqualificationReasonMap>({});
+  const [timeDrafts, setTimeDrafts] = useState<DraftTimeMap>({});
+  const [selectedView, setSelectedView] = useState<ResultView>('overall');
   const [reportForm, setReportForm] = useState<RefereeReportFormData>(initialReportForm);
-  const [draftItems, setDraftItems] = useState<RaceDraftResultItemInput[]>([]);
-  const [cancelReason, setCancelReason] = useState('');
-  const [forceCloseBetting, setForceCloseBetting] = useState(true);
-  const [isBusy, setIsBusy] = useState(false);
-  const [isLoadingAssigned, setIsLoadingAssigned] = useState(isReferee);
+  const [chiefFinalNotes, setChiefFinalNotes] = useState('');
+  const [isLoadingAssigned, setIsLoadingAssigned] = useState(true);
   const [isLoadingRaceData, setIsLoadingRaceData] = useState(false);
+  const [isBusy, setIsBusy] = useState(false);
+  const [isStartConfirmOpen, setIsStartConfirmOpen] = useState(false);
+  const [isResultConfirmOpen, setIsResultConfirmOpen] = useState(false);
+  const [inspectionAction, setInspectionAction] = useState<ChiefInspectionAction | null>(null);
+  const [inspectionNote, setInspectionNote] = useState('');
+  const [inspectionError, setInspectionError] = useState('');
+  const [isReportHistoryOpen, setIsReportHistoryOpen] = useState(false);
+  const [selectedReportDetail, setSelectedReportDetail] = useState<RefereeReportItem | null>(null);
   const [message, setMessage] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
-  const {
-    resultList: adminResults,
-    isLoading: isLoadingAdminResults,
-    setResultList: setAdminResults,
-    fetchRaceResults: fetchAdminRaceResults,
-    handleConfirm: confirmAdminResults,
-    handleCancel: cancelAdminResults,
-    handlePublish: publishAdminResults,
-  } = useAdminRaceResults({ autoFetch: false });
 
   useToastNotifications([
     message ? { tone: 'success', text: message } : null,
@@ -149,180 +191,143 @@ const RaceControlPage = () => {
   ]);
 
   const normalizedRaceId = selectedRaceId.trim();
-
-  const activeRaceSummary = useMemo(() => {
-    if (!normalizedRaceId) {
-      return undefined;
-    }
-
-    return assignedRaces.find((item) => String(item.raceId) === normalizedRaceId);
-  }, [assignedRaces, normalizedRaceId]);
-
-  const refereeRole = normalizeStatus(activeRaceSummary?.refereeRole);
-  const canEditResults = isReferee && ['chief_referee', 'main_referee'].includes(refereeRole);
-  const isRaceInProgress = normalizeStatus(activeRaceSummary?.status ?? raceSnapshot?.status ?? draft?.status) === 'in_progress';
-  const currentRefereeId = profile?.refereeProfile?.refereeId ?? profile?.userId;
-  const automaticReportId = draft?.reportId
-    ?? reports.find((report) => report.refereeId === currentRefereeId)?.reportId;
-  const participantByAssignmentId = useMemo(
-    () => new Map(participants.map((participant) => [participant.assignmentId ?? participant.id ?? 0, participant])),
-    [participants],
-  );
-  const configuredLapCount = useMemo(
-    () => raceSnapshot?.lapCount ?? raceRounds.find((round) => round.lapCount && round.lapCount > 0)?.lapCount,
-    [raceRounds, raceSnapshot?.lapCount],
-  );
-  const lapStatsByAssignment = useMemo(() => {
-    const stats = new Map<number, ParticipantLapStats>();
-
-    lapParticipants.forEach((participant) => {
-      const participantRounds = raceRounds.filter((round) => (
-        round.assignmentId === participant.assignmentId
-        && round.lapTimeSec !== undefined
-      ));
-      const lapTimes = participantRounds
-        .map((round) => round.lapTimeSec as number)
-        .filter((time) => Number.isFinite(time) && time > 0);
-      const totalTime = lapTimes.reduce((total, time) => total + time, 0);
-
-      stats.set(participant.assignmentId, {
-        completedLaps: participantRounds.length,
-        bestLapSec: lapTimes.length > 0 ? Math.min(...lapTimes) : undefined,
-        averageLapSec: lapTimes.length > 0 ? totalTime / lapTimes.length : undefined,
-      });
-    });
-
-    return stats;
-  }, [lapParticipants, raceRounds]);
-
-  const handleSelectRace = (raceId: string) => {
-    if (raceId.trim() !== normalizedRaceId) {
-      setSelectedLapNumber(1);
-      setLapEntryDrafts({});
-    }
+  const activeRace = useMemo(() => assignedRaces.find((race) => String(race.raceId) === normalizedRaceId), [assignedRaces, normalizedRaceId]);
+  const refereeRole = normalizeStatus(activeRace?.refereeRole);
+  const visibleRaceStatus = activeRace?.status ?? draftStatus;
+  const activeRaceStatus = normalizeStatus(visibleRaceStatus);
+  const isRegistrationClosedRace = isRegistrationClosedStatus(visibleRaceStatus);
+  const isOpenForBettingRace = isOpenForBettingStatus(visibleRaceStatus);
+  const hasRaceStarted = ['in_progress', 'in_process', 'running', 'started', 'completed', 'published'].includes(activeRaceStatus);
+  const isChiefReferee = refereeRole === 'chief_referee';
+  const isMainReferee = refereeRole === 'main_referee';
+  const roleLabel = activeRace?.refereeRole ? formatRefereeRoleLabel(activeRace.refereeRole) : 'Referee';
+  const draftByAssignment = useMemo(() => new Map(draftResults.map((result) => [result.assignmentId, result])), [draftResults]);
+  const participantByAssignment = useMemo(() => new Map(participants.map((participant) => [getAssignmentId(participant), participant])), [participants]);
+  const reviewedParticipants = useMemo(() => participants.filter((participant) => {
+    const assignmentId = getAssignmentId(participant);
+    return approvedAssignmentIds.has(assignmentId) || disqualifiedAssignmentIds.has(assignmentId);
+  }), [approvedAssignmentIds, disqualifiedAssignmentIds, participants]);
+  const pendingParticipants = useMemo(() => participants.filter((participant) => {
+    const assignmentId = getAssignmentId(participant);
+    return !approvedAssignmentIds.has(assignmentId) && !disqualifiedAssignmentIds.has(assignmentId);
+  }), [approvedAssignmentIds, disqualifiedAssignmentIds, participants]);
+  const inspectedRegistrationCount = inspectionRegistrations.filter((registration) => normalizeStatus(registration.chiefInspectionStatus)).length;
+  const canStartRace = !isBusy && isChiefReferee && isOpenForBettingRace && !hasRaceStarted;
+  const sortedDraftResults = useMemo(() => [...draftResults].sort((first, second) => (
+    (first.finishPosition ?? Number.MAX_SAFE_INTEGER) - (second.finishPosition ?? Number.MAX_SAFE_INTEGER)
+    || (first.finishTimeSec ?? Number.MAX_SAFE_INTEGER) - (second.finishTimeSec ?? Number.MAX_SAFE_INTEGER)
+    || first.assignmentId - second.assignmentId
+  )), [draftResults]);
+  const lapNumbers = useMemo(() => {
+    const numbers = Array.from(new Set(raceRounds.map((round) => round.roundNumber).filter((round) => round > 0))).sort((a, b) => a - b);
+    return numbers.length > 0 ? numbers : [1];
+  }, [raceRounds]);
+  const selectedLapNumber = selectedView.startsWith('lap:') ? Number(selectedView.replace('lap:', '')) : undefined;
+  const selectedLapRows = useMemo(() => selectedLapNumber ? raceRounds.filter((round) => round.roundNumber === selectedLapNumber).sort((first, second) => first.position - second.position) : [], [raceRounds, selectedLapNumber]);
+  const mainReports = useMemo(() => reports.filter((report) => normalizeStatus(report.refereeRole) === 'main_referee'), [reports]);
+  const submittedReports = mainReports.length > 0 ? mainReports : reports;
+  const handleSelectRace = useCallback((raceId: string) => {
     setSelectedRaceId(raceId);
+    setSelectedView('overall');
     const nextParams = new URLSearchParams(searchParams);
     if (raceId.trim()) nextParams.set('raceId', raceId.trim());
     else nextParams.delete('raceId');
     setSearchParams(nextParams, { replace: true });
-  };
-  const loadAssignedRaces = async () => {
-    if (!isReferee) {
-      return;
-    }
+  }, [searchParams, setSearchParams]);
 
+  const loadAssignedRaces = useCallback(async () => {
     setIsLoadingAssigned(true);
+    setErrorMessage('');
     try {
       const data = await raceOperationsService.getAssignedRaces();
       setAssignedRaces(data);
-      if (!normalizedRaceId && data.length > 0) {
-        handleSelectRace(String(data[0].raceId));
-      }
+      if (!normalizedRaceId && data.length > 0) handleSelectRace(String(data[0].raceId));
+      return data;
     } catch (error) {
       setErrorMessage(getApiErrorMessage(error, 'Unable to load assigned races.'));
+      return [];
     } finally {
       setIsLoadingAssigned(false);
     }
-  };
+  }, [handleSelectRace, normalizedRaceId]);
 
-  const loadRaceData = async (raceId: string) => {
+  const loadRaceData = async (raceId: string, role: string, raceStatus = activeRaceStatus) => {
     if (!raceId) {
-      setReports([]);
-      setDraft(null);
+      setInspectionRegistrations([]);
       setParticipants([]);
+      setReports([]);
+      setDraftResults([]);
+      setDraftStatus('');
       setRaceRounds([]);
-      setLapRanking([]);
-      setRaceSnapshot(null);
-      setLapParticipants([]);
-      setLapEntryDrafts({});
-      setDraftItems([]);
-      setAdminResults([]);
-      setPointRules([createEmptyPointRule()]);
+      setDisqualifiedAssignmentIds(new Set());
+      setDisqualifyReasons({});
+      setTimeDrafts({});
       return;
     }
 
+    const shouldLoadInspection = role === 'chief_referee' && isRegistrationClosedStatus(raceStatus);
+    const shouldLoadParticipants = role === 'chief_referee' && !shouldLoadInspection;
+
     setIsLoadingRaceData(true);
     setErrorMessage('');
-
     try {
-      const [roundData, lapParticipantData, rankingData, raceSnapshotData] = await Promise.all([
-        raceRoundService.getRoundsByRace(raceId),
-        scheduleService.getRaceParticipants(Number(raceId)),
-        raceOperationsService.getResultsByRace(raceId).catch(() => []),
-        isAdmin ? raceCrudService.getRaceById(raceId).catch(() => null) : Promise.resolve(null),
+      const [reportData, draftData, roundData, participantData, inspectionData] = await Promise.all([
+        raceOperationsService.getReports(raceId).catch(() => []),
+        raceOperationsService.getDraft(raceId).catch(() => null),
+        raceRoundService.getRoundsByRace(raceId).catch(() => []),
+        shouldLoadParticipants ? raceOperationsService.getChiefParticipants(raceId).catch(() => []) : Promise.resolve([]),
+        shouldLoadInspection ? raceOperationsService.getChiefInspectionRegistrations(raceId) : Promise.resolve([]),
       ]);
+      const nextDraftResults = draftData?.results ?? [];
+      const nextTimeDrafts = nextDraftResults.reduce<DraftTimeMap>((draftMap, item) => {
+        draftMap[String(item.assignmentId)] = formatSecondsInput(item.finishTimeSec);
+        return draftMap;
+      }, {});
+      const storedApprovedIds = getStoredApprovedIds(raceId);
+      const storedDisqualifiedIds = getStoredDisqualifiedIds(raceId);
+      const storedReasons = getStoredDisqualifyReasons(raceId);
+      nextDraftResults.forEach((result) => {
+        if (result.isDisqualified) {
+          storedDisqualifiedIds.add(result.assignmentId);
+          if (result.disqualifyReason) storedReasons[String(result.assignmentId)] = result.disqualifyReason;
+        } else {
+          storedApprovedIds.add(result.assignmentId);
+        }
+      });
+      setReports(reportData);
+      setDraftResults(nextDraftResults);
+      setDraftStatus(draftData?.status ?? '');
       setRaceRounds(roundData);
-      setLapParticipants(lapParticipantData.filter((participant) => participant.assignmentId > 0));
-      setLapRanking(rankingData);
-      setRaceSnapshot(raceSnapshotData);
-
-      if (isReferee) {
-        const [reportData, draftData, assignmentData] = await Promise.all([
-          raceOperationsService.getReports(raceId),
-          raceOperationsService.getDraft(raceId).catch(() => null),
-          jockeyAssignmentService.getAll(),
-        ]);
-        const raceParticipants = assignmentData
-          .filter((item) => String(item.raceId) === String(raceId) && normalizeStatus(item.status) === 'confirmed')
-          .sort((a, b) => (a.gateNumber ?? Number.MAX_SAFE_INTEGER) - (b.gateNumber ?? Number.MAX_SAFE_INTEGER));
-        const nextDraftItems = draftData?.results.length
-          ? sortDraftItems(draftData.results.map((item) => ({
-            assignmentId: item.assignmentId,
-            finishPosition: item.finishPosition ?? undefined,
-            finishTimeSec: roundSeconds(item.finishTimeSec),
-            isDisqualified: item.isDisqualified,
-            disqualifyReason: item.disqualifyReason ?? '',
-          })))
-          : normalizeDraftPositions(raceParticipants
-            .map((item) => ({
-              assignmentId: item.assignmentId ?? item.id ?? 0,
-              finishTimeSec: undefined,
-              isDisqualified: false,
-              disqualifyReason: '',
-            }))
-            .filter((item) => item.assignmentId > 0));
-
-        setParticipants(raceParticipants);
-        setReports(reportData);
-        setDraft(draftData);
-        setDraftItems(nextDraftItems);
-      }
-
-      if (isAdmin) {
-        const [, ruleData] = await Promise.all([
-          fetchAdminRaceResults(raceId),
-          raceOperationsService.getPointRules(raceId).catch(() => []),
-        ]);
-        setPointRules(ruleData.length > 0 ? ruleData : [createEmptyPointRule()]);
-      }
+      setParticipants(participantData);
+      setInspectionRegistrations(inspectionData);
+      setTimeDrafts(nextTimeDrafts);
+      setApprovedAssignmentIds(storedApprovedIds);
+      setDisqualifiedAssignmentIds(storedDisqualifiedIds);
+      setDisqualifyReasons(storedReasons);
+      persistApprovedIds(raceId, storedApprovedIds);
+      persistDisqualifiedIds(raceId, storedDisqualifiedIds);
+      persistDisqualifyReasons(raceId, storedReasons);
     } catch (error) {
-      setErrorMessage(getApiErrorMessage(error, 'Unable to load race workflow data.'));
+      setErrorMessage(getApiErrorMessage(error, 'Unable to load race control data.'));
+      setInspectionRegistrations([]);
     } finally {
       setIsLoadingRaceData(false);
     }
   };
 
   useEffect(() => {
-    const timeoutId = window.setTimeout(() => {
-      void loadAssignedRaces();
-    }, 0);
-
+    const timeoutId = window.setTimeout(() => void loadAssignedRaces(), 0);
     return () => window.clearTimeout(timeoutId);
-  }, []);
+  }, [loadAssignedRaces]);
 
   useEffect(() => {
-    const timeoutId = window.setTimeout(() => {
-      void loadRaceData(normalizedRaceId);
-    }, 0);
-
+    const timeoutId = window.setTimeout(() => void loadRaceData(normalizedRaceId, refereeRole, activeRaceStatus), 0);
     return () => window.clearTimeout(timeoutId);
-  }, [normalizedRaceId, isAdmin, isReferee]);
-
+  }, [normalizedRaceId, refereeRole, activeRaceStatus]);
   const withBusy = async (work: () => Promise<void>) => {
     setIsBusy(true);
     setMessage('');
     setErrorMessage('');
-
     try {
       await work();
     } catch (error) {
@@ -332,1087 +337,850 @@ const RaceControlPage = () => {
     }
   };
 
-  const updateLapEntryDraft = (assignmentId: number, field: keyof LapEntryDraft, value: string) => {
-    const draftKey = getLapDraftKey(selectedLapNumber, assignmentId);
-    setLapEntryDrafts((current) => ({
-      ...current,
-      [draftKey]: {
-        ...(current[draftKey] ?? { position: '', lapTimeSec: '', recordedAt: '' }),
-        [field]: value,
-      },
-    }));
-  };
-
-  const handleSaveLapEntry = async (participant: RaceParticipantItem) => {
-    if (!normalizedRaceId) {
-      setErrorMessage('Select a race before saving lap results.');
-      return;
-    }
-
-    if (!Number.isInteger(selectedLapNumber) || selectedLapNumber < 1) {
-      setErrorMessage('Lap number must be a positive integer.');
-      return;
-    }
-
-    if (configuredLapCount && selectedLapNumber > configuredLapCount) {
-      setErrorMessage(`Lap number cannot be greater than the configured ${configuredLapCount} laps.`);
-      return;
-    }
-
-    const existingRound = raceRounds.find((round) => (
-      round.assignmentId === participant.assignmentId
-      && round.roundNumber === selectedLapNumber
-    ));
-    const draftKey = getLapDraftKey(selectedLapNumber, participant.assignmentId);
-    const draftEntry = lapEntryDrafts[draftKey] ?? {
-      position: existingRound?.position ? String(existingRound.position) : '',
-      lapTimeSec: formatSecondsInput(existingRound?.lapTimeSec),
-      recordedAt: toDateTimeInputValue(existingRound?.recordedAt ?? new Date().toISOString()),
-    };
-    const position = Number(draftEntry?.position);
-    const lapTimeSec = roundSeconds(Number(draftEntry?.lapTimeSec));
-
-    if (!Number.isInteger(position) || position < 1) {
-      setErrorMessage(`Enter a valid position for ${participant.horseName}.`);
-      return;
-    }
-
-    if (lapTimeSec === undefined || lapTimeSec < 0.01) {
-      setErrorMessage(`Enter a lap time of at least 0.01 seconds for ${participant.horseName}.`);
-      return;
-    }
-
-    setSavingLapAssignmentId(participant.assignmentId);
-    setMessage('');
-    setErrorMessage('');
-    try {
-      const payload = {
-        assignmentId: participant.assignmentId,
-        roundNumber: selectedLapNumber,
-        position,
-        lapTimeSec,
-        recordedAt: draftEntry?.recordedAt,
-      };
-
-      if (existingRound) {
-        await raceRoundService.updateRound(existingRound.roundId, payload);
-      } else {
-        await raceRoundService.createRound(payload);
-      }
-
-      const refreshedRounds = await raceRoundService.getRoundsByRace(normalizedRaceId);
-      setRaceRounds(refreshedRounds);
-      setLapEntryDrafts((current) => {
-        const nextDrafts = { ...current };
-        delete nextDrafts[draftKey];
-        return nextDrafts;
-      });
-
-      const savedMessage = `${participant.horseName} - Lap ${selectedLapNumber} ${existingRound ? 'updated' : 'created'}.`;
-      try {
-        const recalculatedRanking = await raceOperationsService.recalculateResultsFromRounds(normalizedRaceId);
-        setLapRanking(recalculatedRanking);
-        setAdminResults(recalculatedRanking);
-        if (isReferee) {
-          setDraftItems(sortDraftItems(recalculatedRanking.map((result) => ({
-            assignmentId: result.assignmentId,
-            finishPosition: result.finishPosition ?? undefined,
-            finishTimeSec: roundSeconds(result.finishTimeSec),
-            isDisqualified: result.isDisqualified,
-            disqualifyReason: result.disqualifyReason ?? '',
-          }))));
-        }
-        setMessage(`${savedMessage} Race ranking recalculated.`);
-      } catch (rankingError) {
-        setMessage(savedMessage);
-        setErrorMessage(`Lap was saved, but ranking could not be recalculated. ${getApiErrorMessage(rankingError, 'Please retry.')}`);
-      }
-    } catch (error) {
-      setErrorMessage(getApiErrorMessage(error, 'Unable to save lap result.'));
-    } finally {
-      setSavingLapAssignmentId(null);
-    }
-  };
-
-  const moveDraftItem = (index: number, direction: -1 | 1) => {
-    setDraftItems((current) => {
-      const targetIndex = index + direction;
-      if (targetIndex < 0 || targetIndex >= current.length) return current;
-      const next = [...current];
-      [next[index], next[targetIndex]] = [next[targetIndex], next[index]];
-      return normalizeDraftPositions(next);
+  const approveParticipant = (participant: ChiefRaceParticipantItem) => {
+    const assignmentId = getAssignmentId(participant);
+    if (!assignmentId || !normalizedRaceId) return;
+    setApprovedAssignmentIds((current) => {
+      const next = new Set(current);
+      next.add(assignmentId);
+      persistApprovedIds(normalizedRaceId, next);
+      return next;
+    });
+    setDisqualifiedAssignmentIds((current) => {
+      const next = new Set(current);
+      next.delete(assignmentId);
+      persistDisqualifiedIds(normalizedRaceId, next);
+      return next;
     });
   };
 
-  const updateDraftItem = (index: number, nextItem: RaceDraftResultItemInput) => {
-    setDraftItems((current) => normalizeDraftPositions(
-      current.map((item, itemIndex) => itemIndex === index ? nextItem : item),
-    ));
+  const disqualifyParticipant = (participant: ChiefRaceParticipantItem) => {
+    const assignmentId = getAssignmentId(participant);
+    if (!assignmentId || !normalizedRaceId) return;
+    setDisqualifiedAssignmentIds((current) => {
+      const next = new Set(current);
+      next.add(assignmentId);
+      persistDisqualifiedIds(normalizedRaceId, next);
+      return next;
+    });
+    setApprovedAssignmentIds((current) => {
+      const next = new Set(current);
+      next.delete(assignmentId);
+      persistApprovedIds(normalizedRaceId, next);
+      return next;
+    });
   };
-  const handleSubmitReport = async (event: FormEvent<HTMLFormElement>) => {
+
+  const updateDisqualifyReason = (assignmentId: number, reason: string) => {
+    if (!normalizedRaceId) return;
+    setDisqualifyReasons((current) => {
+      const next = { ...current, [String(assignmentId)]: reason };
+      persistDisqualifyReasons(normalizedRaceId, next);
+      return next;
+    });
+  };
+
+  const returnParticipantToInspection = (assignmentId: number) => {
+    if (!normalizedRaceId) return;
+    setApprovedAssignmentIds((current) => {
+      const next = new Set(current);
+      next.delete(assignmentId);
+      persistApprovedIds(normalizedRaceId, next);
+      return next;
+    });
+    setDisqualifiedAssignmentIds((current) => {
+      const next = new Set(current);
+      next.delete(assignmentId);
+      persistDisqualifiedIds(normalizedRaceId, next);
+      return next;
+    });
+    setDisqualifyReasons((current) => {
+      const next = { ...current };
+      delete next[String(assignmentId)];
+      persistDisqualifyReasons(normalizedRaceId, next);
+      return next;
+    });
+  };
+  const openInspectionAction = (status: ChiefInspectionRequest['status'], registration: ChiefInspectionRegistrationItem) => {
+    setInspectionAction({ status, registration });
+    setInspectionNote('');
+    setInspectionError('');
+    setErrorMessage('');
+  };
+
+  const closeInspectionAction = () => {
+    setInspectionAction(null);
+    setInspectionNote('');
+    setInspectionError('');
+  };
+
+  const handleInspectionSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+
+    if (!inspectionAction || !normalizedRaceId) return;
+
+    const registrationId = getRegistrationId(inspectionAction.registration);
+    const trimmedNote = inspectionNote.trim();
+
+    if (!registrationId) {
+      setInspectionError('Registration id is missing.');
+      return;
+    }
+
+    if (!trimmedNote) {
+      setInspectionError('Inspection note is required.');
+      return;
+    }
+
+    await withBusy(async () => {
+      await raceOperationsService.inspectRegistration(normalizedRaceId, registrationId, {
+        status: inspectionAction.status,
+        note: trimmedNote,
+      });
+      const refreshedRaces = await loadAssignedRaces();
+      const refreshedRace = refreshedRaces.find((race) => String(race.raceId) === normalizedRaceId);
+      closeInspectionAction();
+      setMessage(inspectionAction.status === 'approved' ? 'Horse inspection approved.' : 'Horse inspection rejected.');
+      await loadRaceData(normalizedRaceId, refereeRole, normalizeStatus(refreshedRace?.status ?? activeRaceStatus));
+    });
+  };
+  const handleRequestStartRace = () => {
+    if (!normalizedRaceId) {
+      setErrorMessage('Select a race before starting it.');
+      return;
+    }
+    if (!isOpenForBettingRace) {
+      setErrorMessage('Admin must open betting before the Chief referee can start this race.');
+      return;
+    }
+    if (hasRaceStarted) {
+      setErrorMessage('This race has already started.');
+      return;
+    }
+    setErrorMessage('');
+    setIsStartConfirmOpen(true);
+  };
+
+  const handleStartRace = async () => {
+    if (!normalizedRaceId) {
+      setErrorMessage('Select a race before starting it.');
+      return;
+    }
+    if (!isOpenForBettingRace) {
+      setErrorMessage('Admin must open betting before the Chief referee can start this race.');
+      return;
+    }
+    if (hasRaceStarted) {
+      setErrorMessage('This race has already started.');
+      setIsStartConfirmOpen(false);
+      return;
+    }
+    const raceName = activeRace?.raceName ?? 'Race #' + normalizedRaceId;
+    await withBusy(async () => {
+      const response = await raceOperationsService.startChiefRace(normalizedRaceId, {
+        forceCloseBetting: true,
+        note: 'Chief referee started ' + raceName + ' after participant inspection.',
+      });
+      setIsStartConfirmOpen(false);
+      setDraftStatus(response.status);
+      setAssignedRaces((current) => current.map((race) => (String(race.raceId) === normalizedRaceId ? { ...race, status: response.status } : race)));
+      setMessage(response.message || 'Race started.');
+      await loadAssignedRaces();
+      await loadRaceData(normalizedRaceId, refereeRole);
+    });
+  };
+  const handleSaveDraft = async () => {
+    if (!normalizedRaceId) {
+      setErrorMessage('Select a race before saving draft results.');
+      return;
+    }
+    if (reviewedParticipants.length === 0) {
+      setErrorMessage('Check at least one participant before saving results.');
+      return;
+    }
+    const parsedRows = reviewedParticipants.map((participant) => {
+      const assignmentId = getAssignmentId(participant);
+      const isDisqualified = disqualifiedAssignmentIds.has(assignmentId);
+      const finishTimeSec = isDisqualified ? undefined : parseSecondsInput(timeDrafts[String(assignmentId)] ?? '');
+      const disqualifyReason = disqualifyReasons[String(assignmentId)]?.trim();
+      return { assignmentId, finishTimeSec, horseName: participant.horseName, isDisqualified, disqualifyReason };
+    });
+    const invalidRow = parsedRows.find((row) => !row.isDisqualified && (!row.assignmentId || row.finishTimeSec === undefined || row.finishTimeSec <= 0));
+    if (invalidRow) {
+      setErrorMessage('Enter a valid total time for ' + (invalidRow.horseName ?? 'assignment #' + invalidRow.assignmentId) + '.');
+      return;
+    }
+    const invalidDisqualifiedRow = parsedRows.find((row) => row.isDisqualified && !row.disqualifyReason);
+    if (invalidDisqualifiedRow) {
+      setErrorMessage('Enter a disqualification reason for ' + (invalidDisqualifiedRow.horseName ?? 'assignment #' + invalidDisqualifiedRow.assignmentId) + '.');
+      return;
+    }
+    await withBusy(async () => {
+      const qualifiedResults = parsedRows
+        .filter((row) => !row.isDisqualified && Boolean(row.assignmentId && row.finishTimeSec))
+        .map((row) => ({ assignmentId: row.assignmentId, finishTimeSec: row.finishTimeSec as number }))
+        .sort((first, second) => first.finishTimeSec - second.finishTimeSec)
+        .map((row, index) => ({ assignmentId: row.assignmentId, finishPosition: index + 1, finishTimeSec: row.finishTimeSec, isDisqualified: false, disqualifyReason: undefined }));
+      const disqualifiedResults = parsedRows
+        .filter((row) => row.isDisqualified && Boolean(row.assignmentId))
+        .map((row) => ({ assignmentId: row.assignmentId, finishPosition: undefined, finishTimeSec: undefined, isDisqualified: true, disqualifyReason: row.disqualifyReason }));
+      const results = [...qualifiedResults, ...disqualifiedResults];
+      const nextDraft = draftResults.length > 0
+        ? await raceOperationsService.updateDraft(normalizedRaceId, { results })
+        : await raceOperationsService.createDraft(normalizedRaceId, { results });
+      setDraftResults(nextDraft.results);
+      setDraftStatus(nextDraft.status);
+      setMessage('Draft results saved with Chief review decisions.');
+      await loadRaceData(normalizedRaceId, refereeRole);
+    });
+  };
+  const handleRequestConfirmResults = () => {
+    if (!normalizedRaceId) {
+      setErrorMessage('Select a race before confirming results.');
+      return;
+    }
+    if (draftResults.length === 0) {
+      setErrorMessage('Save draft results before confirming.');
+      return;
+    }
+    setErrorMessage('');
+    setIsResultConfirmOpen(true);
+  };
+
+  const handleConfirmResults = async () => {
+    if (!normalizedRaceId) {
+      setErrorMessage('Select a race before confirming results.');
+      return;
+    }
+    if (draftResults.length === 0) {
+      setErrorMessage('Save draft results before confirming.');
+      return;
+    }
+    await withBusy(async () => {
+      const confirmed = await raceOperationsService.confirmChiefResults(normalizedRaceId);
+      setIsResultConfirmOpen(false);
+      setDraftResults(confirmed);
+      setDraftStatus('confirmed');
+      setMessage('Race results confirmed for Admin review.');
+      await loadRaceData(normalizedRaceId, refereeRole);
+    });
+  };
+  const handleSubmitMainReport = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!normalizedRaceId) {
       setErrorMessage('Select a race before submitting a report.');
       return;
     }
-    if (!isRaceInProgress) {
-      setErrorMessage('Reports can only be submitted while the race is in progress.');
-      return;
-    }
-
     await withBusy(async () => {
-      const created = await raceOperationsService.createReport(normalizedRaceId, reportForm);
-      setMessage(`Report #${created.reportId} submitted.`);
+      const created = await raceOperationsService.createReport(normalizedRaceId, {
+        reportType: getMainReportType(reportForm.verdict),
+        inspectionNotes: reportForm.inspectionNotes,
+        violationNotes: reportForm.verdict === 'violation' ? reportForm.violationNotes : '',
+        resultNotes: reportForm.resultNotes,
+        verdict: reportForm.verdict,
+      });
+      setMessage('Report #' + created.reportId + ' submitted.');
       setReportForm(initialReportForm);
-      await loadRaceData(normalizedRaceId);
+      await loadRaceData(normalizedRaceId, refereeRole);
     });
   };
 
-  const handleSubmitDraft = async (event: FormEvent<HTMLFormElement>) => {
+  const handleSubmitChiefFinalReport = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!normalizedRaceId) {
-      setErrorMessage('Select a race before submitting draft results.');
+      setErrorMessage('Select a race before submitting a final report.');
       return;
     }
-    if (!canEditResults) {
-      setErrorMessage('Only a chief or main referee can save race results.');
+    if (!chiefFinalNotes.trim()) {
+      setErrorMessage('Enter final report notes before submitting.');
       return;
     }
-    if (!isRaceInProgress) {
-      setErrorMessage('Race results can only be saved while the race is in progress.');
-      return;
-    }
-    if (draftItems.length === 0) {
-      setErrorMessage('No confirmed horse assignments were found for this race.');
-      return;
-    }
-
     await withBusy(async () => {
-      const payload = {
-        reportId: automaticReportId,
-        results: normalizeDraftPositions(draftItems),
-      };
-      const nextDraft = draft
-        ? await raceOperationsService.updateDraft(normalizedRaceId, payload)
-        : await raceOperationsService.createDraft(normalizedRaceId, payload);
-
-      setDraft(nextDraft);
-      setMessage(draft ? 'Draft results updated.' : 'Draft results created.');
-      await loadRaceData(normalizedRaceId);
+      const created = await raceOperationsService.createChiefFinalReport(normalizedRaceId, chiefFinalNotes);
+      setMessage('Final report #' + created.reportId + ' submitted.');
+      setChiefFinalNotes('');
+      await loadRaceData(normalizedRaceId, refereeRole);
     });
   };
 
-  const handleStartRace = async () => {
-    if (!normalizedRaceId) {
-      setErrorMessage('Enter a race ID before starting the race.');
-      return;
-    }
-
-    const raceName = activeRaceSummary?.raceName ?? draft?.raceName ?? adminResults[0]?.raceName ?? `Race #${normalizedRaceId}`;
-    const bettingMessage = forceCloseBetting
-      ? 'Betting will be closed when the race starts.'
-      : 'Betting will not be force-closed by this action.';
-
-    if (!window.confirm(`Start "${raceName}" as an Admin?\n\n${bettingMessage}`)) {
-      return;
-    }
-
-    await withBusy(async () => {
-      try {
-        const response = await raceOperationsService.startRace(normalizedRaceId, {
-          forceCloseBetting,
-          note: `Admin started "${raceName}"${forceCloseBetting ? ' and requested betting closure' : ''}.`,
-        });
-        await loadRaceData(normalizedRaceId);
-
-        const bettingWasClosed = response.bettingClosed ?? forceCloseBetting;
-        setMessage(
-          response.message
-            ? `Admin action completed for "${response.raceName || raceName}".\n${response.message}`
-            : `Race "${response.raceName || raceName}" is now in progress.${bettingWasClosed ? ' Betting has been closed for this race.' : ''}`,
-        );
-      } catch (error) {
-        throw new Error(
-          `Could not start "${raceName}" as Admin.\n${getApiErrorMessage(error, 'Unable to start race.')}`,
-          { cause: error },
-        );
-      }
-    });
-  };
-
-  const handleSavePointRules = async () => {
-    if (!normalizedRaceId) {
-      setErrorMessage('Enter a race ID before saving point rules.');
-      return;
-    }
-
-    await withBusy(async () => {
-      const hasExistingRules = pointRules.some((rule) => rule.id);
-      const savedRules = hasExistingRules
-        ? await raceOperationsService.updatePointRules(normalizedRaceId, pointRules)
-        : await raceOperationsService.createPointRules(normalizedRaceId, pointRules);
-
-      setPointRules(savedRules.length > 0 ? savedRules : [createEmptyPointRule()]);
-      setMessage('Point rules saved.');
-    });
-  };
-
-  const handleDeletePointRule = async (index: number) => {
-    const rule = pointRules[index];
-
-    if (!rule?.id || !normalizedRaceId) {
-      setPointRules((current) => current.filter((_, itemIndex) => itemIndex !== index));
-      return;
-    }
-
-    await withBusy(async () => {
-      await raceOperationsService.deletePointRule(normalizedRaceId, rule.id as number);
-      setMessage('Point rule deleted.');
-      await loadRaceData(normalizedRaceId);
-    });
-  };
-
-  const handleConfirmResults = async () => {
-    if (!normalizedRaceId) {
-      setErrorMessage('Enter a race ID before confirming results.');
-      return;
-    }
-
-    setMessage('');
-    setErrorMessage('');
-    await confirmAdminResults(normalizedRaceId);
-  };
-
-  const handleCancelResults = async () => {
-    if (!normalizedRaceId) {
-      setErrorMessage('Enter a race ID before cancelling results.');
-      return;
-    }
-
-    setMessage('');
-    setErrorMessage('');
-    const cancelled = await cancelAdminResults(normalizedRaceId, cancelReason);
-
-    if (cancelled) {
-      setCancelReason('');
-    }
-  };
-
-  const handlePublishResults = async () => {
-    if (!normalizedRaceId) {
-      setErrorMessage('Enter a race ID before publishing results.');
-      return;
-    }
-
-    setMessage('');
-    setErrorMessage('');
-    await publishAdminResults(normalizedRaceId);
-  };
-
-  const publishedCount = adminResults.filter((item) => String(item.status ?? '').toLowerCase() === 'published').length;
+  const isUnsupportedReferee = Boolean(normalizedRaceId && !isChiefReferee && !isMainReferee && !isLoadingRaceData);
 
   return (
-    <div className="min-h-screen bg-surface py-8">
-      <div className="mx-auto max-w-[1440px] px-4 md:px-8">
-        <div className="glass-panel mb-6 rounded-2xl p-6">
-          <div className="flex flex-col gap-6 xl:flex-row xl:items-end xl:justify-between">
-            <div>
-              <p className="text-xs font-bold uppercase tracking-[0.2em] text-secondary">
-                {isAdmin ? 'Admin Workflow' : 'Referee Workflow'}
-              </p>
-              <h1 className="font-display mt-2 text-headline-lg font-extrabold text-primary">
-                Referee report and race result control
-              </h1>
-              <p className="mt-2 max-w-3xl text-body-sm text-on-surface-variant">
-                This board now follows the backend workflow: report, draft result, admin confirm, and admin publish.
-              </p>
+    <main className="min-h-screen bg-surface py-8 text-on-surface">
+      <div className="mx-auto grid max-w-[1440px] gap-6 px-4 md:px-8">
+        <section className="glass-panel rounded-xl p-5 md:p-6">
+          <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,430px)] xl:items-center">
+            <div className="min-w-0">
+              <div className="mb-3 inline-flex items-center gap-2 rounded-md border border-secondary/30 bg-secondary/10 px-3 py-1 text-label-sm font-bold uppercase tracking-wider text-secondary">
+                <ShieldCheck className="h-4 w-4" /> Referee race control
+              </div>
+              <h1 className="font-display text-headline-md font-extrabold text-primary md:text-headline-lg">{activeRace?.raceName ?? 'Select an assigned race'}</h1>
             </div>
-            <div className="grid min-w-full gap-3 sm:grid-cols-3 xl:min-w-[520px]">
-              <MetricCard icon={<Flag className="h-4 w-4" />} label="Selected Race" value={normalizedRaceId || '--'} />
-              <MetricCard icon={<ClipboardList className="h-4 w-4" />} label="Reports" value={String(reports.length).padStart(2, '0')} />
-              <MetricCard icon={isReferee ? <Users className="h-4 w-4" /> : <CheckCircle2 className="h-4 w-4" />} label={isReferee ? 'Participants' : 'Published'} value={String(isReferee ? participants.length : publishedCount).padStart(2, '0')} />
+            <div className="min-w-0 overflow-hidden rounded-lg border border-outline-variant bg-surface-container-low p-4">
+              <label className="text-label-sm font-bold uppercase tracking-wider text-outline" htmlFor="race-control-selector">Assigned race</label>
+              <div className="mt-2 flex min-w-0 gap-2">
+                <select id="race-control-selector" value={selectedRaceId} onChange={(event) => handleSelectRace(event.target.value)} disabled={isLoadingAssigned} className="w-full min-w-0 max-w-full flex-1 cursor-pointer truncate rounded-md border border-outline-variant bg-white px-4 py-3 text-body-sm font-semibold text-on-surface focus:border-primary focus:outline-none disabled:cursor-not-allowed disabled:opacity-60">
+                  <option value="">Select race</option>
+                  {assignedRaces.map((race) => <option key={String(race.assignmentId ?? race.raceId) + '-' + String(race.refereeRole)} value={race.raceId}>{formatRaceOptionLabel(race)}</option>)}
+                </select>
+                <button type="button" onClick={() => void loadRaceData(normalizedRaceId, refereeRole)} disabled={isLoadingRaceData || !normalizedRaceId} className="inline-flex h-12 w-12 cursor-pointer items-center justify-center rounded-md border border-outline-variant bg-white text-primary transition-colors hover:border-primary disabled:cursor-not-allowed disabled:opacity-50" aria-label="Refresh race data" title="Refresh">
+                  <RefreshCw className={['h-4 w-4', isLoadingRaceData ? 'animate-spin' : ''].filter(Boolean).join(' ')} />
+                </button>
+              </div>
             </div>
           </div>
-        </div>
-
-        <section className={`relative mb-6 grid items-stretch gap-4 xl:grid-cols-[320px_minmax(0,1fr)] ${isAssignedRaceDropdownOpen ? 'z-[80]' : 'z-10'}`}>
-          <article className="glass-panel h-full rounded-xl p-4">
-            <div className="mb-3 flex items-center gap-3">
-              <Gauge className="h-5 w-5 text-secondary" />
-              <h2 className="font-display text-title-medium font-bold text-primary">Race selector</h2>
-            </div>
-
-            {isReferee && (
-              <div>
-                <div className="mb-2 flex items-center justify-between gap-3">
-                  <p className="text-label-sm font-bold uppercase tracking-[0.16em] text-outline">Assigned race</p>
-                  <button
-                    type="button"
-                    onClick={() => void loadAssignedRaces()}
-                    className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-outline-variant text-primary transition-colors hover:bg-surface-container-high disabled:cursor-not-allowed disabled:opacity-60"
-                    disabled={isBusy || isLoadingAssigned}
-                    aria-label="Refresh assigned races"
-                  >
-                    <RefreshCw className={`h-4 w-4 ${isLoadingAssigned ? 'animate-spin' : ''}`} />
-                  </button>
-                </div>
-
-                <div className="relative">
-                  <button
-                    type="button"
-                    onClick={() => setIsAssignedRaceDropdownOpen((current) => !current)}
-                    disabled={isBusy || isLoadingAssigned || assignedRaces.length === 0}
-                    className="flex w-full items-center justify-between gap-3 rounded-lg border border-outline-variant bg-surface-container-low px-4 py-3 text-left transition-colors hover:bg-surface-container-high disabled:cursor-not-allowed disabled:opacity-70"
-                  >
-                    <span className="min-w-0">
-                      <span className="block truncate text-body-sm font-semibold text-on-surface">
-                        {isLoadingAssigned
-                          ? 'Loading assigned races...'
-                          : activeRaceSummary?.raceName ?? (assignedRaces.length > 0 ? 'Choose assigned race' : 'No assigned races found')}
-                      </span>
-                      <span className="mt-1 block truncate text-label-sm text-on-surface-variant">
-                        {activeRaceSummary
-                          ? `${getScheduleLabel(activeRaceSummary)} - ${activeRaceSummary.refereeRole ?? 'Referee'} - ${activeRaceSummary.status}`
-                          : 'Assign race'}
-                      </span>
-                    </span>
-                    <ChevronDown className={`h-4 w-4 shrink-0 text-primary transition-transform ${isAssignedRaceDropdownOpen ? 'rotate-180' : ''}`} />
-                  </button>
-
-                  {isAssignedRaceDropdownOpen && assignedRaces.length > 0 && (
-                    <div className="absolute left-0 right-0 z-[90] mt-2 max-h-72 overflow-y-auto rounded-lg border border-outline-variant bg-white p-2 shadow-xl">
-                      {assignedRaces.map((race) => (
-                        <button
-                          key={race.assignmentId ?? race.raceId}
-                          type="button"
-                          onClick={() => handleSelectRace(String(race.raceId))}
-                          className={`w-full rounded-md px-3 py-2 text-left transition-colors ${
-                            String(race.raceId) === normalizedRaceId
-                              ? 'bg-primary-container/15 text-primary'
-                              : 'hover:bg-surface-container-high'
-                          }`}
-                        >
-                          <p className="truncate text-body-sm font-semibold text-on-surface">{race.raceName}</p>
-                          <p className="mt-1 truncate text-label-sm text-on-surface-variant">
-                            {getScheduleLabel(race)} - {race.refereeRole ?? 'Referee'} - {race.status}
-                          </p>
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </div>
-            )}
-
-            {!isReferee && (
-              <p className="text-body-sm text-on-surface-variant">
-                Open a race from the admin list to load workflow data.
-              </p>
-            )}
-          </article>
-
-          <article className="glass-panel h-full rounded-xl p-4">
-            <div className="mb-3 flex items-center gap-3">
-              <ShieldCheck className="h-5 w-5 text-secondary" />
-              <h2 className="font-display text-title-medium font-bold text-primary">Current race snapshot</h2>
-            </div>
-            {!normalizedRaceId ? (
-              <p className="text-body-sm text-on-surface-variant">Choose an assigned race to load workflow data.</p>
-            ) : isLoadingRaceData || isLoadingAdminResults ? (
-              <p className="text-body-sm text-on-surface-variant">Loading workflow data...</p>
-            ) : (
-              <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
-                <InfoTile label="Race ID" value={normalizedRaceId} />
-                <InfoTile label="Race Name" value={activeRaceSummary?.raceName ?? raceSnapshot?.name ?? draft?.raceName ?? adminResults[0]?.raceName ?? '-'} />
-                <InfoTile label="Schedule" value={getScheduleLabel(activeRaceSummary ?? raceSnapshot ?? undefined)} />
-                <InfoTile label="Tournament" value={activeRaceSummary?.tournamentName ?? raceSnapshot?.tournamentName ?? adminResults[0]?.tournamentName ?? lapRanking[0]?.tournamentName ?? '-'} />
-                <InfoTile label="Status" value={activeRaceSummary?.status ?? raceSnapshot?.status ?? draft?.status ?? adminResults[0]?.status ?? '-'} />
-                <InfoTile label={isReferee ? "Participants" : "Result records"} value={String(isReferee ? participants.length : adminResults.length)} />
-              </div>
-            )}
-          </article>
         </section>
-        <div className="space-y-6">
-          <section className="glass-panel rounded-xl p-6">
-            <div className="mb-5 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-              <div>
-                <div className="flex items-center gap-3">
-                  <Layers className="h-5 w-5 text-secondary" />
-                  <h2 className="font-display text-title-large font-bold text-primary">Lap results</h2>
+
+        {errorMessage && <div className="rounded-lg border border-error/30 bg-error-container/20 px-4 py-3 text-body-sm font-semibold text-error">{errorMessage}</div>}
+
+        <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
+          <MetricCard icon={<Flag className="h-4 w-4" />} label="Race status" value={formatStatusLabel(visibleRaceStatus)} />
+          <MetricCard icon={<ShieldCheck className="h-4 w-4" />} label="Referee role" value={roleLabel} />
+          <MetricCard icon={<Users className="h-4 w-4" />} label="Participants" value={isChiefReferee ? String(isRegistrationClosedRace ? inspectionRegistrations.length : participants.length) : String(draftResults.length)} />
+          <MetricCard icon={<CheckCircle2 className="h-4 w-4" />} label="Reviewed" value={isChiefReferee ? (isRegistrationClosedRace ? inspectedRegistrationCount + '/' + inspectionRegistrations.length : reviewedParticipants.length + '/' + participants.length) : draftStatus || '-'} />
+          <MetricCard icon={<FileText className="h-4 w-4" />} label="Reports" value={String(reports.length)} />
+        </section>
+
+        {!normalizedRaceId && <EmptyState title="No race selected" description="Choose one assigned race to open the Chief or Main referee workflow." />}
+        {isUnsupportedReferee && <EmptyState title="No Chief/Main assignment" description="This race is assigned to a referee role that does not have a dedicated workflow on this screen." />}
+        {normalizedRaceId && isChiefReferee && (
+          <div className="grid gap-6">
+            {isRegistrationClosedRace ? (
+              <section className="glass-panel rounded-xl p-5 md:p-6">
+                <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+                  <SectionTitle icon={<ClipboardCheck className="h-5 w-5" />} eyebrow="Chief referee" title="Horse inspection" />
+                  <StatusBadge status={visibleRaceStatus} />
                 </div>
-                <p className="mt-2 text-body-sm text-on-surface-variant">
-                  Save each participant result separately for the selected lap. Admin and every race referee can use this section.
-                </p>
-              </div>
-              <label className="w-full max-w-[220px] text-label-sm font-semibold text-on-surface-variant">
-                Lap number{configuredLapCount ? ` (1-${configuredLapCount})` : ''}
-                <input
-                  type="number"
-                  min="1"
-                  max={configuredLapCount}
-                  step="1"
-                  value={selectedLapNumber}
-                  onChange={(event) => {
-                    const nextLap = Number(event.target.value);
-                    setSelectedLapNumber(Number.isFinite(nextLap) ? Math.max(1, Math.trunc(nextLap)) : 1);
-                  }}
-                  className="mt-2 w-full rounded-md border border-outline-variant bg-white px-3 py-2 text-body-sm text-primary focus:border-primary focus:outline-none"
+                <ChiefInspectionTable
+                  registrations={inspectionRegistrations}
+                  isLoading={isLoadingRaceData}
+                  isBusy={isBusy}
+                  onApprove={(registration) => openInspectionAction('approved', registration)}
+                  onReject={(registration) => openInspectionAction('rejected', registration)}
                 />
-              </label>
-            </div>
-
-            {!normalizedRaceId ? (
-              <p className="rounded-md border border-outline-variant bg-surface-container-low px-4 py-8 text-center text-body-sm text-on-surface-variant">
-                Select a race to manage lap results.
-              </p>
-            ) : isLoadingRaceData ? (
-              <p className="rounded-md border border-outline-variant bg-surface-container-low px-4 py-8 text-center text-body-sm text-on-surface-variant">
-                Loading lap results...
-              </p>
-            ) : lapParticipants.length === 0 ? (
-              <p className="rounded-md border border-outline-variant bg-surface-container-low px-4 py-8 text-center text-body-sm text-on-surface-variant">
-                No confirmed participants were found for this race.
-              </p>
+              </section>
             ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full min-w-[980px] text-left">
-                  <thead className="border-b border-outline-variant bg-surface-container">
-                    <tr>
-                      <th className="px-4 py-3 text-label-sm uppercase tracking-wider text-outline">Participant</th>
-                      <th className="px-4 py-3 text-label-sm uppercase tracking-wider text-outline">Position</th>
-                      <th className="px-4 py-3 text-label-sm uppercase tracking-wider text-outline">Lap time (sec)</th>
-                      <th className="px-4 py-3 text-label-sm uppercase tracking-wider text-outline">Recorded at</th>
-                      <th className="px-4 py-3 text-label-sm uppercase tracking-wider text-outline">Status</th>
-                      <th className="px-4 py-3 text-right text-label-sm uppercase tracking-wider text-outline">Action</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-outline-variant">
-                    {lapParticipants.map((participant) => {
-                      const existingRound = raceRounds.find((round) => (
-                        round.assignmentId === participant.assignmentId
-                        && round.roundNumber === selectedLapNumber
-                      ));
-                      const draftKey = getLapDraftKey(selectedLapNumber, participant.assignmentId);
-                      const entry = lapEntryDrafts[draftKey] ?? {
-                        position: existingRound?.position ? String(existingRound.position) : '',
-                        lapTimeSec: formatSecondsInput(existingRound?.lapTimeSec),
-                        recordedAt: toDateTimeInputValue(existingRound?.recordedAt ?? new Date().toISOString()),
-                      };
-
+              <>
+                <section className="glass-panel rounded-xl p-5 md:p-6">
+                  <SectionTitle icon={<ClipboardCheck className="h-5 w-5" />} eyebrow="Chief referee" title="Race start" />
+                  <div className="mt-5 grid gap-3 lg:grid-cols-2 xl:grid-cols-3">
+                    {pendingParticipants.map((participant) => {
+                      const assignmentId = getAssignmentId(participant);
                       return (
-                        <tr key={participant.assignmentId}>
-                          <td className="px-4 py-4">
-                            <p className="text-body-sm font-bold text-primary">{participant.horseName}</p>
-                            <p className="mt-1 text-label-sm text-on-surface-variant">
-                              {participant.jockeyName} | Gate {participant.gateNumber || '-'} | Assignment #{participant.assignmentId}
-                            </p>
-                          </td>
-                          <td className="px-4 py-4">
-                            <input type="number" min="1" step="1" value={entry.position} onChange={(event) => updateLapEntryDraft(participant.assignmentId, 'position', event.target.value)} aria-label={`Position for ${participant.horseName}`} className="w-24 rounded-md border border-outline-variant bg-white px-3 py-2 text-body-sm focus:border-primary focus:outline-none" />
-                          </td>
-                          <td className="px-4 py-4">
-                            <input type="number" min="0.01" step="0.01" value={entry.lapTimeSec} onChange={(event) => updateLapEntryDraft(participant.assignmentId, 'lapTimeSec', event.target.value)} aria-label={`Lap time for ${participant.horseName}`} className="w-32 rounded-md border border-outline-variant bg-white px-3 py-2 text-body-sm focus:border-primary focus:outline-none" />
-                          </td>
-                          <td className="px-4 py-4">
-                            <input type="datetime-local" value={entry.recordedAt} onChange={(event) => updateLapEntryDraft(participant.assignmentId, 'recordedAt', event.target.value)} aria-label={`Recorded time for ${participant.horseName}`} className="rounded-md border border-outline-variant bg-white px-3 py-2 text-body-sm focus:border-primary focus:outline-none" />
-                          </td>
-                          <td className="px-4 py-4 text-body-sm text-on-surface-variant">
-                            {existingRound ? `Saved #${existingRound.roundId}` : 'Not saved'}
-                          </td>
-                          <td className="px-4 py-4 text-right">
-                            <button type="button" onClick={() => void handleSaveLapEntry(participant)} disabled={savingLapAssignmentId !== null} className="rounded-md bg-secondary px-4 py-2 text-label-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-60">
-                              {savingLapAssignmentId === participant.assignmentId ? 'Saving...' : existingRound ? 'Update' : 'Save'}
-                            </button>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            )}
-
-            <div className="mt-8 border-t border-outline-variant pt-6">
-              <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
-                <div>
-                  <div className="flex flex-wrap items-center gap-3">
-                    <h3 className="font-display text-title-medium font-bold text-primary">Race ranking</h3>
-                    <span className="rounded-full border border-secondary/30 bg-secondary/10 px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-[0.14em] text-secondary">
-                      Live from laps
-                    </span>
-                  </div>
-                  <p className="mt-1 text-body-sm text-on-surface-variant">
-                    Ranking and lap statistics update after every saved lap. Chief and main referees can adjust this same list before saving the official draft.
-                  </p>
-                </div>
-                <div className="flex flex-wrap items-center gap-2">
-                  {isReferee && (
-                    <span className="rounded-full bg-surface-container px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-on-surface-variant">
-                      {formatRefereeRoleLabel(activeRaceSummary?.refereeRole)}
-                    </span>
-                  )}
-                  <span className="text-label-sm font-semibold text-on-surface-variant">
-                    {(isReferee ? draftItems.length : lapRanking.length)} ranked participant(s)
-                  </span>
-                </div>
-              </div>
-
-              {isReferee ? (
-                <form onSubmit={handleSubmitDraft} className="grid gap-4">
-                  {!canEditResults && (
-                    <p className="rounded-md border border-outline-variant bg-surface-container-low px-3 py-2 text-body-sm text-on-surface-variant">
-                      Ranking is read-only. Only a chief or main referee can save the official draft.
-                    </p>
-                  )}
-                  {canEditResults && !isRaceInProgress && (
-                    <p className="rounded-md border border-outline-variant bg-surface-container-low px-3 py-2 text-body-sm text-on-surface-variant">
-                      Ranking can be edited and saved when the race is in progress.
-                    </p>
-                  )}
-                  <p className="rounded-md border border-outline-variant bg-surface-container-low px-3 py-2 text-label-sm text-on-surface-variant">
-                    {automaticReportId
-                      ? 'Your report will be linked to this ranking automatically.'
-                      : 'No report from your account is available yet. You can still save the ranking without entering a report ID.'}
-                  </p>
-                  <p className="text-label-sm text-on-surface-variant">
-                    Lap data supplies the live order and statistics. Use the arrow buttons only when an official adjustment is required.
-                  </p>
-
-                  <div className="space-y-3">
-                    {draftItems.map((item, index) => {
-                      const rankingIndex = lapRanking.findIndex((result) => result.assignmentId === item.assignmentId);
-                      const rankingResult = rankingIndex >= 0 ? lapRanking[rankingIndex] : undefined;
-                      const stats = lapStatsByAssignment.get(item.assignmentId);
-                      const leader = lapRanking[0];
-                      const leaderStats = leader ? lapStatsByAssignment.get(leader.assignmentId) : undefined;
-                      const canCompareGap = rankingIndex > 0
-                        && stats?.completedLaps === leaderStats?.completedLaps
-                        && rankingResult?.finishTimeSec != null
-                        && leader?.finishTimeSec != null;
-                      const gap = canCompareGap && rankingResult && leader
-                        ? Number(rankingResult.finishTimeSec) - Number(leader.finishTimeSec)
-                        : undefined;
-
-                      return (
-                        <ParticipantResultRow
-                          key={item.assignmentId}
-                          item={item}
-                          participant={participantByAssignmentId.get(item.assignmentId)}
-                          index={index}
-                          total={draftItems.length}
-                          lapStats={stats}
-                          configuredLapCount={configuredLapCount}
-                          points={rankingResult?.pointsAwarded ?? 0}
-                          gapLabel={rankingIndex === 0 ? 'Leader' : gap === undefined ? '-' : `+${formatSeconds(gap)}`}
-                          isEditable={canEditResults && isRaceInProgress}
-                          onChange={(nextItem) => updateDraftItem(index, nextItem)}
-                          onMove={(direction) => moveDraftItem(index, direction)}
+                        <ParticipantCard
+                          key={assignmentId}
+                          participant={participant}
+                          disqualifyReason={disqualifyReasons[String(assignmentId)] ?? ''}
+                          onReasonChange={(value) => updateDisqualifyReason(assignmentId, value)}
+                          onPass={() => approveParticipant(participant)}
+                          onDisqualify={() => disqualifyParticipant(participant)}
                         />
                       );
                     })}
-                    {!isLoadingRaceData && draftItems.length === 0 && (
-                      <div className="rounded-lg border border-outline-variant bg-surface-container-low px-4 py-8 text-center text-body-sm text-on-surface-variant">
-                        No confirmed horse assignments found for this race.
-                      </div>
-                    )}
+                    {pendingParticipants.length === 0 && <div className="rounded-lg border border-secondary/30 bg-secondary/10 p-4 text-body-sm font-semibold text-secondary">Final approved participants are ready for race operations.</div>}
                   </div>
-
-                  <button
-                    disabled={isBusy || !canEditResults || !isRaceInProgress || draftItems.length === 0}
-                    className="cursor-pointer rounded-md bg-secondary px-5 py-3 text-body-sm font-bold text-white hover:bg-opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
-                  >
-                    {draft ? 'Update draft ranking' : 'Save draft ranking'}
-                  </button>
-                </form>
-              ) : lapRanking.length === 0 ? (
-                <p className="rounded-md bg-surface-container-low px-4 py-6 text-center text-body-sm text-on-surface-variant">Save a lap result to calculate the race ranking.</p>
-              ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full min-w-[920px] text-left">
-                    <thead className="border-b border-outline-variant bg-surface-container">
-                      <tr>
-                        <th className="px-4 py-3 text-label-sm uppercase tracking-wider text-outline">Rank</th>
-                        <th className="px-4 py-3 text-label-sm uppercase tracking-wider text-outline">Participant</th>
-                        <th className="px-4 py-3 text-label-sm uppercase tracking-wider text-outline">Completed</th>
-                        <th className="px-4 py-3 text-label-sm uppercase tracking-wider text-outline">Total time</th>
-                        <th className="px-4 py-3 text-label-sm uppercase tracking-wider text-outline">Best lap</th>
-                        <th className="px-4 py-3 text-label-sm uppercase tracking-wider text-outline">Average</th>
-                        <th className="px-4 py-3 text-label-sm uppercase tracking-wider text-outline">Gap</th>
-                        <th className="px-4 py-3 text-label-sm uppercase tracking-wider text-outline">Points</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-outline-variant">
-                      {lapRanking.map((result, index) => {
-                        const participant = lapParticipants.find((item) => item.assignmentId === result.assignmentId);
-                        const stats = lapStatsByAssignment.get(result.assignmentId);
-                        const leader = lapRanking[0];
-                        const leaderStats = leader ? lapStatsByAssignment.get(leader.assignmentId) : undefined;
-                        const canCompareGap = index > 0 && stats?.completedLaps === leaderStats?.completedLaps && result.finishTimeSec != null && leader?.finishTimeSec != null;
-                        const gap = canCompareGap ? Number(result.finishTimeSec) - Number(leader.finishTimeSec) : undefined;
-
-                        return (
-                          <tr key={result.resultId ?? result.assignmentId} className="transition-colors hover:bg-surface-container-low">
-                            <td className="px-4 py-4 font-display text-title-medium font-extrabold text-secondary">#{result.finishPosition ?? index + 1}</td>
-                            <td className="px-4 py-4"><p className="text-body-sm font-bold text-primary">{participant?.horseName ?? result.horseName ?? `Assignment #${result.assignmentId}`}</p><p className="mt-1 text-label-sm text-on-surface-variant">{participant?.jockeyName ?? result.jockeyFullName ?? '-'}</p></td>
-                            <td className="px-4 py-4 text-body-sm text-on-surface-variant">{stats?.completedLaps ?? 0}{configuredLapCount ? `/${configuredLapCount}` : ''}</td>
-                            <td className="px-4 py-4 text-body-sm font-bold text-primary">{formatSeconds(result.finishTimeSec)}</td>
-                            <td className="px-4 py-4 text-body-sm text-on-surface-variant">{formatSeconds(stats?.bestLapSec)}</td>
-                            <td className="px-4 py-4 text-body-sm text-on-surface-variant">{formatSeconds(stats?.averageLapSec)}</td>
-                            <td className="px-4 py-4 text-body-sm text-on-surface-variant">{index === 0 ? 'Leader' : gap === undefined ? '-' : `+${formatSeconds(gap)}`}</td>
-                            <td className="px-4 py-4 text-body-sm font-bold text-primary">{result.pointsAwarded ?? 0}</td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </div>
-          </section>
-
-          {isReferee && (
-            <section>
-              <article className="glass-panel rounded-xl p-6">
-                <div className="mb-5 flex items-center gap-3">
-                  <ClipboardList className="h-5 w-5 text-secondary" />
-                  <h2 className="font-display text-title-large font-bold text-primary">Submit report</h2>
-                </div>
-                {!isRaceInProgress && (
-                  <p className="mb-4 rounded-md border border-outline-variant bg-surface-container-low px-3 py-2 text-body-sm text-on-surface-variant">Reports can be submitted when the race is in progress.</p>
-                )}
-                <form onSubmit={handleSubmitReport} className="grid gap-4">
-                  <div className="grid gap-4 md:grid-cols-2">
-                    <SelectInput label="Report type" value={reportForm.reportType ?? 'final'} options={reportTypeOptions} onChange={(value) => setReportForm((current) => ({ ...current, reportType: value }))} />
-                    <SelectInput label="Verdict" value={reportForm.verdict ?? 'clean'} options={verdictOptions} onChange={(value) => setReportForm((current) => ({ ...current, verdict: value }))} />
+                  <div className="mt-5 flex flex-col gap-3 border-t border-outline-variant pt-4 md:flex-row md:items-center md:justify-between">
+                    <p className="text-body-sm text-on-surface-variant">Chief start is available after Admin opens betting. Current race status: <StatusBadge status={visibleRaceStatus} /></p>
+                    <button type="button" onClick={handleRequestStartRace} disabled={!canStartRace} className="inline-flex cursor-pointer items-center justify-center gap-2 rounded-md bg-primary px-5 py-3 text-body-sm font-bold text-on-primary transition-opacity hover:bg-opacity-90 disabled:cursor-not-allowed disabled:bg-outline-variant disabled:text-on-surface-variant disabled:opacity-80"><Flag className="h-4 w-4" /> {hasRaceStarted ? 'Race started' : 'Start race'}</button>
                   </div>
-                  <TextArea label="Inspection notes" value={reportForm.inspectionNotes ?? ''} onChange={(value) => setReportForm((current) => ({ ...current, inspectionNotes: value }))} />
-                  {reportForm.verdict === 'violation' && !reportForm.violationNotes?.trim() && (
-                    <p className="text-label-sm font-semibold text-error">Violation notes are required when the verdict is Violation.</p>
+                </section>
+
+                <section className="glass-panel rounded-xl p-5 md:p-6">
+                  <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+                    <SectionTitle icon={<Trophy className="h-5 w-5" />} eyebrow="Draft result" title="Checked horses" />
+                    <ResultViewSelect value={selectedView} lapNumbers={lapNumbers} onChange={setSelectedView} />
+                  </div>
+                  {selectedView === 'overall' ? (
+                    <ChiefDraftTable participants={reviewedParticipants} disqualifiedAssignmentIds={disqualifiedAssignmentIds} disqualifyReasons={disqualifyReasons} draftByAssignment={draftByAssignment} timeDrafts={timeDrafts} isBusy={isBusy || isLoadingRaceData} onReturn={returnParticipantToInspection} onTimeChange={(assignmentId, value) => setTimeDrafts((current) => ({ ...current, [String(assignmentId)]: value }))} />
+                  ) : (
+                    <LapResultTable rows={selectedLapRows} participantByAssignment={participantByAssignment} />
                   )}
-                  <TextArea label="Violation notes" value={reportForm.violationNotes ?? ''} onChange={(value) => setReportForm((current) => ({ ...current, violationNotes: value }))} />
-                  <TextArea label="Result notes" value={reportForm.resultNotes ?? ''} onChange={(value) => setReportForm((current) => ({ ...current, resultNotes: value }))} />
-                  <button disabled={isBusy || !isRaceInProgress} className="cursor-pointer rounded-md bg-secondary px-5 py-3 text-body-sm font-bold text-white hover:bg-opacity-90 disabled:cursor-not-allowed disabled:opacity-60">
-                    Submit report
-                  </button>
-                </form>
-              </article>
+                  <div className="mt-5 flex flex-wrap justify-end gap-3 border-t border-outline-variant pt-4">
+                    <button type="button" onClick={() => void handleSaveDraft()} disabled={isBusy || selectedView !== 'overall' || reviewedParticipants.length === 0} className="inline-flex cursor-pointer items-center gap-2 rounded-md bg-secondary px-5 py-3 text-body-sm font-bold text-white transition-opacity hover:bg-opacity-90 disabled:cursor-not-allowed disabled:opacity-50"><Save className="h-4 w-4" /> Save draft</button>
+                    <button type="button" onClick={handleRequestConfirmResults} disabled={isBusy || draftResults.length === 0} className="inline-flex cursor-pointer items-center gap-2 rounded-md border border-primary/40 px-5 py-3 text-body-sm font-bold text-primary transition-colors hover:bg-primary/10 disabled:cursor-not-allowed disabled:opacity-50"><CheckCircle2 className="h-4 w-4" /> Confirm result</button>
+                  </div>
+                </section>
 
+                <section className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_420px]">
+                  <article className="glass-panel rounded-xl p-5 md:p-6">
+                    <SectionTitle icon={<Eye className="h-5 w-5" />} eyebrow="Main referee" title="Submitted reports" />
+                    <ReportTable reports={submittedReports} onViewDetail={setSelectedReportDetail} />
+                  </article>
+                  <article className="glass-panel rounded-xl p-5 md:p-6">
+                    <SectionTitle icon={<Send className="h-5 w-5" />} eyebrow="Admin handoff" title="Final report" />
+                    <form className="mt-5 grid gap-4" onSubmit={(event) => void handleSubmitChiefFinalReport(event)}>
+                      <TextArea label="Final notes" value={chiefFinalNotes} onChange={setChiefFinalNotes} placeholder="Race completion summary for Admin" />
+                      <button type="submit" disabled={isBusy} className="inline-flex cursor-pointer items-center justify-center gap-2 rounded-md bg-primary px-5 py-3 text-body-sm font-bold text-on-primary transition-opacity hover:bg-opacity-90 disabled:cursor-not-allowed disabled:opacity-50"><Send className="h-4 w-4" /> Submit final report</button>
+                    </form>
+                  </article>
+                </section>
+              </>
+            )}
+          </div>
+        )}
+        {normalizedRaceId && isMainReferee && (
+          <div className="grid gap-6">
+            <section className="glass-panel rounded-xl p-5 md:p-6">
+              <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+                <SectionTitle icon={<Timer className="h-5 w-5" />} eyebrow="Main referee" title="Chief saved result" />
+                <ResultViewSelect value={selectedView} lapNumbers={lapNumbers} onChange={setSelectedView} />
+              </div>
+              {selectedView === 'overall' ? <ReadOnlyResultTable results={sortedDraftResults} /> : <LapResultTable rows={selectedLapRows} />}
             </section>
-          )}
 
-          {isReferee && (
-            <section className="glass-panel rounded-xl p-6">
-              <h2 className="font-display mb-5 text-title-large font-bold text-primary">Submitted reports</h2>
-              <div className="overflow-x-auto">
-                <table className="w-full text-left">
-                  <thead className="border-b border-outline-variant bg-surface-container">
-                    <tr>
-                      <th className="px-4 py-3 text-label-sm uppercase tracking-wider text-outline">Report ID</th>
-                      <th className="px-4 py-3 text-label-sm uppercase tracking-wider text-outline">Verdict</th>
-                      <th className="px-4 py-3 text-label-sm uppercase tracking-wider text-outline">Referee</th>
-                      <th className="px-4 py-3 text-label-sm uppercase tracking-wider text-outline">Role</th>
-                      <th className="px-4 py-3 text-label-sm uppercase tracking-wider text-outline">Type</th>
-                      <th className="px-4 py-3 text-label-sm uppercase tracking-wider text-outline">Submitted</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-outline-variant">
-                    {reports.map((report) => (
-                      <tr key={report.reportId}>
-                        <td className="px-4 py-4 text-body-sm font-semibold text-primary">{report.reportId}</td>
-                        <td className="px-4 py-4 text-body-sm text-on-surface-variant">{report.verdict ?? '-'}</td>
-                        <td className="px-4 py-4 text-body-sm text-on-surface-variant">{report.refereeFullName ?? `Referee #${report.refereeId ?? '-'}`}</td>
-                        <td className="px-4 py-4 text-body-sm text-on-surface-variant">{formatRefereeRoleLabel(report.refereeRole)}</td>
-                        <td className="px-4 py-4 text-body-sm text-on-surface-variant">{report.reportType ?? '-'}</td>
-                        <td className="px-4 py-4 text-body-sm text-on-surface-variant">{formatDateTime(report.submittedAt)}</td>
-                      </tr>
-                    ))}
-                    {reports.length === 0 && (
-                      <tr>
-                        <td colSpan={6} className="px-4 py-8 text-center text-body-sm text-on-surface-variant">No reports found for this race.</td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
+            <section className="glass-panel rounded-xl p-5 md:p-6">
+              <SectionTitle icon={<ClipboardList className="h-5 w-5" />} eyebrow="Race report" title="Submit report" />
+              <form className="mt-5 grid gap-4" onSubmit={(event) => void handleSubmitMainReport(event)}>
+                <SelectInput label="Report type" value={reportForm.reportType ?? getMainReportType(reportForm.verdict)} options={[{ value: MAIN_INSPECTION_REPORT_TYPE, label: 'Inspection report' }, { value: MAIN_VIOLATION_REPORT_TYPE, label: 'Violation report' }]} onChange={(value) => setReportForm((current) => ({ ...current, reportType: value, verdict: value === MAIN_VIOLATION_REPORT_TYPE ? 'violation' : 'clean', violationNotes: value === MAIN_VIOLATION_REPORT_TYPE ? current.violationNotes : '' }))} />
+                <SelectInput label="Verdict" value={reportForm.verdict ?? 'clean'} options={[{ value: 'clean', label: 'Clean - no violation' }, { value: 'violation', label: 'Violation detected' }]} onChange={(value) => setReportForm((current) => ({ ...current, reportType: getMainReportType(value), verdict: value, violationNotes: value === 'violation' ? current.violationNotes : '' }))} />
+                <TextArea label="Inspection notes" value={reportForm.inspectionNotes ?? ''} onChange={(value) => setReportForm((current) => ({ ...current, inspectionNotes: value }))} />
+                {reportForm.verdict === 'violation' && <TextArea label="Violation notes" value={reportForm.violationNotes ?? ''} onChange={(value) => setReportForm((current) => ({ ...current, violationNotes: value }))} />}
+                <TextArea label="Result notes" value={reportForm.resultNotes ?? ''} onChange={(value) => setReportForm((current) => ({ ...current, resultNotes: value }))} />
+                <button type="submit" disabled={isBusy} className="inline-flex cursor-pointer items-center justify-center gap-2 rounded-md bg-primary px-5 py-3 text-body-sm font-bold text-on-primary transition-opacity hover:bg-opacity-90 disabled:cursor-not-allowed disabled:opacity-50"><Send className="h-4 w-4" /> Submit report</button>
+              </form>
+              <div className="mt-6 flex justify-end border-t border-outline-variant pt-5">
+                <button type="button" onClick={() => setIsReportHistoryOpen(true)} className="inline-flex cursor-pointer items-center justify-center gap-2 rounded-md border border-outline-variant px-4 py-2.5 text-body-sm font-bold text-primary transition-colors hover:border-primary hover:bg-primary/10">
+                  <Eye className="h-4 w-4" /> View report history
+                </button>
               </div>
             </section>
-          )}
+          </div>
+        )}
+        {selectedReportDetail && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 px-4 py-6" role="presentation">
+            <section className="max-h-[calc(100vh-3rem)] w-full max-w-3xl overflow-y-auto rounded-lg border border-outline-variant bg-white p-6 shadow-2xl" role="dialog" aria-modal="true" aria-labelledby="submitted-report-detail-title">
+              <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                <SectionTitle icon={<Eye className="h-5 w-5" />} eyebrow="Submitted reports" title={'Report #' + selectedReportDetail.reportId} />
+                <button type="button" onClick={() => setSelectedReportDetail(null)} className="cursor-pointer rounded-md border border-outline-variant px-4 py-2.5 text-body-sm font-bold text-on-surface-variant transition-colors hover:border-primary hover:text-primary">Close</button>
+              </div>
+              <div className="mt-5 grid gap-3 sm:grid-cols-2">
+                <ReportDetailField label="Report type">{formatStatusLabel(selectedReportDetail.reportType)}</ReportDetailField>
+                <ReportDetailField label="Verdict"><StatusBadge status={selectedReportDetail.verdict} /></ReportDetailField>
+                <ReportDetailField label="Referee">{selectedReportDetail.refereeFullName ?? '-'}</ReportDetailField>
+                <ReportDetailField label="Role">{formatRefereeRoleLabel(selectedReportDetail.refereeRole)}</ReportDetailField>
+                <ReportDetailField label="Race">{selectedReportDetail.raceName ?? '-'}</ReportDetailField>
+                <ReportDetailField label="Submitted">{formatDateTime(selectedReportDetail.submittedAt)}</ReportDetailField>
+              </div>
+              <div className="mt-5 grid gap-4">
+                <ReportDetailNote label="Inspection notes" value={selectedReportDetail.inspectionNotes} />
+                <ReportDetailNote label="Violation notes" value={selectedReportDetail.violationNotes} />
+                <ReportDetailNote label="Result notes" value={selectedReportDetail.resultNotes} />
+              </div>
+            </section>
+          </div>
+        )}
+        {isReportHistoryOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 px-4 py-6" role="presentation">
+            <section className="max-h-[calc(100vh-3rem)] w-full max-w-4xl overflow-y-auto rounded-lg border border-outline-variant bg-white p-6 shadow-2xl" role="dialog" aria-modal="true" aria-labelledby="report-history-title">
+              <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                <SectionTitle icon={<FileText className="h-5 w-5" />} eyebrow="Report history" title="Recent reports" />
+                <button type="button" onClick={() => setIsReportHistoryOpen(false)} className="cursor-pointer rounded-md border border-outline-variant px-4 py-2.5 text-body-sm font-bold text-on-surface-variant transition-colors hover:border-primary hover:text-primary">Close</button>
+              </div>
+              <ReportTable reports={reports} />
+            </section>
+          </div>
+        )}
 
-          {isAdmin && (
-            <>
-              <section className="grid gap-6 xl:grid-cols-2">
-                <article className="glass-panel rounded-xl p-6">
-                  <div className="mb-5 flex items-center gap-3">
-                    <Flag className="h-5 w-5 text-secondary" />
-                    <h2 className="font-display text-title-large font-bold text-primary">Start race</h2>
-                  </div>
-                  <label className="flex items-center gap-3 rounded-md border border-outline-variant bg-surface-container-low px-4 py-3 text-body-sm font-semibold text-primary">
-                    <input type="checkbox" checked={forceCloseBetting} onChange={(event) => setForceCloseBetting(event.target.checked)} />
-                    Force close betting when starting race
-                  </label>
-                  <button
-                    type="button"
-                    onClick={() => void handleStartRace()}
-                    disabled={isBusy || !normalizedRaceId}
-                    className="mt-4 rounded-md bg-secondary px-5 py-3 text-body-sm font-bold text-white hover:bg-opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
-                  >
-                    Start race
-                  </button>
-                </article>
+        {inspectionAction && (
+          <ChiefInspectionActionModal
+            action={inspectionAction}
+            note={inspectionNote}
+            error={inspectionError}
+            isBusy={isBusy}
+            onNoteChange={setInspectionNote}
+            onSubmit={handleInspectionSubmit}
+            onClose={closeInspectionAction}
+          />
+        )}
+        {isStartConfirmOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 px-4 py-6" role="presentation">
+            <section className="w-full max-w-md rounded-lg border border-outline-variant bg-white p-6 shadow-2xl" role="dialog" aria-modal="true" aria-labelledby="start-race-confirm-title">
+              <div className="flex items-start gap-3">
+                <span className="mt-1 inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary"><Flag className="h-5 w-5" /></span>
+                <div className="min-w-0">
+                  <h2 id="start-race-confirm-title" className="font-display text-title-large font-bold text-primary">Start race?</h2>
+                  <p className="mt-2 text-body-sm text-on-surface-variant">
+                    {activeRace?.raceName ?? 'This race'} will move into progress and betting will be closed for this race.
+                  </p>
+                </div>
+              </div>
+              <div className="mt-5 grid gap-2 rounded-md border border-outline-variant bg-surface-container-low p-3 text-body-sm text-on-surface-variant">
+                <span>Checked participants: {reviewedParticipants.length}/{participants.length}</span>
+                <span>Disqualified: {disqualifiedAssignmentIds.size}</span>
+              </div>
+              <div className="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+                <button type="button" onClick={() => setIsStartConfirmOpen(false)} disabled={isBusy} className="cursor-pointer rounded-md border border-outline-variant px-4 py-2.5 text-body-sm font-bold text-on-surface-variant transition-colors hover:border-primary hover:text-primary disabled:cursor-not-allowed disabled:opacity-50">Cancel</button>
+                <button type="button" onClick={() => void handleStartRace()} disabled={isBusy} className="inline-flex cursor-pointer items-center justify-center gap-2 rounded-md bg-primary px-5 py-2.5 text-body-sm font-bold text-on-primary transition-opacity hover:bg-opacity-90 disabled:cursor-not-allowed disabled:opacity-50"><Flag className="h-4 w-4" /> {isBusy ? 'Starting...' : 'Start race'}</button>
+              </div>
+            </section>
+          </div>
+        )}
 
-                <article className="glass-panel rounded-xl p-6">
-                  <div className="mb-5 flex items-center gap-3">
-                    <Gauge className="h-5 w-5 text-secondary" />
-                    <h2 className="font-display text-title-large font-bold text-primary">Point rules</h2>
-                  </div>
-                  <div className="space-y-3">
-                    {pointRules.map((rule, index) => (
-                      <div key={rule.id ?? index} className="grid gap-3 rounded-lg border border-outline-variant bg-surface-container-low p-4 md:grid-cols-[1fr_1fr_2fr_auto]">
-                        <TextInput label="Position" type="number" value={String(rule.finishPosition || '')} onChange={(value) => setPointRules((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, finishPosition: Number(value) } : item))} />
-                        <TextInput label="Points" type="number" value={String(rule.points || '')} onChange={(value) => setPointRules((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, points: Number(value) } : item))} />
-                        <TextInput label="Note" value={rule.note ?? ''} onChange={(value) => setPointRules((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, note: value } : item))} />
-                        <button
-                          type="button"
-                          onClick={() => void handleDeletePointRule(index)}
-                          className="self-end rounded-md border border-error/40 px-3 py-2 text-label-sm font-bold text-error"
-                        >
-                          Remove
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                  <div className="mt-4 flex flex-wrap gap-3">
-                    <button
-                      type="button"
-                      onClick={() => setPointRules((current) => [...current, createEmptyPointRule()])}
-                      className="rounded-md border border-outline-variant px-4 py-2 text-label-sm font-bold text-on-surface"
-                    >
-                      Add rule
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => void handleSavePointRules()}
-                      disabled={isBusy}
-                      className="rounded-md bg-secondary px-5 py-3 text-body-sm font-bold text-white hover:bg-opacity-90"
-                    >
-                      Save point rules
-                    </button>
-                  </div>
-                </article>
-              </section>
+        {isResultConfirmOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 px-4 py-6" role="presentation">
+            <section className="w-full max-w-md rounded-lg border border-outline-variant bg-white p-6 shadow-2xl" role="dialog" aria-modal="true" aria-labelledby="confirm-result-title">
+              <div className="flex items-start gap-3">
+                <span className="mt-1 inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-secondary/10 text-secondary"><CheckCircle2 className="h-5 w-5" /></span>
+                <div className="min-w-0">
+                  <h2 id="confirm-result-title" className="font-display text-title-large font-bold text-primary">Confirm result?</h2>
+                  <p className="mt-2 text-body-sm text-on-surface-variant">
+                    {activeRace?.raceName ?? 'This race'} result draft will be confirmed and sent to Admin review.
+                  </p>
+                </div>
+              </div>
+              <div className="mt-5 grid gap-2 rounded-md border border-outline-variant bg-surface-container-low p-3 text-body-sm text-on-surface-variant">
+                <span>Result rows: {draftResults.length}</span>
+                <span>Disqualified: {draftResults.filter((result) => result.isDisqualified).length}</span>
+              </div>
+              <div className="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+                <button type="button" onClick={() => setIsResultConfirmOpen(false)} disabled={isBusy} className="cursor-pointer rounded-md border border-outline-variant px-4 py-2.5 text-body-sm font-bold text-on-surface-variant transition-colors hover:border-primary hover:text-primary disabled:cursor-not-allowed disabled:opacity-50">Cancel</button>
+                <button type="button" onClick={() => void handleConfirmResults()} disabled={isBusy} className="inline-flex cursor-pointer items-center justify-center gap-2 rounded-md bg-secondary px-5 py-2.5 text-body-sm font-bold text-white transition-opacity hover:bg-opacity-90 disabled:cursor-not-allowed disabled:opacity-50"><CheckCircle2 className="h-4 w-4" /> {isBusy ? 'Confirming...' : 'Confirm result'}</button>
+              </div>
+            </section>
+          </div>
+        )}      </div>
+    </main>
+  );
+};
 
-              <section className="glass-panel rounded-xl p-6">
-                <div className="mb-5 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-                  <h2 className="font-display text-title-large font-bold text-primary">Admin race results</h2>
-                  <div className="flex flex-wrap gap-3">
-                    <button type="button" onClick={() => void handleConfirmResults()} disabled={isBusy || isLoadingAdminResults} className="rounded-md bg-secondary px-4 py-2 text-label-sm font-bold text-white">Confirm</button>
-                    <button type="button" onClick={() => void handlePublishResults()} disabled={isBusy || isLoadingAdminResults} className="rounded-md bg-primary px-4 py-2 text-label-sm font-bold text-on-primary">Publish</button>
-                  </div>
+const ChiefInspectionTable = ({
+  registrations,
+  isLoading,
+  isBusy,
+  onApprove,
+  onReject,
+}: {
+  registrations: ChiefInspectionRegistrationItem[];
+  isLoading: boolean;
+  isBusy: boolean;
+  onApprove: (registration: ChiefInspectionRegistrationItem) => void;
+  onReject: (registration: ChiefInspectionRegistrationItem) => void;
+}) => (
+  <div className="mt-5 overflow-x-auto rounded-lg border border-outline-variant bg-white">
+    <table className="w-full min-w-[1080px] text-left">
+      <thead className="border-b border-outline-variant bg-surface-container">
+        <tr>
+          <TableHead>Horse</TableHead>
+          <TableHead>Owner</TableHead>
+          <TableHead>Jockey</TableHead>
+          <TableHead>Gate</TableHead>
+          <TableHead>Owner confirm</TableHead>
+          <TableHead>Chief inspection</TableHead>
+          <TableHead>Note</TableHead>
+          <TableHead>Actions</TableHead>
+        </tr>
+      </thead>
+      <tbody className="divide-y divide-outline-variant">
+        {!isLoading && registrations.map((registration) => {
+          const registrationId = getRegistrationId(registration);
+          const workflowLabel = getInspectionWorkflowLabel(registration);
+          const chiefStatus = normalizeStatus(registration.chiefInspectionStatus);
+          const isRejected = workflowLabel === 'Rejected';
+          const canInspect = !isBusy && !isRejected && chiefStatus !== 'approved';
+
+          return (
+            <tr key={registrationId || `${registration.raceId ?? 'race'}-${registration.horseId ?? 'horse'}`} className="align-top transition-colors hover:bg-surface-container-low/70">
+              <td className="px-4 py-4"><HorseIdentity horseName={registration.horseName} avatarUrl={registration.horseAvatarUrl} subtext={'Registration #' + (registrationId || '-')} /></td>
+              <td className="px-4 py-4 text-body-sm font-semibold text-on-surface-variant">{registration.ownerFullName ?? '-'}<span className="mt-1 block text-label-sm text-outline">{registration.ownerStableName ?? 'No stable'}</span></td>
+              <td className="px-4 py-4 text-body-sm font-semibold text-on-surface-variant">{registration.jockeyFullName ?? '-'}<span className="mt-1 block text-label-sm text-outline">{formatStatusLabel(registration.jockeyStatus)}</span></td>
+              <td className="px-4 py-4 text-body-sm font-bold text-primary">{registration.gateNumber ?? '-'}</td>
+              <td className="px-4 py-4"><StatusBadge status={registration.ownerConfirmationStatus} /></td>
+              <td className="px-4 py-4"><InspectionWorkflowBadge label={workflowLabel} /><span className="mt-2 block text-label-sm text-on-surface-variant">Chief: {formatStatusLabel(registration.chiefInspectionStatus)}</span></td>
+              <td className="max-w-xs px-4 py-4 text-body-sm text-on-surface-variant">{registration.chiefInspectionNote?.trim() || '-'}</td>
+              <td className="px-4 py-4">
+                <div className="flex flex-wrap gap-2">
+                  <button type="button" onClick={() => onApprove(registration)} disabled={!canInspect} className="inline-flex cursor-pointer items-center gap-2 rounded-md bg-secondary px-3 py-2 text-label-sm font-bold text-white transition-opacity hover:bg-opacity-90 disabled:cursor-not-allowed disabled:opacity-50"><CheckCircle2 className="h-4 w-4" /> Approve</button>
+                  <button type="button" onClick={() => onReject(registration)} disabled={!canInspect} className="inline-flex cursor-pointer items-center gap-2 rounded-md border border-error/40 px-3 py-2 text-label-sm font-bold text-error transition-colors hover:bg-error-container/20 disabled:cursor-not-allowed disabled:opacity-50"><Flag className="h-4 w-4" /> Reject</button>
                 </div>
-                <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-end">
-                  <div className="min-w-0 flex-1">
-                    <TextArea label="Cancel reason" value={cancelReason} onChange={setCancelReason} />
-                  </div>
-                  <button type="button" onClick={() => void handleCancelResults()} disabled={isBusy || isLoadingAdminResults} className="rounded-md border border-error/40 px-4 py-3 text-label-sm font-bold text-error">
-                    Cancel results
-                  </button>
-                </div>
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left">
-                    <thead className="border-b border-outline-variant bg-surface-container">
-                      <tr>
-                        <th className="px-4 py-3 text-label-sm uppercase tracking-wider text-outline">Assignment</th>
-                        <th className="px-4 py-3 text-label-sm uppercase tracking-wider text-outline">Horse</th>
-                        <th className="px-4 py-3 text-label-sm uppercase tracking-wider text-outline">Jockey</th>
-                        <th className="px-4 py-3 text-label-sm uppercase tracking-wider text-outline">Position</th>
-                        <th className="px-4 py-3 text-label-sm uppercase tracking-wider text-outline">Time</th>
-                        <th className="px-4 py-3 text-label-sm uppercase tracking-wider text-outline">Points</th>
-                        <th className="px-4 py-3 text-label-sm uppercase tracking-wider text-outline">Status</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-outline-variant">
-                      {adminResults.map((item) => (
-                        <tr key={`${item.resultId ?? item.assignmentId}-${item.assignmentId}`}>
-                          <td className="px-4 py-4 text-body-sm font-semibold text-primary">{item.assignmentId}</td>
-                          <td className="px-4 py-4 text-body-sm text-on-surface-variant">{item.horseName ?? '-'}</td>
-                          <td className="px-4 py-4 text-body-sm text-on-surface-variant">{item.jockeyFullName ?? '-'}</td>
-                          <td className="px-4 py-4 text-body-sm text-on-surface-variant">{item.finishPosition ?? '-'}</td>
-                          <td className="px-4 py-4 text-body-sm text-on-surface-variant">{formatSeconds(item.finishTimeSec)}</td>
-                          <td className="px-4 py-4 text-body-sm text-on-surface-variant">{item.pointsAwarded ?? 0}</td>
-                          <td className="px-4 py-4 text-body-sm text-on-surface-variant">{item.status ?? '-'}</td>
-                        </tr>
-                      ))}
-                      {adminResults.length === 0 && (
-                        <tr>
-                          <td colSpan={7} className="px-4 py-8 text-center text-body-sm text-on-surface-variant">No admin result records found for this race.</td>
-                        </tr>
-                      )}
-                    </tbody>
-                  </table>
-                </div>
-              </section>
-            </>
-          )}
+              </td>
+            </tr>
+          );
+        })}
+        {isLoading && <TableEmpty colSpan={8} text="Loading registrations waiting for chief inspection..." />}
+        {!isLoading && registrations.length === 0 && <TableEmpty colSpan={8} text="No registrations are waiting for chief inspection on this race." />}
+      </tbody>
+    </table>
+  </div>
+);
+
+const InspectionWorkflowBadge = ({ label }: { label: string }) => {
+  const className = label === 'Rejected'
+    ? 'border-error/30 bg-error-container/20 text-error'
+    : label === 'Final approved' || label === 'Chief approved - waiting admin'
+      ? 'border-secondary/30 bg-secondary/10 text-secondary'
+      : label === 'Waiting chief inspection'
+        ? 'border-primary/30 bg-primary/10 text-primary'
+        : 'border-tertiary/30 bg-tertiary/10 text-tertiary';
+
+  return <span className={['inline-flex rounded-md border px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider', className].join(' ')}>{label}</span>;
+};
+
+const ChiefInspectionActionModal = ({
+  action,
+  note,
+  error,
+  isBusy,
+  onNoteChange,
+  onSubmit,
+  onClose,
+}: {
+  action: ChiefInspectionAction;
+  note: string;
+  error: string;
+  isBusy: boolean;
+  onNoteChange: (value: string) => void;
+  onSubmit: (event: FormEvent<HTMLFormElement>) => void;
+  onClose: () => void;
+}) => {
+  const isApprove = action.status === 'approved';
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 px-4 py-6" role="presentation">
+      <section className="w-full max-w-xl rounded-lg border border-outline-variant bg-white p-6 shadow-2xl" role="dialog" aria-modal="true" aria-labelledby="chief-inspection-action-title">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+          <SectionTitle icon={isApprove ? <CheckCircle2 className="h-5 w-5" /> : <Flag className="h-5 w-5" />} eyebrow="Chief inspection" title={isApprove ? 'Approve inspection' : 'Reject inspection'} />
+          <button type="button" onClick={onClose} disabled={isBusy} className="cursor-pointer rounded-md border border-outline-variant px-4 py-2.5 text-body-sm font-bold text-on-surface-variant transition-colors hover:border-primary hover:text-primary disabled:cursor-not-allowed disabled:opacity-50">Close</button>
         </div>
-      </div>
+        <form className="mt-5 grid gap-4" onSubmit={onSubmit}>
+          <div className="rounded-md border border-outline-variant bg-surface-container-low p-4">
+            <HorseIdentity horseName={action.registration.horseName} avatarUrl={action.registration.horseAvatarUrl} subtext={action.registration.jockeyFullName ? 'Jockey: ' + action.registration.jockeyFullName : undefined} />
+          </div>
+          <TextArea label="Inspection note" value={note} onChange={onNoteChange} placeholder="Required chief inspection note" />
+          {error && <div className="rounded-md border border-error/30 bg-error-container/20 px-4 py-3 text-body-sm font-semibold text-error">{error}</div>}
+          <div className="flex flex-col-reverse gap-3 border-t border-outline-variant pt-4 sm:flex-row sm:justify-end">
+            <button type="button" onClick={onClose} disabled={isBusy} className="cursor-pointer rounded-md border border-outline-variant px-4 py-2.5 text-body-sm font-bold text-on-surface-variant transition-colors hover:border-primary hover:text-primary disabled:cursor-not-allowed disabled:opacity-50">Cancel</button>
+            <button type="submit" disabled={isBusy} className={['inline-flex cursor-pointer items-center justify-center gap-2 rounded-md px-5 py-2.5 text-body-sm font-bold transition-opacity disabled:cursor-not-allowed disabled:opacity-50', isApprove ? 'bg-secondary text-white hover:bg-opacity-90' : 'border border-error/40 text-error hover:bg-error-container/20'].join(' ')}>
+              {isApprove ? <CheckCircle2 className="h-4 w-4" /> : <Flag className="h-4 w-4" />}
+              {isBusy ? 'Saving...' : isApprove ? 'Approve inspection' : 'Reject inspection'}
+            </button>
+          </div>
+        </form>
+      </section>
+    </div>
+  );
+};
+const ChiefDraftTable = ({
+  participants,
+  disqualifiedAssignmentIds,
+  disqualifyReasons,
+  draftByAssignment,
+  timeDrafts,
+  isBusy,
+  onReturn,
+  onTimeChange,
+}: {
+  participants: ChiefRaceParticipantItem[];
+  disqualifiedAssignmentIds: Set<number>;
+  disqualifyReasons: DisqualificationReasonMap;
+  draftByAssignment: Map<number, RaceResultWorkflowItem>;
+  timeDrafts: DraftTimeMap;
+  isBusy: boolean;
+  onReturn: (assignmentId: number) => void;
+  onTimeChange: (assignmentId: number, value: string) => void;
+}) => (
+  <div className="mt-5 overflow-x-auto rounded-lg border border-outline-variant bg-white">
+    <table className="w-full min-w-[840px] text-left">
+      <thead className="border-b border-outline-variant bg-surface-container"><tr><TableHead>Horse</TableHead><TableHead>Jockey</TableHead><TableHead>Gate</TableHead><TableHead>Review</TableHead><TableHead>Saved rank</TableHead><TableHead>Total time</TableHead><TableHead>Action</TableHead></tr></thead>
+      <tbody className="divide-y divide-outline-variant">
+        {participants.map((participant) => {
+          const assignmentId = getAssignmentId(participant);
+          const saved = draftByAssignment.get(assignmentId);
+          const isDisqualified = disqualifiedAssignmentIds.has(assignmentId) || Boolean(saved?.isDisqualified);
+          const reason = disqualifyReasons[String(assignmentId)] || saved?.disqualifyReason || '-';
+          return (
+            <tr key={assignmentId} className="transition-colors hover:bg-surface-container-low/70">
+              <td className="px-4 py-4"><HorseIdentity horseName={participant.horseName} avatarUrl={participant.horseAvatarUrl} /></td>
+              <td className="px-4 py-4 text-body-sm font-semibold text-on-surface-variant">{participant.jockeyFullName ?? '-'}</td>
+              <td className="px-4 py-4 text-body-sm font-bold text-primary">{participant.gateNumber ?? '-'}</td>
+              <td className="px-4 py-4">{isDisqualified ? <StatusBadge status="disqualified" /> : <StatusBadge status="qualified" />}</td>
+              <td className="px-4 py-4 text-body-sm text-on-surface-variant">{isDisqualified ? 'DQ' : saved?.finishPosition ?? '-'}</td>
+              <td className="px-4 py-4">
+                {isDisqualified ? (
+                  <span className="block max-w-[220px] break-words text-body-sm font-semibold text-error">{reason}</span>
+                ) : (
+                  <input type="text" inputMode="decimal" value={timeDrafts[String(assignmentId)] ?? formatSecondsInput(saved?.finishTimeSec)} onChange={(event) => onTimeChange(assignmentId, event.target.value)} placeholder="92.35 or 1:32.35" disabled={isBusy} className="w-full rounded-md border border-outline-variant bg-surface-container-low px-3 py-2 text-body-sm font-semibold focus:border-primary focus:outline-none disabled:cursor-not-allowed disabled:opacity-60" aria-label={'Total time for ' + (participant.horseName ?? 'assignment ' + assignmentId)} />
+                )}
+              </td>
+              <td className="px-4 py-4"><button type="button" onClick={() => onReturn(assignmentId)} disabled={isBusy} className="cursor-pointer rounded-md border border-outline-variant px-3 py-2 text-label-sm font-bold text-on-surface-variant transition-colors hover:border-primary hover:text-primary disabled:cursor-not-allowed disabled:opacity-50">Back to check</button></td>
+            </tr>
+          );
+        })}
+        {participants.length === 0 && <TableEmpty colSpan={7} text="Checked horses will appear here." />}
+      </tbody>
+    </table>
+  </div>
+);
+const ReadOnlyResultTable = ({ results }: { results: RaceResultWorkflowItem[] }) => (
+  <div className="mt-5 overflow-x-auto rounded-lg border border-outline-variant bg-white">
+    <table className="w-full min-w-[720px] text-left">
+      <thead className="border-b border-outline-variant bg-surface-container"><tr><TableHead>Rank</TableHead><TableHead>Horse</TableHead><TableHead>Jockey</TableHead><TableHead>Gate</TableHead><TableHead>Total time</TableHead><TableHead>Status</TableHead></tr></thead>
+      <tbody className="divide-y divide-outline-variant">
+        {results.map((result, index) => (
+          <tr key={String(result.resultId ?? result.assignmentId) + '-' + index} className="transition-colors hover:bg-surface-container-low/70">
+            <td className="px-4 py-4 font-display text-xl font-extrabold text-primary">{result.isDisqualified ? 'DQ' : '#' + (result.finishPosition ?? index + 1)}</td>
+            <td className="px-4 py-4"><HorseIdentity horseName={result.horseName} subtext={'Assignment #' + result.assignmentId} /></td>
+            <td className="px-4 py-4 text-body-sm font-semibold text-on-surface-variant">{result.jockeyFullName ?? '-'}</td>
+            <td className="px-4 py-4 text-body-sm font-bold text-primary">{result.gateNumber ?? '-'}</td>
+            <td className="px-4 py-4 text-body-sm font-bold text-secondary">{formatSeconds(result.finishTimeSec)}</td>
+            <td className="px-4 py-4"><StatusBadge status={result.isDisqualified ? 'disqualified' : result.status} /></td>
+          </tr>
+        ))}
+        {results.length === 0 && <TableEmpty colSpan={6} text="Chief draft results are not available yet." />}
+      </tbody>
+    </table>
+  </div>
+);
+
+const LapResultTable = ({ rows, participantByAssignment }: { rows: RaceRoundItem[]; participantByAssignment?: Map<number, ChiefRaceParticipantItem> }) => (
+  <div className="mt-5 overflow-x-auto rounded-lg border border-outline-variant bg-white">
+    <table className="w-full min-w-[680px] text-left">
+      <thead className="border-b border-outline-variant bg-surface-container"><tr><TableHead>Lap rank</TableHead><TableHead>Horse</TableHead><TableHead>Jockey</TableHead><TableHead>Lap time</TableHead><TableHead>Recorded</TableHead></tr></thead>
+      <tbody className="divide-y divide-outline-variant">
+        {rows.map((row) => {
+          const participant = participantByAssignment?.get(row.assignmentId);
+          return (
+            <tr key={row.roundId} className="transition-colors hover:bg-surface-container-low/70">
+              <td className="px-4 py-4 font-display text-xl font-extrabold text-primary">#{row.position}</td>
+              <td className="px-4 py-4"><HorseIdentity horseName={participant?.horseName ?? row.horseName} avatarUrl={participant?.horseAvatarUrl} subtext={'Assignment #' + row.assignmentId} /></td>
+              <td className="px-4 py-4 text-body-sm font-semibold text-on-surface-variant">{participant?.jockeyFullName ?? row.jockeyFullName ?? '-'}</td>
+              <td className="px-4 py-4 text-body-sm font-bold text-secondary">{formatSeconds(row.lapTimeSec)}</td>
+              <td className="px-4 py-4 text-body-sm text-on-surface-variant">{formatDateTime(row.recordedAt)}</td>
+            </tr>
+          );
+        })}
+        {rows.length === 0 && <TableEmpty colSpan={5} text="No lap data found for this view." />}
+      </tbody>
+    </table>
+  </div>
+);
+
+const ParticipantCard = ({
+  participant,
+  disqualifyReason,
+  onReasonChange,
+  onPass,
+  onDisqualify,
+}: {
+  participant: ChiefRaceParticipantItem;
+  disqualifyReason: string;
+  onReasonChange: (value: string) => void;
+  onPass: () => void;
+  onDisqualify: () => void;
+}) => (
+  <article className="rounded-lg border border-outline-variant bg-white p-4 transition-colors hover:border-primary/50">
+    <HorseIdentity horseName={participant.horseName} avatarUrl={participant.horseAvatarUrl} />
+    <div className="mt-4 grid grid-cols-2 gap-2">
+      <InfoPill label="Gate" value={participant.gateNumber ?? '-'} />
+      <InfoPill label="Jockey" value={participant.jockeyFullName ?? '-'} />
+      <InfoPill label="Status" value={participant.status ?? '-'} />
+      <InfoPill label="Owner confirm" value={participant.ownerConfirmationStatus ?? '-'} />
+    </div>
+    <label className="mt-4 grid gap-2">
+      <span className="text-label-sm font-bold uppercase tracking-wider text-outline">Disqualification reason</span>
+      <input value={disqualifyReason} onChange={(event) => onReasonChange(event.target.value)} placeholder="Required only when disqualified" className="rounded-md border border-outline-variant bg-surface-container-low px-3 py-2 text-body-sm focus:border-primary focus:outline-none" />
+    </label>
+    <div className="mt-4 grid gap-2 sm:grid-cols-2">
+      <button type="button" onClick={onPass} className="inline-flex cursor-pointer items-center justify-center gap-2 rounded-md bg-secondary px-4 py-2.5 text-body-sm font-bold text-white transition-opacity hover:bg-opacity-90"><CheckCircle2 className="h-4 w-4" /> Pass check</button>
+      <button type="button" onClick={onDisqualify} className="inline-flex cursor-pointer items-center justify-center gap-2 rounded-md border border-error/40 px-4 py-2.5 text-body-sm font-bold text-error transition-colors hover:bg-error-container/20"><Flag className="h-4 w-4" /> Disqualify</button>
+    </div>
+  </article>
+);
+const ReportTable = ({ reports, compact = false, onViewDetail }: { reports: RefereeReportItem[]; compact?: boolean; onViewDetail?: (report: RefereeReportItem) => void }) => {
+  const colSpan = onViewDetail ? 6 : 5;
+
+  return (
+    <div className={['mt-4 overflow-x-auto rounded-lg border border-outline-variant bg-white', compact ? 'max-h-72' : ''].filter(Boolean).join(' ')}>
+      <table className="w-full min-w-[720px] text-left">
+        <thead className="border-b border-outline-variant bg-surface-container">
+          <tr>
+            <TableHead>Report</TableHead>
+            <TableHead>Verdict</TableHead>
+            <TableHead>Referee</TableHead>
+            <TableHead>Notes</TableHead>
+            <TableHead>Submitted</TableHead>
+            {onViewDetail && <TableHead>Action</TableHead>}
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-outline-variant">
+          {reports.map((report) => (
+            <tr key={report.reportId} className="align-top transition-colors hover:bg-surface-container-low/70">
+              <td className="px-4 py-4 text-body-sm font-bold text-primary">#{report.reportId}<span className="mt-1 block text-label-sm text-outline">{report.reportType ?? '-'}</span></td>
+              <td className="px-4 py-4"><StatusBadge status={report.verdict} /></td>
+              <td className="px-4 py-4 text-body-sm text-on-surface-variant">{report.refereeFullName ?? '-'}<span className="mt-1 block text-label-sm text-outline">{formatRefereeRoleLabel(report.refereeRole)}</span></td>
+              <td className="max-w-sm px-4 py-4 text-body-sm text-on-surface-variant">{report.violationNotes || report.resultNotes || report.inspectionNotes || '-'}</td>
+              <td className="px-4 py-4 text-body-sm text-on-surface-variant">{formatDateTime(report.submittedAt)}</td>
+              {onViewDetail && (
+                <td className="px-4 py-4">
+                  <button type="button" onClick={() => onViewDetail(report)} className="inline-flex h-9 w-9 cursor-pointer items-center justify-center rounded-md border border-outline-variant text-primary transition-colors hover:border-primary hover:bg-primary/10" aria-label={'View report #' + report.reportId + ' detail'} title="View detail">
+                    <Eye className="h-4 w-4" />
+                  </button>
+                </td>
+              )}
+            </tr>
+          ))}
+          {reports.length === 0 && <TableEmpty colSpan={colSpan} text="No reports found for this race." />}
+        </tbody>
+      </table>
     </div>
   );
 };
 
-const ParticipantResultRow = ({
-  item,
-  participant,
-  index,
-  total,
-  lapStats,
-  configuredLapCount,
-  points,
-  gapLabel,
-  isEditable,
-  onChange,
-  onMove,
-}: {
-  item: RaceDraftResultItemInput;
-  participant?: JockeyAssignmentItem;
-  index: number;
-  total: number;
-  lapStats?: ParticipantLapStats;
-  configuredLapCount?: number;
-  points: number;
-  gapLabel: string;
-  isEditable: boolean;
-  onChange: (item: RaceDraftResultItemInput) => void;
-  onMove: (direction: -1 | 1) => void;
-}) => (
-  <article className="rounded-lg border border-outline-variant bg-surface-container-low p-4 transition-colors hover:border-primary/40">
-    <div className="grid gap-4 lg:grid-cols-[64px_minmax(0,1.2fr)_minmax(0,0.8fr)_140px_auto] lg:items-center">
-      <div className={`flex h-12 w-12 items-center justify-center rounded-lg font-display text-xl font-extrabold ${item.isDisqualified ? 'bg-error-container/40 text-error' : 'bg-secondary/15 text-secondary'}`}>
-        {item.isDisqualified ? 'DQ' : item.finishPosition ?? index + 1}
-      </div>
-      <div className="flex min-w-0 items-center gap-3">
-        {participant?.horseAvatarUrl ? (
-          <img src={participant.horseAvatarUrl} alt={participant.horseName ?? 'Race horse'} className="h-11 w-11 shrink-0 rounded-md border border-outline-variant object-cover" />
-        ) : (
-          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-md border border-outline-variant bg-white text-label-sm font-bold text-outline">H</div>
-        )}
-        <div className="min-w-0">
-          <p className="break-words text-body-sm font-bold text-primary">{participant?.horseName ?? `Assignment #${item.assignmentId}`}</p>
-          <p className="mt-1 text-label-sm text-on-surface-variant">Gate {participant?.gateNumber ?? '-'} | Assignment #{item.assignmentId}</p>
-        </div>
-      </div>
-      <div className="min-w-0">
-        <p className="text-[10px] font-bold uppercase tracking-wider text-outline">Jockey</p>
-        <p className="mt-1 break-words text-body-sm font-semibold text-on-surface-variant">{participant?.jockeyFullName ?? `Jockey ${participant?.jockeyId ?? '-'}`}</p>
-      </div>
-      <label className="grid gap-1">
-        <span className="text-[10px] font-bold uppercase tracking-wider text-outline">Total time (sec)</span>
-        <input
-          type="number"
-          min="0"
-          step="0.01"
-          disabled={!isEditable || item.isDisqualified}
-          value={item.finishTimeSec ?? ''}
-          onChange={(event) => onChange({ ...item, finishTimeSec: event.target.value ? Number(event.target.value) : undefined })}
-          className="w-full rounded-md border border-outline-variant bg-white px-3 py-2 text-body-sm focus:border-primary focus:outline-none disabled:cursor-not-allowed disabled:bg-surface-container disabled:opacity-70"
-          aria-label={`Total time for ${participant?.horseName ?? `assignment ${item.assignmentId}`}`}
-        />
-      </label>
-      <div className="flex items-center justify-end gap-2">
-        <button
-          type="button"
-          onClick={() => onMove(-1)}
-          disabled={!isEditable || index === 0}
-          aria-label={`Move ${participant?.horseName ?? 'horse'} up`}
-          className="flex h-9 w-9 cursor-pointer items-center justify-center rounded-md border border-outline-variant bg-white text-primary transition-colors hover:border-primary disabled:cursor-not-allowed disabled:opacity-40"
-        >
-          <ArrowUp className="h-4 w-4" />
-        </button>
-        <button
-          type="button"
-          onClick={() => onMove(1)}
-          disabled={!isEditable || index === total - 1}
-          aria-label={`Move ${participant?.horseName ?? 'horse'} down`}
-          className="flex h-9 w-9 cursor-pointer items-center justify-center rounded-md border border-outline-variant bg-white text-primary transition-colors hover:border-primary disabled:cursor-not-allowed disabled:opacity-40"
-        >
-          <ArrowDown className="h-4 w-4" />
-        </button>
-      </div>
-    </div>
-
-    <div className="mt-3 grid gap-2 border-t border-outline-variant pt-3 sm:grid-cols-2 lg:grid-cols-5">
-      <RankingStat label="Completed" value={`${lapStats?.completedLaps ?? 0}${configuredLapCount ? `/${configuredLapCount}` : ''}`} />
-      <RankingStat label="Best lap" value={formatSeconds(lapStats?.bestLapSec)} />
-      <RankingStat label="Average" value={formatSeconds(lapStats?.averageLapSec)} />
-      <RankingStat label="Gap" value={gapLabel} />
-      <RankingStat label="Points" value={String(points)} emphasis />
-    </div>
-
-    <div className="mt-3 grid gap-3 border-t border-outline-variant pt-3 sm:grid-cols-[auto_minmax(0,1fr)] sm:items-center">
-      <label className={`flex items-center gap-2 text-body-sm font-semibold text-primary ${isEditable ? 'cursor-pointer' : 'cursor-not-allowed opacity-70'}`}>
-        <input
-          type="checkbox"
-          checked={item.isDisqualified}
-          disabled={!isEditable}
-          onChange={(event) => onChange({ ...item, isDisqualified: event.target.checked })}
-        />
-        Disqualified
-      </label>
-      {item.isDisqualified && (
-        <label className="grid gap-1">
-          <span className="text-[10px] font-bold uppercase tracking-wider text-outline">Disqualification reason</span>
-          <input
-            value={item.disqualifyReason ?? ''}
-            disabled={!isEditable}
-            onChange={(event) => onChange({ ...item, disqualifyReason: event.target.value })}
-            className="w-full rounded-md border border-outline-variant bg-white px-3 py-2 text-body-sm focus:border-primary focus:outline-none disabled:cursor-not-allowed disabled:bg-surface-container disabled:opacity-70"
-          />
-        </label>
-      )}
-    </div>
-  </article>
-);
-
-const RankingStat = ({
-  label,
-  value,
-  emphasis = false,
-}: {
-  label: string;
-  value: string;
-  emphasis?: boolean;
-}) => (
-  <div className="rounded-md border border-outline-variant/70 bg-white px-3 py-2">
+const ReportDetailField = ({ label, children }: { label: string; children: ReactNode }) => (
+  <div className="rounded-md border border-outline-variant bg-surface-container-low px-3 py-2">
     <p className="text-[10px] font-bold uppercase tracking-wider text-outline">{label}</p>
-    <p className={`mt-1 text-body-sm font-bold ${emphasis ? 'text-secondary' : 'text-on-surface'}`}>{value}</p>
-  </div>
-);
-const MetricCard = ({ icon, label, value }: { icon: ReactNode; label: string; value: string }) => (
-  <div className="rounded-xl border border-outline-variant/40 bg-surface-container-lowest/70 p-4">
-    <div className="mb-3 flex items-center justify-between text-on-surface-variant">
-      <span className="text-[10px] font-bold uppercase tracking-[0.16em]">{label}</span>
-      <span className="text-primary">{icon}</span>
-    </div>
-    <p className="font-display truncate text-2xl font-extrabold text-on-surface">{value}</p>
+    <div className="mt-1 break-words text-body-sm font-semibold text-on-surface">{children}</div>
   </div>
 );
 
-const InfoTile = ({ label, value }: { label: string; value: string }) => (
-  <div className="min-w-0 rounded-lg border border-outline-variant/30 bg-surface-container-low px-3 py-2">
-    <p className="truncate text-[10px] font-bold uppercase tracking-[0.12em] text-outline">{label}</p>
-    <p className="mt-1 truncate text-body-sm font-semibold text-on-surface" title={value}>{value}</p>
-  </div>
+const ReportDetailNote = ({ label, value }: { label: string; value?: string }) => (
+  <section className="rounded-md border border-outline-variant bg-surface-container-low p-4">
+    <h3 className="text-label-sm font-bold uppercase tracking-wider text-outline">{label}</h3>
+    <p className="mt-2 whitespace-pre-wrap break-words text-body-sm text-on-surface-variant">{value?.trim() || '-'}</p>
+  </section>
 );
-
-const TextInput = ({
-  label,
-  value,
-  onChange,
-  type = 'text',
-  placeholder,
-}: {
-  label: string;
-  value: string;
-  onChange: (value: string) => void;
-  type?: string;
-  placeholder?: string;
-}) => (
-  <label className="grid min-w-0 gap-2">
-    <span className="min-w-0 break-words text-label-sm font-bold uppercase tracking-wider text-outline">{label}</span>
-    <input
-      type={type}
-      value={value}
-      onChange={(event) => onChange(event.target.value)}
-      placeholder={placeholder}
-      className="min-w-0 w-full rounded-md border border-outline-variant bg-surface-container-low px-4 py-3 text-body-sm focus:border-primary focus:outline-none"
-    />
-  </label>
-);
-
-const SelectInput = ({
-  label,
-  value,
-  options,
-  onChange,
-}: {
-  label: string;
-  value: string;
-  options: ReadonlyArray<{ value: string; label: string }>;
-  onChange: (value: string) => void;
-}) => (
-  <label className="grid min-w-0 gap-2">
-    <span className="min-w-0 break-words text-label-sm font-bold uppercase tracking-wider text-outline">{label}</span>
-    <select
-      value={value}
-      onChange={(event) => onChange(event.target.value)}
-      className="min-w-0 w-full cursor-pointer rounded-md border border-outline-variant bg-surface-container-low px-4 py-3 text-body-sm focus:border-primary focus:outline-none"
-    >
-      {options.map((option) => (
-        <option key={option.value} value={option.value}>{option.label}</option>
-      ))}
+const ResultViewSelect = ({ value, lapNumbers, onChange }: { value: ResultView; lapNumbers: number[]; onChange: (value: ResultView) => void }) => (
+  <label className="grid min-w-[220px] gap-2">
+    <span className="text-label-sm font-bold uppercase tracking-wider text-outline">Lap view</span>
+    <select value={value} onChange={(event) => onChange(event.target.value)} className="cursor-pointer rounded-md border border-outline-variant bg-white px-4 py-3 text-body-sm font-semibold text-on-surface focus:border-primary focus:outline-none">
+      <option value="overall">Overall result</option>
+      {lapNumbers.map((lap) => <option key={lap} value={getLapViewValue(lap)}>Lap {lap}</option>)}
     </select>
   </label>
 );
 
-const TextArea = ({
-  label,
-  value,
-  onChange,
-}: {
-  label: string;
-  value: string;
-  onChange: (value: string) => void;
-}) => (
-  <label className="grid min-w-0 gap-2">
-    <span className="min-w-0 break-words text-label-sm font-bold uppercase tracking-wider text-outline">{label}</span>
-    <textarea
-      value={value}
-      onChange={(event) => onChange(event.target.value)}
-      rows={3}
-      className="min-h-[104px] w-full rounded-md border border-outline-variant bg-surface-container-low px-4 py-3 text-body-sm focus:border-primary focus:outline-none"
-    />
-  </label>
+const SectionTitle = ({ icon, eyebrow, title }: { icon: ReactNode; eyebrow: string; title: string }) => (
+  <div className="min-w-0"><p className="inline-flex items-center gap-2 text-label-sm font-bold uppercase tracking-wider text-secondary">{icon}{eyebrow}</p><h2 className="font-display mt-1 text-title-large font-bold text-primary">{title}</h2></div>
 );
 
-const formatDateTime = (value?: string) => {
-  if (!value) {
-    return '-';
-  }
+const MetricCard = ({ icon, label, value }: { icon: ReactNode; label: string; value: string }) => (
+  <article className="rounded-lg border border-outline-variant bg-white p-4 shadow-sm"><div className="flex items-center justify-between gap-3 text-on-surface-variant"><span className="text-label-sm font-bold uppercase tracking-wider">{label}</span><span className="text-secondary">{icon}</span></div><p className="font-display mt-3 truncate text-2xl font-extrabold text-primary" title={value}>{value}</p></article>
+);
 
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) {
-    return value;
-  }
+const HorseIdentity = ({ horseName, avatarUrl, subtext }: { horseName?: string; avatarUrl?: string; subtext?: string }) => (
+  <div className="flex min-w-0 items-center gap-3">
+    {avatarUrl ? <img src={avatarUrl} alt={horseName ?? 'Race horse'} className="h-11 w-11 shrink-0 rounded-md border border-outline-variant object-cover" /> : <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-md border border-outline-variant bg-surface-container text-label-sm font-bold text-outline">H</div>}
+    <div className="min-w-0"><p className="break-words text-body-sm font-bold text-primary">{horseName ?? 'Unknown horse'}</p>{subtext && <p className="mt-1 break-words text-label-sm text-on-surface-variant">{subtext}</p>}</div>
+  </div>
+);
 
-  return date.toLocaleString('en-GB', {
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
-};
+const InfoPill = ({ label, value }: { label: string; value: ReactNode }) => (
+  <div className="min-w-0 rounded-md border border-outline-variant bg-surface-container-low px-3 py-2"><p className="truncate text-[10px] font-bold uppercase tracking-wider text-outline">{label}</p><p className="mt-1 truncate text-body-sm font-semibold text-on-surface" title={String(value)}>{value}</p></div>
+);
 
-type RaceScheduleSummary = {
-  scheduleId?: number;
-  scheduleTitle?: string;
-  dayNumber?: number;
-  scheduledAt?: string;
-};
+const StatusBadge = ({ status }: { status?: string }) => (
+  <span className={['inline-flex rounded-md border px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider', statusClassName(status)].join(' ')}>{formatStatusLabel(status)}</span>
+);
 
-const getScheduleLabel = (race?: RaceScheduleSummary) => {
-  const title = race?.scheduleTitle?.trim();
-  if (title) {
-    return title;
-  }
+const SelectInput = ({ label, value, options, onChange }: { label: string; value: string; options: Array<{ value: string; label: string }>; onChange: (value: string) => void }) => (
+  <label className="grid gap-2"><span className="text-label-sm font-bold uppercase tracking-wider text-outline">{label}</span><select value={value} onChange={(event) => onChange(event.target.value)} className="cursor-pointer rounded-md border border-outline-variant bg-white px-4 py-3 text-body-sm font-semibold text-on-surface focus:border-primary focus:outline-none">{options.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>
+);
 
-  if (race?.dayNumber) {
-    return `Day ${race.dayNumber}`;
-  }
+const TextArea = ({ label, value, onChange, placeholder }: { label: string; value: string; onChange: (value: string) => void; placeholder?: string }) => (
+  <label className="grid gap-2"><span className="text-label-sm font-bold uppercase tracking-wider text-outline">{label}</span><textarea value={value} onChange={(event) => onChange(event.target.value)} placeholder={placeholder} rows={4} className="min-h-[112px] rounded-md border border-outline-variant bg-white px-4 py-3 text-body-sm text-on-surface focus:border-primary focus:outline-none" /></label>
+);
 
-  if (race?.scheduleId) {
-    return `Schedule #${race.scheduleId}`;
-  }
-
-  return formatDateTime(race?.scheduledAt);
-};
+const TableHead = ({ children }: { children: ReactNode }) => <th className="px-4 py-3 text-label-sm uppercase tracking-wider text-outline">{children}</th>;
+const TableEmpty = ({ colSpan, text }: { colSpan: number; text: string }) => <tr><td colSpan={colSpan} className="px-4 py-8 text-center text-body-sm text-on-surface-variant">{text}</td></tr>;
+const EmptyState = ({ title, description }: { title: string; description: string }) => <section className="rounded-xl border border-outline-variant bg-white p-8 text-center"><h2 className="font-display text-title-large font-bold text-primary">{title}</h2><p className="mt-2 text-body-sm text-on-surface-variant">{description}</p></section>;
 
 export default RaceControlPage;

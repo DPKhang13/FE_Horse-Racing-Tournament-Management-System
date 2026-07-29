@@ -142,7 +142,7 @@ const TournamentSchedulePage = () => {
     <div className="min-h-screen bg-surface py-8">
       <div className="mx-auto max-w-[1440px] px-4 md:px-8">
         <motion.div 
-          className="glass-panel mb-6 rounded-2xl p-6"
+          className="admin-surface-panel mb-6 rounded-xl p-6"
           initial="hidden"
           animate="visible"
           variants={revealContainer}
@@ -193,7 +193,7 @@ const TournamentSchedulePage = () => {
         </motion.div>
 
         <motion.div 
-          className="glass-panel mb-6 rounded-xl p-4"
+          className="admin-surface-panel mb-6 rounded-xl p-4"
           initial="hidden"
           animate="visible"
           variants={revealUp}
@@ -266,7 +266,7 @@ const TournamentSchedulePage = () => {
         ) : (
           <>
             <motion.div 
-              className="glass-panel hidden overflow-hidden rounded-xl lg:block"
+              className="admin-surface-panel hidden overflow-hidden rounded-xl lg:block"
               initial="hidden"
               animate="visible"
               variants={revealUp}
@@ -364,7 +364,7 @@ const MatchStatusBadge = ({ status }: { status: MatchStatus }) => (
 );
 
 const EmptyScheduleState = ({ title, description }: { title: string; description: string }) => (
-  <div className="glass-panel rounded-xl px-6 py-16 text-center">
+  <div className="admin-surface-panel rounded-xl px-6 py-16 text-center">
     <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-surface-container">
       <Search className="h-6 w-6 text-outline" />
     </div>
@@ -374,7 +374,7 @@ const EmptyScheduleState = ({ title, description }: { title: string; description
 );
 
 const ScheduleCard = ({ match }: { match: TournamentMatch }) => (
-  <article className="glass-panel rounded-xl p-5">
+  <article className="admin-surface-panel rounded-xl p-5">
     <div className="mb-4 flex items-start justify-between gap-4">
       <div>
         <p className="mb-1 text-label-sm font-bold uppercase tracking-wider text-outline">{match.matchId}</p>

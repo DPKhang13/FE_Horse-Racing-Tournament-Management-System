@@ -47,6 +47,35 @@ const loadRoundsForRace = async (raceId: number): Promise<RaceRoundItem[]> => {
   }
 };
 
+const formatLapTime = (value: number) => (value > 0 ? `${value.toFixed(2)}s` : '-');
+
+const groupRoundsByLap = (rounds: RaceRoundItem[]) => {
+  const groups = new Map<number, RaceRoundItem[]>();
+
+  rounds.forEach((round) => {
+    const lapNumber = Number.isFinite(round.roundNumber) && round.roundNumber > 0 ? round.roundNumber : 0;
+    groups.set(lapNumber, [...(groups.get(lapNumber) ?? []), round]);
+  });
+
+  return Array.from(groups.entries())
+    .sort(([leftLap], [rightLap]) => leftLap - rightLap)
+    .map(([lapNumber, lapRounds]) => ({
+      lapNumber,
+      rounds: [...lapRounds].sort((left, right) => {
+        const leftPosition = left.position ?? Number.MAX_SAFE_INTEGER;
+        const rightPosition = right.position ?? Number.MAX_SAFE_INTEGER;
+
+        if (leftPosition !== rightPosition) {
+          return leftPosition - rightPosition;
+        }
+
+        return left.lapTimeSec - right.lapTimeSec;
+      }),
+    }));
+};
+
+const getLapLabel = (lapNumber: number) => (lapNumber > 0 ? `Lap ${lapNumber}` : 'Lap TBA');
+
 const SchedulePage = () => {
   const [profile, setProfile] = useState<UserProfile | undefined>(() => authService.getStoredUserProfile());
   const [tournaments, setTournaments] = useState<TournamentApiItem[]>([]);
@@ -98,7 +127,7 @@ const SchedulePage = () => {
     const q = searchQuery.trim().toLowerCase();
     if (!q) return tournaments;
     return tournaments.filter((t) =>
-      [t.name, t.location, t.status].some((v) => v?.toLowerCase().includes(q)),
+      [t.name, t.tournamentName, t.location, t.status].some((v) => v?.toLowerCase().includes(q)),
     );
   }, [tournaments, searchQuery]);
 
@@ -181,7 +210,7 @@ const SchedulePage = () => {
                 >
                   <div className="flex items-start justify-between gap-4 mb-4">
                     <h3 className="text-body-lg font-bold text-primary group-hover:text-secondary transition-colors">
-                      {t.name ?? `Tournament ${tid}`}
+                      {t.name ?? t.tournamentName ?? `Tournament ${tid}`}
                     </h3>
                     <ChevronRight className="h-5 w-5 text-outline shrink-0 mt-0.5" />
                   </div>
@@ -222,7 +251,7 @@ const SchedulePage = () => {
                   {selectedTournament.location ?? '-'}
                 </p>
                 <h2 className="text-headline-md font-bold text-primary">
-                  {selectedTournament.name ?? `Tournament ${selectedTournamentId}`}
+                  {selectedTournament.name ?? selectedTournament.tournamentName ?? `Tournament ${selectedTournamentId}`}
                 </h2>
                 <div className="flex flex-wrap gap-4 mt-3">
                   <span className="text-body-sm text-on-surface-variant">
@@ -258,6 +287,7 @@ const SchedulePage = () => {
                 <div className="space-y-6">
                   {tournamentRaces.map((race) => {
                     const rounds = raceRounds.get(race.raceId) ?? [];
+                    const roundGroups = groupRoundsByLap(rounds);
                     const isExpanded = selectedRaceId === race.raceId;
                     return (
                       <div key={race.raceId} className="border border-outline-variant rounded-lg overflow-hidden">
@@ -275,7 +305,7 @@ const SchedulePage = () => {
                               <span className="flex items-center gap-1"><Clock className="w-3.5 h-3.5" />{formatDateTime(race.scheduledAt)}</span>
                               <span>{race.distanceM}m • {race.trackType}</span>
                               <span>{race.lapCount} lap(s)</span>
-                              {rounds.length > 0 && <span className="text-secondary font-semibold">{rounds.length} round(s)</span>}
+                              {roundGroups.length > 0 && <span className="text-secondary font-semibold">{roundGroups.length} lap group(s)</span>}
                             </div>
                           </div>
                           <ChevronRight className={`h-5 w-5 text-outline shrink-0 transition-transform ${isExpanded ? 'rotate-90' : ''}`} />
@@ -290,34 +320,54 @@ const SchedulePage = () => {
                               <InfoPill label="Race Number" value={String(race.raceNumber)} />
                             </div>
 
-                            {rounds.length > 0 && (
-                              <>
-                                <p className="text-label-sm font-bold uppercase tracking-wider text-outline mb-3">Laps / Rounds</p>
-                                <div className="overflow-x-auto">
-                                  <table className="w-full min-w-[500px] text-left text-body-sm">
-                                    <thead>
-                                      <tr className="border-b border-outline-variant">
-                                        <th className="px-3 py-2 text-label-sm text-outline uppercase tracking-wider">Round</th>
-                                        <th className="px-3 py-2 text-label-sm text-outline uppercase tracking-wider">Horse</th>
-                                        <th className="px-3 py-2 text-label-sm text-outline uppercase tracking-wider">Jockey</th>
-                                        <th className="px-3 py-2 text-label-sm text-outline uppercase tracking-wider">Position</th>
-                                        <th className="px-3 py-2 text-label-sm text-outline uppercase tracking-wider">Lap Time</th>
-                                      </tr>
-                                    </thead>
-                                    <tbody className="divide-y divide-outline-variant">
-                                      {rounds.map((round) => (
-                                        <tr key={round.roundId} className="hover:bg-surface-container-low">
-                                          <td className="px-3 py-2 font-semibold text-primary">{round.roundNumber}</td>
-                                          <td className="px-3 py-2 text-on-surface-variant">{round.horseName ?? '-'}</td>
-                                          <td className="px-3 py-2 text-on-surface-variant">{round.jockeyFullName ?? '-'}</td>
-                                          <td className="px-3 py-2">{round.position != null ? `#${round.position}` : '-'}</td>
-                                          <td className="px-3 py-2">{round.lapTimeSec > 0 ? `${round.lapTimeSec.toFixed(2)}s` : '-'}</td>
-                                        </tr>
-                                      ))}
-                                    </tbody>
-                                  </table>
+                            {roundGroups.length > 0 && (
+                              <div>
+                                <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                                  <p className="text-label-sm font-bold uppercase tracking-wider text-outline">Laps / Rounds</p>
+                                  <span className="rounded-full bg-secondary/10 px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-secondary">
+                                    {roundGroups.length} lap group(s)
+                                  </span>
                                 </div>
-                              </>
+
+                                <div className="space-y-4">
+                                  {roundGroups.map(({ lapNumber, rounds: lapRounds }) => (
+                                    <section key={lapNumber} className="overflow-hidden rounded-lg border border-outline-variant bg-white">
+                                      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-outline-variant bg-surface-container-low px-4 py-3">
+                                        <div>
+                                          <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-outline">Lap</p>
+                                          <h5 className="mt-1 text-body-md font-bold text-primary">{getLapLabel(lapNumber)}</h5>
+                                        </div>
+                                        <span className="rounded-full bg-white px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-on-surface-variant">
+                                          {lapRounds.length} runner(s)
+                                        </span>
+                                      </div>
+
+                                      <div className="overflow-x-auto">
+                                        <table className="w-full min-w-[460px] text-left text-body-sm">
+                                          <thead>
+                                            <tr className="border-b border-outline-variant">
+                                              <th className="px-3 py-2 text-label-sm text-outline uppercase tracking-wider">Horse</th>
+                                              <th className="px-3 py-2 text-label-sm text-outline uppercase tracking-wider">Jockey</th>
+                                              <th className="px-3 py-2 text-label-sm text-outline uppercase tracking-wider">Position</th>
+                                              <th className="px-3 py-2 text-label-sm text-outline uppercase tracking-wider">Lap Time</th>
+                                            </tr>
+                                          </thead>
+                                          <tbody className="divide-y divide-outline-variant">
+                                            {lapRounds.map((round) => (
+                                              <tr key={round.roundId} className="hover:bg-surface-container-low">
+                                                <td className="px-3 py-2 font-semibold text-on-surface-variant">{round.horseName ?? '-'}</td>
+                                                <td className="px-3 py-2 text-on-surface-variant">{round.jockeyFullName ?? '-'}</td>
+                                                <td className="px-3 py-2">{round.position != null ? `#${round.position}` : '-'}</td>
+                                                <td className="px-3 py-2 font-medium tabular-nums">{formatLapTime(round.lapTimeSec)}</td>
+                                              </tr>
+                                            ))}
+                                          </tbody>
+                                        </table>
+                                      </div>
+                                    </section>
+                                  ))}
+                                </div>
+                              </div>
                             )}
                           </div>
                         )}

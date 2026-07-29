@@ -17,6 +17,7 @@ export type RegistrationResponse = {
   tournamentName?: string | null;
   raceName?: string | null;
   raceNumber?: number | null;
+  raceStatus?: string | null;
   scheduledAt?: string | null;
   horseName?: string | null;
   horseAvatarUrl?: string | null;
@@ -24,13 +25,20 @@ export type RegistrationResponse = {
   ownerStableName?: string | null;
   jockeyFullName?: string | null;
   jockeyStatus?: string | null;
+  chiefInspectionStatus?: string | null;
+  chiefInspectionNote?: string | null;
+  chiefInspectedByFullName?: string | null;
+  chiefInspectedAt?: string | null;
+  adminReviewedByFullName?: string | null;
+  adminReviewedAt?: string | null;
+  adminReviewNote?: string | null;
   approvedByFullName?: string | null;
 };
 
 export type ApproveRegistrationRequest = {
-  note: string;
+  note?: string;
 };
 
 export type RejectRegistrationRequest = {
-  reason: string;
+  reason?: string;
 };

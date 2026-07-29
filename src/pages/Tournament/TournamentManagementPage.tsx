@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react';
-import { Ban, CalendarDays, ClipboardList, Eye, Filter, Flag, ListChecks, Pencil, Plus, RefreshCw, Save, Search, Trash2, Trophy, Users, X } from 'lucide-react';
+import { AlertTriangle, Ban, CalendarDays, ClipboardList, Eye, Filter, Flag, Medal, Pencil, Plus, RefreshCw, Save, Search, Trash2, Trophy, Users, X } from 'lucide-react';
 import { motion } from 'motion/react';
 import { Link, useNavigate } from 'react-router-dom';
 import { getApiErrorMessage } from '../../services/apiClient';
@@ -58,6 +58,13 @@ const tournamentLocationOptions = [
 ] as const;
 const raceRankGroupOptions = ['A', 'B', 'C', 'D', 'E'] as const;
 const raceTrackTypeOptions = ['Turf', 'Dirt', 'Synthetic'] as const;
+const raceStatusOptions = [
+  { value: 'ready', label: 'Ready' },
+  { value: 'open_for_betting', label: 'Open for betting' },
+  { value: 'in_progress', label: 'In progress' },
+  { value: 'completed', label: 'Completed' },
+  { value: 'cancelled', label: 'Cancelled' },
+] as const;
 const createRaceNumberOptions = (raceCount: number, currentRaceNumber: number) =>
   Array.from({ length: Math.max(1, raceCount + 1, currentRaceNumber) }, (_, index) => index + 1);
 const emptyFormData: TournamentMutationData = {
@@ -88,7 +95,7 @@ const emptyRaceFormData: RaceFormData = {
   trackType: 'Turf',
   maxHorses: 8,
   maxReferees: 3,
-  status: 'scheduled',
+  status: 'ready',
 };
 const createDefaultPointRules = (): PointRuleRequest[] =>
   [1, 2, 3].map((finishPosition) => ({
@@ -220,6 +227,28 @@ const normalizeTournamentLocation = (value?: string) => {
   }
 
   return '';
+};
+
+const normalizeRaceCrudStatus = (status?: string) => {
+  const value = status?.trim().toLowerCase().replace(/[\s-]+/g, '_') ?? '';
+
+  if (value === 'open_for_betting' || value === 'betting_open' || (value.includes('open') && value.includes('betting'))) {
+    return 'open_for_betting';
+  }
+
+  if (value.includes('progress') || value.includes('ongoing') || value.includes('running') || value === 'live') {
+    return 'in_progress';
+  }
+
+  if (value.includes('complete') || value.includes('finish')) {
+    return 'completed';
+  }
+
+  if (value.includes('cancel')) {
+    return 'cancelled';
+  }
+
+  return 'ready';
 };
 
 const isValidDateInput = (value: string) => {
@@ -361,6 +390,20 @@ const validateTournamentForm = (data: TournamentMutationData, originalTournament
   }
 
   return errors;
+};
+
+const formatCloseRegistrationSummary = (tournament: Tournament) => {
+  const summary = tournament.closeRegistrationSummary;
+
+  if (!summary) {
+    return '';
+  }
+
+  return [
+    'Warning: close registration processed by backend.',
+    String(summary.rejectedPendingRegistrations) + ' pending registration(s) rejected.',
+    String(summary.cancelledUnconfirmedRegistrations) + ' unconfirmed registration(s) cancelled.',
+  ].join('\n');
 };
 
 const toFormData = (tournament: Tournament): TournamentMutationData => ({
@@ -507,6 +550,7 @@ const TournamentManagementPage = () => {
   const [lastCreatedTournament, setLastCreatedTournament] = useState<Tournament | null>(null);
   const [raceModalTournament, setRaceModalTournament] = useState<Tournament | null>(null);
   const [isRaceModalOpen, setIsRaceModalOpen] = useState(false);
+  const [forceCloseRegistration, setForceCloseRegistration] = useState(false);
 
   useToastNotifications([
     message ? { tone: 'success', text: message } : null,
@@ -567,7 +611,6 @@ const TournamentManagementPage = () => {
     });
   }, [dateFrom, dateTo, searchTerm, statusFilter, tournaments]);
 
-  const ongoingCount = tournaments.filter((tournament) => tournament.status === 'Ongoing').length;
   const upcomingCount = tournaments.filter((tournament) => tournament.status === 'Upcoming').length;
   const totalParticipants = tournaments.reduce((total, tournament) => total + tournament.currentParticipants, 0);
   const totalTournamentCount = globalTournamentCount ?? tournaments.length;
@@ -582,6 +625,7 @@ const TournamentManagementPage = () => {
     setMessage('');
     setShowTournamentSuccess(false);
     setLastCreatedTournament(null);
+    setForceCloseRegistration(false);
     setIsFormOpen(true);
   };
 
@@ -594,6 +638,7 @@ const TournamentManagementPage = () => {
     setMessage('');
     setShowTournamentSuccess(false);
     setLastCreatedTournament(null);
+    setForceCloseRegistration(false);
     setIsFormOpen(true);
   };
 
@@ -605,10 +650,15 @@ const TournamentManagementPage = () => {
     setCreatePrizeErrors({});
     setShowTournamentSuccess(false);
     setLastCreatedTournament(null);
+    setForceCloseRegistration(false);
   };
 
   const handleFieldChange = <K extends keyof TournamentMutationData>(field: K, value: TournamentMutationData[K]) => {
     setFormData((current) => ({ ...current, [field]: value }));
+
+    if (field === 'status' && value !== 'Registration Closed') {
+      setForceCloseRegistration(false);
+    }
 
     if (formErrors[field]) {
       setFormErrors((current) => {
@@ -697,7 +747,16 @@ const TournamentManagementPage = () => {
             registrationCloseAt,
           });
         } else if (shouldUseWorkflow && formData.status === 'Registration Closed') {
-          finalTournament = await tournamentService.closeRegistration(selectedTournament.tournamentId);
+          finalTournament = await tournamentService.closeRegistration(selectedTournament.tournamentId, {
+            autoRejectPending: forceCloseRegistration,
+            autoCancelUnconfirmed: forceCloseRegistration,
+            allowCloseWithoutEligibleRaces: forceCloseRegistration,
+          });
+          const closeRegistrationSummary = formatCloseRegistrationSummary(finalTournament);
+
+          if (closeRegistrationSummary) {
+            responseMessages.push(closeRegistrationSummary);
+          }
         } else if (shouldUseWorkflow && formData.status === 'Ongoing') {
           finalTournament = await tournamentService.startTournament(selectedTournament.tournamentId);
         } else if (shouldUseWorkflow && formData.status === 'Completed') {
@@ -781,7 +840,7 @@ const TournamentManagementPage = () => {
     <div className="min-h-screen bg-surface py-8">
       <div className="mx-auto max-w-[1440px] px-4 md:px-8">
         <motion.div 
-          className="glass-panel mb-6 rounded-2xl p-6"
+          className="admin-surface-panel mb-6 rounded-xl p-6"
           initial="hidden"
           animate="visible"
           variants={revealContainer}
@@ -796,7 +855,7 @@ const TournamentManagementPage = () => {
             </motion.div>
 
             <motion.div 
-              className="grid min-w-full gap-3 sm:grid-cols-2 xl:min-w-[560px] xl:grid-cols-4"
+              className="grid min-w-full gap-3 sm:grid-cols-2 xl:min-w-[420px] xl:grid-cols-3"
               variants={revealContainer}
             >
               <motion.div variants={revealUp}>
@@ -804,9 +863,6 @@ const TournamentManagementPage = () => {
               </motion.div>
               <motion.div variants={revealUp}>
                 <MetricCard icon={<CalendarDays className="h-4 w-4" />} label="Upcoming" value={String(upcomingCount).padStart(2, '0')} />
-              </motion.div>
-              <motion.div variants={revealUp}>
-                <MetricCard icon={<ListChecks className="h-4 w-4" />} label="Ongoing" value={String(ongoingCount).padStart(2, '0')} />
               </motion.div>
               <motion.div variants={revealUp}>
                 <MetricCard icon={<Users className="h-4 w-4" />} label="Participants" value={String(totalParticipants)} />
@@ -822,7 +878,7 @@ const TournamentManagementPage = () => {
           variants={revealContainer}
         >
           <motion.div 
-            className="glass-panel flex-1 rounded-xl p-4"
+            className="admin-surface-panel flex-1 rounded-xl p-4"
             variants={revealUp}
           >
             <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(220px,1fr)_180px_180px_180px]">
@@ -880,7 +936,7 @@ const TournamentManagementPage = () => {
         </motion.div>
 
         <motion.div 
-          className="glass-panel overflow-hidden rounded-xl"
+          className="admin-surface-panel overflow-hidden rounded-xl"
           initial="hidden"
           animate="visible"
           variants={revealUp}
@@ -940,6 +996,16 @@ const TournamentManagementPage = () => {
                         >
                           <CalendarDays className="h-4 w-4" />
                         </Link>
+                        {tournament.status === 'Completed' && (
+                          <Link
+                            to={`/tournaments/${tournament.tournamentId}/prize-awards`}
+                            className="flex h-9 w-9 items-center justify-center rounded-md border border-outline-variant text-on-surface-variant transition-colors hover:border-primary hover:text-primary"
+                            aria-label={`Manage prize awards for ${tournament.tournamentName}`}
+                            title={`Manage prize awards for ${tournament.tournamentName}`}
+                          >
+                            <Medal className="h-4 w-4" />
+                          </Link>
+                        )}
                       </div>
                     </td>
                   </motion.tr>
@@ -973,6 +1039,8 @@ const TournamentManagementPage = () => {
             isEditing={Boolean(selectedTournament)}
             editableStatuses={editableTournamentStatuses}
             selectedTournament={selectedTournament}
+            forceCloseRegistration={forceCloseRegistration}
+            onForceCloseRegistrationChange={setForceCloseRegistration}
             onChange={handleFieldChange}
             onCreatePrizeChange={handleCreatePrizeChange}
             onSubmit={handleSubmit}
@@ -1038,6 +1106,8 @@ const TournamentForm = ({
   isEditing,
   editableStatuses,
   selectedTournament,
+  forceCloseRegistration,
+  onForceCloseRegistrationChange,
   onChange,
   onCreatePrizeChange,
   onSubmit,
@@ -1055,6 +1125,8 @@ const TournamentForm = ({
   isEditing: boolean;
   editableStatuses: TournamentStatus[];
   selectedTournament: Tournament | null;
+  forceCloseRegistration: boolean;
+  onForceCloseRegistrationChange: (value: boolean) => void;
   onChange: <K extends keyof TournamentMutationData>(field: K, value: TournamentMutationData[K]) => void;
   onCreatePrizeChange: (index: number, field: EditablePrizeField, value: string | number) => void;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
@@ -1064,6 +1136,10 @@ const TournamentForm = ({
   onDone?: () => void;
   onCreateSchedule?: (tournament: Tournament) => void;
 }) => {
+  const shouldShowForceClose = isEditing
+    && selectedTournament?.status === 'Registration Open'
+    && formData.status === 'Registration Closed';
+
   if (showTournamentSuccess && lastCreatedTournament) {
     return (
       <motion.div 
@@ -1168,6 +1244,27 @@ const TournamentForm = ({
               </select>
             </Field>
           </motion.div>
+          {shouldShowForceClose && (
+            <motion.div className="md:col-span-2" variants={revealUp}>
+              <label className="flex items-start gap-3 rounded-md border border-error/40 bg-surface-container-low p-4 text-body-sm text-on-surface-variant">
+                <input
+                  type="checkbox"
+                  checked={forceCloseRegistration}
+                  onChange={(event) => onForceCloseRegistrationChange(event.target.checked)}
+                  className="mt-1 h-4 w-4 accent-error"
+                />
+                <span className="flex-1 space-y-1">
+                  <span className="flex items-center gap-2 font-bold text-error">
+                    <AlertTriangle className="h-4 w-4" />
+                    Force close registration
+                  </span>
+                  <span className="block text-body-xs text-on-surface-variant">
+                    Reject pending registrations, cancel unconfirmed jockey assignments, and allow closing races without eligible horses.
+                  </span>
+                </span>
+              </label>
+            </motion.div>
+          )}
           {formData.status === 'Registration Open' && (
             <>
               <motion.div variants={revealUp}>
@@ -1618,7 +1715,7 @@ const RaceCrudPanel = ({ tournament }: { tournament: Tournament }) => {
       trackType: normalizedTrackType ?? 'Turf',
       maxHorses: race.maxHorses,
       maxReferees: race.maxReferees,
-      status: race.status,
+      status: normalizeRaceCrudStatus(race.status),
     });
 
     try {
@@ -1734,7 +1831,7 @@ const RaceCrudPanel = ({ tournament }: { tournament: Tournament }) => {
     setErrorMessage('');
 
     try {
-      await raceCrudService.deleteRace(race.raceId, tournament.tournamentId);
+      await raceCrudService.deleteRace(race.raceId);
       setMessage('Race cancelled.');
       await loadRaces();
     } catch (error) {
@@ -1764,7 +1861,7 @@ const RaceCrudPanel = ({ tournament }: { tournament: Tournament }) => {
         <motion.button 
           type="button" 
           onClick={resetRaceForm} 
-          className="gold-gradient inline-flex items-center justify-center gap-3 rounded-2xl px-8 py-4 text-label-lg font-extrabold text-on-primary shadow-lg shadow-primary/20 hover:shadow-xl hover:shadow-primary/30 transition-all"
+          className="gold-gradient inline-flex items-center justify-center gap-3 rounded-xl px-8 py-4 text-label-lg font-extrabold text-on-primary shadow-lg shadow-primary/20 hover:shadow-lg shadow-black/10 hover:shadow-primary/30 transition-all"
           whileHover="hover"
           whileTap="tap"
         >
@@ -1784,7 +1881,7 @@ const RaceCrudPanel = ({ tournament }: { tournament: Tournament }) => {
           variants={revealUp}
         >
           <div className="flex items-center gap-3 mb-6">
-            <div className="h-12 w-12 rounded-2xl bg-secondary/10 flex items-center justify-center">
+            <div className="h-12 w-12 rounded-xl bg-secondary/10 flex items-center justify-center">
               <Flag className="h-6 w-6 text-secondary" />
             </div>
             <div>
@@ -1794,14 +1891,14 @@ const RaceCrudPanel = ({ tournament }: { tournament: Tournament }) => {
           </div>
 
           {isLoadingRaces ? (
-            <div className="glass-panel rounded-3xl p-12 text-center">
+            <div className="admin-surface-panel rounded-xl p-12 text-center">
               <div className="mx-auto mb-6 h-16 w-16 rounded-full bg-surface-container flex items-center justify-center">
                 <div className="h-8 w-8 text-outline animate-spin">⚙</div>
               </div>
               <p className="text-body-lg font-semibold text-on-surface-variant">Loading races...</p>
             </div>
           ) : races.length === 0 ? (
-            <div className="glass-panel rounded-3xl p-12 text-center border-2 border-dashed border-outline-variant">
+            <div className="admin-surface-panel rounded-xl p-12 text-center border-2 border-dashed border-outline-variant">
               <div className="mx-auto mb-6 h-20 w-20 rounded-full bg-surface-container flex items-center justify-center">
                 <Flag className="h-10 w-10 text-outline" />
               </div>
@@ -1810,7 +1907,7 @@ const RaceCrudPanel = ({ tournament }: { tournament: Tournament }) => {
               <motion.button 
                 type="button" 
                 onClick={resetRaceForm} 
-                className="gold-gradient inline-flex items-center justify-center gap-3 rounded-2xl px-8 py-4 text-label-lg font-extrabold text-on-primary"
+                className="gold-gradient inline-flex items-center justify-center gap-3 rounded-xl px-8 py-4 text-label-lg font-extrabold text-on-primary"
                 whileHover="hover"
                 whileTap="tap"
               >
@@ -1826,7 +1923,7 @@ const RaceCrudPanel = ({ tournament }: { tournament: Tournament }) => {
               {races.map((race) => (
                 <motion.div
                   key={race.raceId}
-                  className="glass-panel rounded-3xl border-2 border-outline-variant p-6 transition-all duration-300 hover:border-primary/50 hover:shadow-lg hover:shadow-primary/10"
+                  className="admin-surface-panel rounded-xl border-2 border-outline-variant p-6 transition-all duration-300 hover:border-primary/50 hover:shadow-lg hover:shadow-primary/10"
                   variants={revealUp}
                   whileHover="hover"
                 >
@@ -1955,7 +2052,7 @@ const RaceFormPanel = ({
   if (showRaceSuccess && lastCreatedRace) {
     return (
       <motion.div 
-        className="glass-panel rounded-3xl p-8 space-y-8"
+        className="admin-surface-panel rounded-xl p-8 space-y-8"
         initial="hidden"
         animate="visible"
         variants={revealContainer}
@@ -1975,7 +2072,7 @@ const RaceFormPanel = ({
           <motion.button
             type="button"
             onClick={onDone}
-            className="w-full rounded-2xl border-2 border-outline-variant px-8 py-4 text-label-lg font-bold text-on-surface-variant hover:text-primary hover:border-primary"
+            className="w-full rounded-xl border-2 border-outline-variant px-8 py-4 text-label-lg font-bold text-on-surface-variant hover:text-primary hover:border-primary"
             variants={revealUp}
             whileHover="hover"
             whileTap="tap"
@@ -1990,14 +2087,14 @@ const RaceFormPanel = ({
   return (
     <motion.form 
       onSubmit={onSubmit} 
-      className="glass-panel rounded-3xl p-6"
+      className="admin-surface-panel rounded-xl p-6"
       initial="hidden"
       animate="visible"
       variants={revealContainer}
     >
       <motion.div className="mb-6 flex items-center justify-between gap-4" variants={revealUp}>
         <div className="flex items-center gap-3">
-          <div className="h-10 w-10 rounded-2xl bg-secondary/10 flex items-center justify-center">
+          <div className="h-10 w-10 rounded-xl bg-secondary/10 flex items-center justify-center">
             <Flag className="h-5 w-5 text-secondary" />
           </div>
           <h4 className="font-display text-xl font-extrabold text-primary">
@@ -2075,10 +2172,9 @@ const RaceFormPanel = ({
         <motion.div className="grid gap-4 md:grid-cols-2" variants={revealUp}>
           <Field label="Status">
             <select value={form.status} onChange={(event) => onChange('status', event.target.value)} className={inputClassName}>
-              <option value="scheduled">Scheduled</option>
-              <option value="ongoing">Ongoing</option>
-              <option value="completed">Completed</option>
-              <option value="cancelled">Cancelled</option>
+              {raceStatusOptions.map((status) => (
+                <option key={status.value} value={status.value}>{status.label}</option>
+              ))}
             </select>
           </Field>
           <Field label="Schedule">
@@ -2122,7 +2218,7 @@ const RaceFormPanel = ({
           ) : (
             <div className="space-y-3">
               {pointRules.map((rule, index) => (
-                <div key={`${index}-${rule.finishPosition}`} className="grid gap-2 rounded-2xl border border-outline-variant p-3 sm:grid-cols-[90px_90px_minmax(0,1fr)_40px]">
+                <div key={`${index}-${rule.finishPosition}`} className="grid gap-2 rounded-xl border border-outline-variant p-3 sm:grid-cols-[90px_90px_minmax(0,1fr)_40px]">
                   <label className="space-y-1">
                     <span className="text-label-xs font-bold text-on-surface-variant">Position</span>
                     <input
@@ -2174,7 +2270,7 @@ const RaceFormPanel = ({
 
       <motion.button 
         type="submit" 
-        className="mt-8 w-full gold-gradient rounded-2xl px-8 py-4 text-label-lg font-extrabold text-on-primary shadow-lg shadow-primary/20 hover:shadow-xl hover:shadow-primary/30 transition-all"
+        className="mt-8 w-full gold-gradient rounded-xl px-8 py-4 text-label-lg font-extrabold text-on-primary shadow-lg shadow-primary/20 hover:shadow-lg shadow-black/10 hover:shadow-primary/30 transition-all"
         disabled={isLoadingPointRules}
         variants={revealUp}
         whileHover="hover"
@@ -2232,7 +2328,7 @@ const TournamentDetailModal = ({
           </Link>
         }
       >
-        <SchedulePreview matches={tournament.schedule} />
+        <SchedulePreview matches={tournament.schedule} tournamentLocation={tournament.location} />
       </DetailSection>
     </div>
   </Modal>
@@ -2271,22 +2367,21 @@ const ParticipantsTable = ({ participants }: { participants: TournamentParticipa
   );
 };
 
-const SchedulePreview = ({ matches }: { matches: TournamentMatch[] }) => {
+const SchedulePreview = ({ matches, tournamentLocation }: { matches: TournamentMatch[]; tournamentLocation: string }) => {
   if (matches.length === 0) {
     return <InlineEmptyState text="No matches exist for this tournament." />;
   }
 
   return (
     <div className="overflow-x-auto">
-      <table className="w-full min-w-[860px] text-left">
+      <table className="w-full min-w-[760px] text-left">
         <thead className="border-b border-outline-variant bg-surface-container">
           <tr>
             <th className="px-4 py-3 text-label-sm uppercase tracking-wider text-outline">Match</th>
             <th className="px-4 py-3 text-label-sm uppercase tracking-wider text-outline">Round</th>
             <th className="px-4 py-3 text-label-sm uppercase tracking-wider text-outline">Date</th>
             <th className="px-4 py-3 text-label-sm uppercase tracking-wider text-outline">Time</th>
-            <th className="px-4 py-3 text-label-sm uppercase tracking-wider text-outline">Arena / Location</th>
-            <th className="px-4 py-3 text-label-sm uppercase tracking-wider text-outline">Participants</th>
+            <th className="px-4 py-3 text-label-sm uppercase tracking-wider text-outline">Location</th>
             <th className="px-4 py-3 text-label-sm uppercase tracking-wider text-outline">Status</th>
           </tr>
         </thead>
@@ -2297,8 +2392,7 @@ const SchedulePreview = ({ matches }: { matches: TournamentMatch[] }) => {
               <td className="px-4 py-3 text-body-sm text-on-surface-variant">{match.round}</td>
               <td className="px-4 py-3 text-body-sm text-on-surface-variant">{formatDate(match.matchDate)}</td>
               <td className="px-4 py-3 text-body-sm text-on-surface-variant">{match.startTime} - {match.endTime}</td>
-              <td className="px-4 py-3 text-body-sm text-on-surface-variant">{match.arenaLocation}</td>
-              <td className="px-4 py-3 text-body-sm text-on-surface-variant">{match.participant1} vs {match.participant2}</td>
+              <td className="px-4 py-3 text-body-sm text-on-surface-variant">{tournamentLocation || '-'}</td>
               <td className="px-4 py-3">
                 <MatchStatusBadge status={match.matchStatus} />
               </td>
@@ -2358,8 +2452,8 @@ const Modal = ({
   onClose: () => void;
   children: ReactNode;
 }) => (
-  <div className="fixed inset-0 z-[60] overflow-y-auto bg-black/50 px-4 py-8">
-    <div className="mx-auto max-w-7xl rounded-lg border border-outline-variant bg-white shadow-xl">
+  <div className="fixed inset-0 z-[60] overflow-y-auto bg-black/60 px-4 py-8">
+    <div className="mx-auto max-w-7xl rounded-lg border border-outline-variant bg-surface-container-low shadow-lg shadow-black/10" role="dialog" aria-modal="true" aria-label={title}>
       <div className="flex items-start justify-between gap-6 border-b border-outline-variant p-8">
         <div>
           <p className="mb-2 text-label-sm font-bold uppercase tracking-widest text-outline">{subtitle}</p>

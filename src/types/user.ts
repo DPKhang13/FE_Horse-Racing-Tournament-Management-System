@@ -35,6 +35,7 @@ export interface UserProfile {
     licenseNumber?: string;
     rankingPoints?: number;
     totalWins?: number;
+    totalRaces?: number;
     experienceYears?: number;
     status?: string;
   };
