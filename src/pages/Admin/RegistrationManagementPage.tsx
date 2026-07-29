@@ -16,6 +16,7 @@ import {
 import { getApiErrorMessage } from '../../services/apiClient';
 import { registrationService } from '../../services/registrationService';
 import type { RegistrationResponse } from '../../types/registration';
+import { findHorseScheduleConflict, isApprovedRegistration } from '../../utils/raceRegistrationConflicts';
 
 type Notice = {
   tone: 'success' | 'error';
@@ -391,6 +392,22 @@ const RegistrationManagementPage = () => {
     setNotice(null);
 
     try {
+      if (activeAction.type === 'approve') {
+        const allRegistrations = await registrationService.getAllRegistrations();
+        const conflict = findHorseScheduleConflict(
+          activeAction.registration,
+          allRegistrations,
+          isApprovedRegistration,
+        );
+
+        if (conflict) {
+          setActionError(
+            `Ngua bi trung gio dua voi ${conflict.raceName ?? `Race ${conflict.raceId ?? '-'}`} (${formatDateTime(conflict.scheduledAt)}).`,
+          );
+          return;
+        }
+      }
+
       const updatedRegistration = activeAction.type === 'approve'
         ? await registrationService.approveRegistration(registrationId, { note: trimmedNote || undefined })
         : await registrationService.rejectRegistration(registrationId, { reason: trimmedReason || undefined });

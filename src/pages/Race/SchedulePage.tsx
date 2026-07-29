@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Calendar, ChevronRight, Clock, MapPin, Search, Trophy, X } from 'lucide-react';
 import { getApiErrorMessage, apiClient, unwrapApiList } from '../../services/apiClient';
 import { authService } from '../../services/authService';
@@ -242,9 +243,9 @@ const SchedulePage = () => {
         )}
       </div>
 
-      {selectedTournament && (
-        <div className="fixed inset-0 z-[70] overflow-y-auto bg-black/55 px-4 py-8">
-          <div className="mx-auto max-w-6xl rounded-lg border border-outline-variant bg-white shadow-xl">
+      {selectedTournament && createPortal(
+        <div className="fixed inset-0 z-[70] flex items-center justify-center overflow-hidden bg-black/55 p-4 sm:p-8" role="presentation">
+          <div className="flex max-h-[calc(100vh-2rem)] w-full max-w-6xl flex-col overflow-hidden rounded-xl border border-outline-variant bg-white shadow-xl" role="dialog" aria-modal="true">
             <div className="flex items-start justify-between gap-6 border-b border-outline-variant p-6">
               <div>
                 <p className="mb-2 text-label-sm font-bold uppercase tracking-widest text-outline">
@@ -278,7 +279,7 @@ const SchedulePage = () => {
               </button>
             </div>
 
-            <div className="p-6">
+            <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden p-6">
               {isDetailLoading ? (
                 <LoadingState />
               ) : tournamentRaces.length === 0 ? (
@@ -378,7 +379,8 @@ const SchedulePage = () => {
               )}
             </div>
           </div>
-        </div>
+        </div>,
+        document.body,
       )}
     </div>
   );
