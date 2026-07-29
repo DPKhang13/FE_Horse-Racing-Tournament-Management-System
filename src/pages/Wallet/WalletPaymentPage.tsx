@@ -114,6 +114,12 @@ const WalletPaymentPage = () => {
               >
                 View top-up history
               </Link>
+              <Link
+                to="/wallet/withdrawals"
+                className="inline-flex items-center justify-center rounded-lg border border-outline-variant px-4 py-3 text-sm font-bold text-on-surface-variant transition hover:border-primary hover:text-primary"
+              >
+                Withdraw money
+              </Link>
               <motion.button
                 type="button"
                 onClick={() => void loadWallet()}

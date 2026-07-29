@@ -35,6 +35,8 @@ const WalletPaymentPage = lazy(() => import('../pages/Wallet/WalletPaymentPage')
 const PaymentResultPage = lazy(() => import('../pages/Wallet/PaymentResultPage'));
 const WalletHistoryPage = lazy(() => import('../pages/Wallet/WalletHistoryPage'));
 const WalletTransactionDetailPage = lazy(() => import('../pages/Wallet/WalletTransactionDetailPage'));
+const WalletWithdrawalsPage = lazy(() => import('../pages/Wallet/WalletWithdrawalsPage'));
+const WalletWithdrawalDetailPage = lazy(() => import('../pages/Wallet/WalletWithdrawalDetailPage'));
 const TournamentManagementPage = lazy(() => import('../pages/Tournament/TournamentManagementPage'));
 const TournamentSchedulePage = lazy(() => import('../pages/Tournament/TournamentSchedulePage'));
 const UserManagementPage = lazy(() => import('../pages/Admin/UserManagementPage'));
@@ -108,6 +110,8 @@ const AppRoutes = () => {
       <Route path="/wallet" element={protectedPage(<WalletPaymentPage />, ['spectator'])} />
       <Route path="/wallet/history" element={protectedPage(<WalletHistoryPage />, ['spectator'])} />
       <Route path="/wallet/transactions/:txId" element={protectedPage(<WalletTransactionDetailPage />, ['spectator'])} />
+      <Route path="/wallet/withdrawals" element={protectedPage(<WalletWithdrawalsPage />, ['spectator'])} />
+      <Route path="/wallet/withdrawals/:withdrawalId" element={protectedPage(<WalletWithdrawalDetailPage />, ['spectator'])} />
       <Route path="/payment-result" element={protectedPage(<PaymentResultPage />, ['spectator'])} />
     </Routes>
   );
