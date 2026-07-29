@@ -3,6 +3,7 @@ type RaceRegistrationScheduleCandidate = {
   regId?: number | string;
   raceId?: number | string;
   raceName?: string | null;
+  raceStatus?: string | null;
   horseId?: number | string;
   scheduledAt?: string | null;
   status?: string | null;
@@ -24,8 +25,14 @@ const getScheduleTime = (value?: string | null) => {
 };
 
 export const isScheduleActiveRegistration = (registration: RaceRegistrationScheduleCandidate) => {
-  const status = normalizeRegistrationStatus(registration.status);
-  return !['rejected', 'cancelled', 'canceled', 'deleted'].includes(status);
+  const registrationStatus = normalizeRegistrationStatus(registration.status);
+  const raceStatus = normalizeRegistrationStatus(registration.raceStatus);
+
+  if (['completed', 'cancelled', 'canceled'].includes(raceStatus)) {
+    return false;
+  }
+
+  return !['rejected', 'cancelled', 'canceled', 'deleted'].includes(registrationStatus);
 };
 
 export const isApprovedRegistration = (registration: RaceRegistrationScheduleCandidate) =>
