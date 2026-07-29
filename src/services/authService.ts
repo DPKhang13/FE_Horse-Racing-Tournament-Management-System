@@ -19,7 +19,7 @@ export type RegisterRequest = {
   password: string;
   fullName: string;
   phone: string;
-  roleType: 'horse_owner' | 'jockey' | 'race_referee' | 'spectator';
+  roleType: 'horse_owner' | 'jockey' | 'spectator';
 };
 
 export type VerifyOtpRequest = {

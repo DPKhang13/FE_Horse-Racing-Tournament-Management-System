@@ -1,9 +1,9 @@
 import { useMemo, useState, type FormEvent } from 'react';
 import { motion } from 'motion/react';
-import { ArrowLeft, ArrowRight, CheckCircle2, Eye, Gavel, Medal, Shield, UserRound } from 'lucide-react';
+import { ArrowLeft, ArrowRight, CheckCircle2, Eye, Medal, Shield, UserRound } from 'lucide-react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 
-type RegistrationRole = 'horse_owner' | 'jockey' | 'race_referee' | 'spectator';
+type RegistrationRole = 'horse_owner' | 'jockey' | 'spectator';
 
 // Animation variants
 const revealContainer = {
@@ -38,12 +38,7 @@ const roles: Array<{
     description: 'Track invitations, assignments, race schedule, and professional performance.',
     icon: Medal,
   },
-  {
-    id: 'race_referee',
-    title: 'Referee',
-    description: 'Control race results, certify outcomes, and monitor tournament integrity.',
-    icon: Gavel,
-  },
+
   {
     id: 'spectator',
     title: 'Spectator',
@@ -62,7 +57,7 @@ const RegistrationPage = () => {
   const [licenseNumber, setLicenseNumber] = useState('');
   const [organization, setOrganization] = useState('');
 
-  const selectedRoleMeta = useMemo(() => roles.find((role) => role.id === selectedRole) ?? roles[3], [selectedRole]);
+  const selectedRoleMeta = useMemo(() => roles.find((role) => role.id === selectedRole) ?? roles[2], [selectedRole]);
   const progressWidth = step === 1 ? '50%' : '100%';
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
