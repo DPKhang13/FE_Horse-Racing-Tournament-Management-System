@@ -97,7 +97,6 @@ const WalletWithdrawalsPage = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
-  const [successMessage, setSuccessMessage] = useState('');
 
   const amount = Number(amountInput);
   const validAmount = amountInput.trim() !== '' && Number.isFinite(amount) ? amount : 0;
@@ -149,13 +148,11 @@ const WalletWithdrawalsPage = () => {
 
     setIsSubmitting(true);
     setErrorMessage('');
-    setSuccessMessage('');
 
     try {
       await withdrawalService.createWithdrawal({
         pointsAmount: requestedPoints,
       });
-      setSuccessMessage('Cash withdrawal request created. The matching points have been locked while the request waits for admin approval.');
       setAmountInput(String(MIN_WITHDRAWAL_AMOUNT));
       await loadWithdrawals();
     } catch (error) {
@@ -224,16 +221,6 @@ const WalletWithdrawalsPage = () => {
             animate={{ opacity: 1, y: 0 }}
           >
             {errorMessage}
-          </motion.div>
-        )}
-
-        {successMessage && (
-          <motion.div
-            className="mb-6 rounded-lg border border-secondary/40 bg-secondary/10 px-4 py-3 text-sm font-semibold text-secondary"
-            initial={{ opacity: 0, y: 16 }}
-            animate={{ opacity: 1, y: 0 }}
-          >
-            {successMessage}
           </motion.div>
         )}
 
@@ -357,7 +344,7 @@ const WalletWithdrawalsPage = () => {
                 <table className="w-full text-left text-sm">
                   <thead>
                     <tr className="border-b border-outline-variant/50 text-xs uppercase tracking-[0.12em] text-outline">
-                      <th className="px-3 py-3">Request ID</th>
+                      <th className="px-3 py-3">No.</th>
                       <th className="px-3 py-3">Amount</th>
                       <th className="px-3 py-3">Cash Received</th>
                       <th className="px-3 py-3">Status</th>
@@ -373,7 +360,7 @@ const WalletWithdrawalsPage = () => {
 
                       return (
                         <tr key={`${withdrawalId}-${index}`} className="border-b border-outline-variant/20">
-                          <td className="px-3 py-4 font-semibold text-on-surface">{withdrawalId}</td>
+                          <td className="px-3 py-4 font-semibold text-on-surface">{index + 1}</td>
                           <td className="whitespace-nowrap px-3 py-4 text-on-surface-variant">
                             {originalAmount === undefined ? '-' : formatCurrency(originalAmount)}
                           </td>
@@ -391,6 +378,7 @@ const WalletWithdrawalsPage = () => {
                           <td className="px-3 py-4">
                             <Link
                               to={`/wallet/withdrawals/${encodeURIComponent(String(withdrawalId))}`}
+                              state={{ requestNo: index + 1 }}
                               title="View details"
                               aria-label={`View request ${withdrawalId}`}
                               className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-primary/20 bg-primary/10 text-primary transition hover:bg-primary/15"
