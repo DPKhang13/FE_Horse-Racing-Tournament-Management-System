@@ -17,9 +17,9 @@ export type WithdrawalResponse = {
   taxAmount: number | string | null;
   netCashAmount: number | string | null;
   exchangeRate: number | string | null;
-  bankName: string | null;
-  bankAccountNumber: string | null;
-  bankAccountName: string | null;
+  pickupCode: string | null;
+  payoutLocation: string | null;
+  payoutCounter: string | null;
   status: string | null;
   approvedBy: number | null;
   approvedAt: string | null;
@@ -28,7 +28,6 @@ export type WithdrawalResponse = {
   paidBy: number | null;
   paidAt: string | null;
   rejectReason: string | null;
-  bankTransactionCode: string | null;
   paymentNote: string | null;
   invoiceNumber: string | null;
   invoiceUrl: string | null;
@@ -42,7 +41,12 @@ export type RejectWithdrawalPayload = {
   rejectReason: string;
 };
 
+export type ApproveWithdrawalPayload = {
+  payoutLocation: string;
+  payoutCounter: string;
+};
+
 export type MarkWithdrawalPaidPayload = {
-  bankTransactionCode: string;
+  pickupCode: string;
   paymentNote?: string;
 };

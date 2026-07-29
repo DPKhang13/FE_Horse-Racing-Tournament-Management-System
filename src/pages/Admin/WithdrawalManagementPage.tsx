@@ -21,6 +21,7 @@ import { withdrawalService } from '../../services/withdrawalService';
 import { showToast } from '../../utils/toast';
 import {
   withdrawalStatuses,
+  type ApproveWithdrawalPayload,
   type MarkWithdrawalPaidPayload,
   type RejectWithdrawalPayload,
   type WithdrawalResponse,
@@ -158,20 +159,6 @@ const getInvoiceStatus = (withdrawal: WithdrawalResponse) => {
   return 'Not generated';
 };
 
-const maskAccountNumber = (value?: string | null) => {
-  const text = String(value ?? '').trim();
-
-  if (!text) {
-    return '-';
-  }
-
-  if (text.length <= 4) {
-    return 'Ending ' + text;
-  }
-
-  return `Ending ${text.slice(-4)}`;
-};
-
 const hasFinancialProcessingFields = (withdrawal: WithdrawalResponse) =>
   Boolean(withdrawal.withdrawalId && withdrawal.status && withdrawal.requestedPoints !== null && withdrawal.netCashAmount !== null);
 
@@ -217,7 +204,9 @@ const WithdrawalManagementPage = () => {
   const [activeDialog, setActiveDialog] = useState<ActiveDialog>(null);
   const [dialogError, setDialogError] = useState('');
   const [rejectReason, setRejectReason] = useState('');
-  const [paidTransactionCode, setPaidTransactionCode] = useState('');
+  const [payoutLocation, setPayoutLocation] = useState('');
+  const [payoutCounter, setPayoutCounter] = useState('');
+  const [pickupCode, setPickupCode] = useState('');
   const [paidNote, setPaidNote] = useState('');
   const [paidConfirmed, setPaidConfirmed] = useState(false);
   const [runningActionKey, setRunningActionKey] = useState('');
@@ -306,6 +295,9 @@ const WithdrawalManagementPage = () => {
       withdrawal.username,
       withdrawal.userFullName,
       withdrawal.userEmail,
+      withdrawal.pickupCode,
+      withdrawal.payoutLocation,
+      withdrawal.payoutCounter,
     ].some((value) => String(value ?? '').toLowerCase().includes(search)));
   }, [searchText, withdrawals]);
 
@@ -322,7 +314,9 @@ const WithdrawalManagementPage = () => {
   const openDialog = (type: DialogAction, withdrawal: WithdrawalResponse) => {
     setDialogError('');
     setRejectReason('');
-    setPaidTransactionCode('');
+    setPayoutLocation('');
+    setPayoutCounter('');
+    setPickupCode('');
     setPaidNote('');
     setPaidConfirmed(false);
     setActiveDialog({ type, withdrawal });
@@ -340,7 +334,7 @@ const WithdrawalManagementPage = () => {
   const runConfirmedAction = async (
     action: DialogAction,
     withdrawal: WithdrawalResponse,
-    payload?: RejectWithdrawalPayload | MarkWithdrawalPaidPayload,
+    payload?: ApproveWithdrawalPayload | RejectWithdrawalPayload | MarkWithdrawalPaidPayload,
   ) => {
     if (!withdrawal.withdrawalId) {
       setDialogError('Withdrawal ID is missing. This request cannot be processed safely.');
@@ -353,7 +347,7 @@ const WithdrawalManagementPage = () => {
 
     try {
       if (action === 'approve') {
-        await withdrawalService.approveWithdrawal(withdrawal.withdrawalId);
+        await withdrawalService.approveWithdrawal(withdrawal.withdrawalId, payload as ApproveWithdrawalPayload);
         showToast({ tone: 'success', text: 'Withdrawal approved.' });
       } else if (action === 'reject') {
         await withdrawalService.rejectWithdrawal(withdrawal.withdrawalId, payload as RejectWithdrawalPayload);
@@ -379,7 +373,33 @@ const WithdrawalManagementPage = () => {
       return;
     }
 
-    void runConfirmedAction('approve', activeDialog.withdrawal);
+    const location = payoutLocation.trim();
+    const counter = payoutCounter.trim();
+
+    if (!location) {
+      setDialogError('Payout location is required.');
+      return;
+    }
+
+    if (!counter) {
+      setDialogError('Payout counter is required.');
+      return;
+    }
+
+    if (location.length > 255) {
+      setDialogError('Payout location must not exceed 255 characters.');
+      return;
+    }
+
+    if (counter.length > 100) {
+      setDialogError('Payout counter must not exceed 100 characters.');
+      return;
+    }
+
+    void runConfirmedAction('approve', activeDialog.withdrawal, {
+      payoutLocation: location,
+      payoutCounter: counter,
+    });
   };
 
   const handleRejectSubmit = (event: FormEvent<HTMLFormElement>) => {
@@ -411,7 +431,7 @@ const WithdrawalManagementPage = () => {
       return;
     }
 
-    const bankTransactionCode = paidTransactionCode.trim();
+    const submittedPickupCode = pickupCode.trim();
     const paymentNote = paidNote.trim();
 
     if (!paidConfirmed) {
@@ -419,13 +439,13 @@ const WithdrawalManagementPage = () => {
       return;
     }
 
-    if (!bankTransactionCode) {
-      setDialogError('Bank transaction code is required by the backend.');
+    if (!submittedPickupCode) {
+      setDialogError('Pickup code is required to verify this counter payment.');
       return;
     }
 
-    if (bankTransactionCode.length > 100) {
-      setDialogError('Bank transaction code must not exceed 100 characters.');
+    if (submittedPickupCode.length > 100) {
+      setDialogError('Pickup code must not exceed 100 characters.');
       return;
     }
 
@@ -435,7 +455,7 @@ const WithdrawalManagementPage = () => {
     }
 
     void runConfirmedAction('mark-paid', activeDialog.withdrawal, {
-      bankTransactionCode,
+      pickupCode: submittedPickupCode,
       paymentNote: paymentNote || undefined,
     });
   };
@@ -624,8 +644,18 @@ const WithdrawalManagementPage = () => {
       {activeDialog?.type === 'approve' && (
         <ApproveDialog
           withdrawal={activeDialog.withdrawal}
+          location={payoutLocation}
+          counter={payoutCounter}
           error={dialogError}
           isSubmitting={Boolean(runningActionKey)}
+          onLocationChange={(value) => {
+            setPayoutLocation(value);
+            setDialogError('');
+          }}
+          onCounterChange={(value) => {
+            setPayoutCounter(value);
+            setDialogError('');
+          }}
           onClose={closeDialog}
           onSubmit={handleApproveSubmit}
         />
@@ -649,13 +679,13 @@ const WithdrawalManagementPage = () => {
       {activeDialog?.type === 'mark-paid' && (
         <MarkPaidDialog
           withdrawal={activeDialog.withdrawal}
-          transactionCode={paidTransactionCode}
+          pickupCode={pickupCode}
           note={paidNote}
           confirmed={paidConfirmed}
           error={dialogError}
           isSubmitting={Boolean(runningActionKey)}
-          onTransactionCodeChange={(value) => {
-            setPaidTransactionCode(value);
+          onPickupCodeChange={(value) => {
+            setPickupCode(value);
             setDialogError('');
           }}
           onNoteChange={(value) => {
@@ -731,6 +761,7 @@ const WithdrawalRow = ({
     <tr className="transition-colors hover:bg-surface-container-lowest">
       <TableCell strong>
         <span className="whitespace-nowrap">{getWithdrawalLabel(withdrawal)}</span>
+        {withdrawal.pickupCode && <p className="mt-1 text-label-sm font-semibold text-secondary">{withdrawal.pickupCode}</p>}
         {withdrawal.txId && <p className="mt-1 text-label-sm font-semibold text-outline">TX #{withdrawal.txId}</p>}
       </TableCell>
       <TableCell>
@@ -856,9 +887,9 @@ const WithdrawalDetailsDrawer = ({
             <DetailItem label="Paid at" value={formatDateTime(withdrawal.paidAt)} />
             <DetailItem label="Rejected at" value={formatDateTime(withdrawal.rejectedAt)} />
             <DetailItem label="Processed by" value={getProcessorText(withdrawal)} />
-            <DetailItem label="Bank" value={withdrawal.bankName ?? '-'} />
-            <DetailItem label="Account name" value={withdrawal.bankAccountName ?? '-'} />
-            <DetailItem label="Account number" value={maskAccountNumber(withdrawal.bankAccountNumber)} />
+            <DetailItem label="Pickup code" value={withdrawal.pickupCode ?? '-'} />
+            <DetailItem label="Payout location" value={withdrawal.payoutLocation ?? '-'} />
+            <DetailItem label="Payout counter" value={withdrawal.payoutCounter ?? '-'} />
             <DetailItem label="Reject reason" value={withdrawal.rejectReason ?? '-'} />
             <DetailItem label="Payment note" value={withdrawal.paymentNote ?? '-'} />
             <DetailItem label="Invoice" value={getInvoiceStatus(withdrawal)} />
@@ -898,21 +929,50 @@ const WithdrawalDetailsDrawer = ({
 
 const ApproveDialog = ({
   withdrawal,
+  location,
+  counter,
   error,
   isSubmitting,
+  onLocationChange,
+  onCounterChange,
   onClose,
   onSubmit,
 }: {
   withdrawal: WithdrawalResponse;
+  location: string;
+  counter: string;
   error: string;
   isSubmitting: boolean;
+  onLocationChange: (value: string) => void;
+  onCounterChange: (value: string) => void;
   onClose: () => void;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
 }) => (
   <ConfirmModal title="Approve Withdrawal" subtitle={getWithdrawalLabel(withdrawal)} onClose={onClose}>
     <form onSubmit={onSubmit} className="space-y-5 p-6">
-      <p className="text-body-sm font-semibold text-on-surface-variant">Confirm that this withdrawal request has been reviewed and is valid.</p>
+      <p className="text-body-sm font-semibold text-on-surface-variant">Set the counter pickup details for this approved cash withdrawal.</p>
       <DialogSummary withdrawal={withdrawal} />
+      <Field label="Payout location" error={location.length > 255 ? 'Maximum 255 characters.' : undefined}>
+        <textarea
+          value={location}
+          onChange={(event) => onLocationChange(event.target.value)}
+          maxLength={255}
+          rows={3}
+          disabled={isSubmitting}
+          className={inputClassName}
+          autoFocus
+        />
+      </Field>
+      <Field label="Payout counter" error={counter.length > 100 ? 'Maximum 100 characters.' : undefined}>
+        <input
+          type="text"
+          value={counter}
+          onChange={(event) => onCounterChange(event.target.value)}
+          maxLength={100}
+          disabled={isSubmitting}
+          className={inputClassName}
+        />
+      </Field>
       {error && <DialogError message={error} />}
       <DialogActions
         cancelLabel="Cancel"
@@ -920,11 +980,11 @@ const ApproveDialog = ({
         isSubmitting={isSubmitting}
         submitTone="success"
         onClose={onClose}
+        disabled={!location.trim() || !counter.trim()}
       />
     </form>
   </ConfirmModal>
 );
-
 const RejectDialog = ({
   withdrawal,
   reason,
@@ -971,24 +1031,24 @@ const RejectDialog = ({
 
 const MarkPaidDialog = ({
   withdrawal,
-  transactionCode,
+  pickupCode,
   note,
   confirmed,
   error,
   isSubmitting,
-  onTransactionCodeChange,
+  onPickupCodeChange,
   onNoteChange,
   onConfirmedChange,
   onClose,
   onSubmit,
 }: {
   withdrawal: WithdrawalResponse;
-  transactionCode: string;
+  pickupCode: string;
   note: string;
   confirmed: boolean;
   error: string;
   isSubmitting: boolean;
-  onTransactionCodeChange: (value: string) => void;
+  onPickupCodeChange: (value: string) => void;
   onNoteChange: (value: string) => void;
   onConfirmedChange: (value: boolean) => void;
   onClose: () => void;
@@ -997,14 +1057,14 @@ const MarkPaidDialog = ({
   <ConfirmModal title="Mark as Paid" subtitle={getWithdrawalLabel(withdrawal)} onClose={onClose}>
     <form onSubmit={onSubmit} className="space-y-5 p-6">
       <div className="rounded-md border border-primary/30 bg-primary/10 px-4 py-3 text-body-sm font-semibold text-on-surface">
-        Confirm that the cash has been handed directly to the spectator. This action will mark the withdrawal as paid.
+        Verify the spectator pickup code before confirming the counter cash payment.
       </div>
       <DialogSummary withdrawal={withdrawal} includeApprovedAt />
-      <Field label="Bank transaction code">
+      <Field label="Pickup code">
         <input
           type="text"
-          value={transactionCode}
-          onChange={(event) => onTransactionCodeChange(event.target.value)}
+          value={pickupCode}
+          onChange={(event) => onPickupCodeChange(event.target.value)}
           maxLength={100}
           disabled={isSubmitting}
           className={inputClassName}
@@ -1029,7 +1089,7 @@ const MarkPaidDialog = ({
           disabled={isSubmitting}
           className="mt-1 h-4 w-4 accent-primary"
         />
-        <span>I confirm that the spectator received the cash payment.</span>
+        <span>I confirm that the pickup code was checked and the spectator received the cash payment.</span>
       </label>
       {error && <DialogError message={error} />}
       <DialogActions
@@ -1038,12 +1098,11 @@ const MarkPaidDialog = ({
         isSubmitting={isSubmitting}
         submitTone="success"
         onClose={onClose}
-        disabled={!confirmed || !transactionCode.trim()}
+        disabled={!confirmed || !pickupCode.trim()}
       />
     </form>
   </ConfirmModal>
 );
-
 const DialogSummary = ({ withdrawal, includeApprovedAt = false }: { withdrawal: WithdrawalResponse; includeApprovedAt?: boolean }) => (
   <div className="grid gap-3 sm:grid-cols-2">
     <DetailItem label="Spectator" value={getSpectatorName(withdrawal)} />
@@ -1051,6 +1110,9 @@ const DialogSummary = ({ withdrawal, includeApprovedAt = false }: { withdrawal: 
     <DetailItem label="Requested points" value={formatPoints(withdrawal.requestedPoints)} />
     <DetailItem label="Cash amount" value={formatCash(withdrawal.netCashAmount)} />
     {includeApprovedAt && <DetailItem label="Approved at" value={formatDateTime(withdrawal.approvedAt)} />}
+    {includeApprovedAt && <DetailItem label="Pickup code on record" value={withdrawal.pickupCode ?? '-'} />}
+    {includeApprovedAt && <DetailItem label="Payout location" value={withdrawal.payoutLocation ?? '-'} />}
+    {includeApprovedAt && <DetailItem label="Payout counter" value={withdrawal.payoutCounter ?? '-'} />}
   </div>
 );
 
@@ -1272,4 +1334,3 @@ const inputClassName =
   'w-full rounded-md border border-outline-variant bg-surface-container-low px-4 py-3 text-body-sm font-semibold text-on-surface transition-colors focus:border-primary focus:outline-none disabled:cursor-not-allowed disabled:opacity-70';
 
 export default WithdrawalManagementPage;
-

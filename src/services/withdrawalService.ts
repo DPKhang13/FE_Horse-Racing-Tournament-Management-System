@@ -1,5 +1,6 @@
 import { apiClient, unwrapApiData, unwrapApiList } from './apiClient';
 import type {
+  ApproveWithdrawalPayload,
   MarkWithdrawalPaidPayload,
   RejectWithdrawalPayload,
   WithdrawalResponse,
@@ -55,9 +56,9 @@ const mapWithdrawal = (raw: unknown): WithdrawalResponse => {
     taxAmount: asNullableAmount(item.taxAmount),
     netCashAmount: asNullableAmount(item.netCashAmount),
     exchangeRate: asNullableAmount(item.exchangeRate),
-    bankName: asNullableString(item.bankName),
-    bankAccountNumber: asNullableString(item.bankAccountNumber),
-    bankAccountName: asNullableString(item.bankAccountName),
+    pickupCode: asNullableString(item.pickupCode),
+    payoutLocation: asNullableString(item.payoutLocation),
+    payoutCounter: asNullableString(item.payoutCounter),
     status: asNullableString(item.status),
     approvedBy: asNullableNumber(item.approvedBy),
     approvedAt: asNullableString(item.approvedAt),
@@ -66,7 +67,6 @@ const mapWithdrawal = (raw: unknown): WithdrawalResponse => {
     paidBy: asNullableNumber(item.paidBy),
     paidAt: asNullableString(item.paidAt),
     rejectReason: asNullableString(item.rejectReason),
-    bankTransactionCode: asNullableString(item.bankTransactionCode),
     paymentNote: asNullableString(item.paymentNote),
     invoiceNumber: asNullableString(item.invoiceNumber),
     invoiceUrl: asNullableString(item.invoiceUrl),
@@ -87,8 +87,8 @@ export const withdrawalService = {
     return unwrapApiList<unknown>(response).map(mapWithdrawal);
   },
 
-  async approveWithdrawal(withdrawalId: number): Promise<WithdrawalResponse> {
-    const response = await apiClient.patch(`/api/withdrawals/admin/${withdrawalId}/approve`);
+  async approveWithdrawal(withdrawalId: number, payload: ApproveWithdrawalPayload): Promise<WithdrawalResponse> {
+    const response = await apiClient.patch(`/api/withdrawals/admin/${withdrawalId}/approve`, payload);
     return mapWithdrawal(unwrapApiData<unknown>(response));
   },
 
