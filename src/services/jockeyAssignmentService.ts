@@ -16,6 +16,7 @@ export type JockeyAssignmentItem = {
   expiredAt?: string;
   raceName?: string;
   raceNumber?: number;
+  raceStatus?: string;
   scheduledAt?: string;
   horseId?: number;
   horseName?: string;
