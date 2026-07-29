@@ -90,18 +90,7 @@ const formatCash = (value: number | string | null | undefined) => {
   return `${new Intl.NumberFormat('vi-VN', { maximumFractionDigits: 0 }).format(numericValue)} VND`;
 };
 
-const formatDecimal = (value: number | string | null | undefined) => {
-  const numericValue = toFiniteNumber(value);
-
-  if (numericValue === null) {
-    return '-';
-  }
-
-  return new Intl.NumberFormat('en-US', {
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 6,
-  }).format(numericValue);
-};
+const defaultWithdrawalTaxRate = '10%';
 
 const formatDateTime = (value?: string | null) => {
   if (!value) {
@@ -595,7 +584,7 @@ const WithdrawalManagementPage = () => {
                     <TableHeader>Spectator</TableHeader>
                     <TableHeader>Points Requested</TableHeader>
                     <TableHeader>Cash Amount</TableHeader>
-                    <TableHeader>Exchange Rate</TableHeader>
+                    <TableHeader>Tax</TableHeader>
                     <TableHeader>Status</TableHeader>
                     <TableHeader>Requested At</TableHeader>
                     <TableHeader align="right">Actions</TableHeader>
@@ -776,7 +765,7 @@ const WithdrawalRow = ({
           {formatCash(withdrawal.netCashAmount)}
         </span>
       </TableCell>
-      <TableCell>{formatDecimal(withdrawal.exchangeRate)}</TableCell>
+      <TableCell>{defaultWithdrawalTaxRate}</TableCell>
       <TableCell><WithdrawalStatusBadge status={withdrawal.status} /></TableCell>
       <TableCell>{formatDateTime(withdrawal.createdAt)}</TableCell>
       <TableCell>
@@ -880,8 +869,7 @@ const WithdrawalDetailsDrawer = ({
             <DetailItem label="Wallet ID" value={withdrawal.walletId ? `#${withdrawal.walletId}` : '-'} />
             <DetailItem label="Transaction ID" value={withdrawal.txId ? `#${withdrawal.txId}` : '-'} />
             <DetailItem label="Gross cash" value={formatCash(withdrawal.grossCashAmount)} />
-            <DetailItem label="Tax" value={`${formatCash(withdrawal.taxAmount)} (${formatDecimal(withdrawal.taxRate)}%)`} />
-            <DetailItem label="Exchange rate" value={formatDecimal(withdrawal.exchangeRate)} />
+            <DetailItem label="Tax" value={`${formatCash(withdrawal.taxAmount)} (${defaultWithdrawalTaxRate})`} />
             <DetailItem label="Requested at" value={formatDateTime(withdrawal.createdAt)} />
             <DetailItem label="Approved at" value={formatDateTime(withdrawal.approvedAt)} />
             <DetailItem label="Paid at" value={formatDateTime(withdrawal.paidAt)} />
@@ -1109,6 +1097,7 @@ const DialogSummary = ({ withdrawal, includeApprovedAt = false }: { withdrawal: 
     <DetailItem label="Current status" value={<WithdrawalStatusBadge status={withdrawal.status} />} />
     <DetailItem label="Requested points" value={formatPoints(withdrawal.requestedPoints)} />
     <DetailItem label="Cash amount" value={formatCash(withdrawal.netCashAmount)} />
+    <DetailItem label="Tax" value={defaultWithdrawalTaxRate} />
     {includeApprovedAt && <DetailItem label="Approved at" value={formatDateTime(withdrawal.approvedAt)} />}
     {includeApprovedAt && <DetailItem label="Pickup code on record" value={withdrawal.pickupCode ?? '-'} />}
     {includeApprovedAt && <DetailItem label="Payout location" value={withdrawal.payoutLocation ?? '-'} />}
