@@ -21,6 +21,7 @@ const isOwnerConfirmed = (registration: RaceRegistrationItem) =>
 
 const VIETNAM_TIME_ZONE = 'Asia/Ho_Chi_Minh';
 const ACTIVE_ASSIGNMENT_STATUSES = new Set(['pending', 'accepted', 'confirmed']);
+const TERMINAL_RACE_STATUSES = new Set(['completed', 'cancelled']);
 
 const getScheduleTime = (value?: string) => {
   if (!value) {
@@ -93,6 +94,11 @@ const formatScheduleDateTime = (value?: string) => {
 };
 
 const isActiveScheduleAssignment = (assignment: JockeyAssignmentItem, now: number) => {
+  const raceStatus = (assignment.raceStatus ?? '').trim().toLowerCase();
+  if (TERMINAL_RACE_STATUSES.has(raceStatus)) {
+    return false;
+  }
+
   const status = normalizeInvitationStatus(assignment.status);
   if (!ACTIVE_ASSIGNMENT_STATUSES.has(status)) {
     return false;

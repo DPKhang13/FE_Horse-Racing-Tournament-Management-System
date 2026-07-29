@@ -251,6 +251,21 @@ const normalizeRaceCrudStatus = (status?: string) => {
   return 'ready';
 };
 
+const isTournamentActiveRaceStatus = (status?: string) => {
+  const value = normalizeRaceCrudStatus(status);
+  return value === 'open_for_betting' || value === 'in_progress';
+};
+
+const inferTournamentStatusFromRaces = (tournament: Tournament, races: RaceCrudItem[]): Tournament => {
+  if (tournament.status === 'Completed' || tournament.status === 'Cancelled' || tournament.status === 'Ongoing') {
+    return tournament;
+  }
+
+  return races.some((race) => isTournamentActiveRaceStatus(race.status))
+    ? { ...tournament, status: 'Ongoing' }
+    : tournament;
+};
+
 const isValidDateInput = (value: string) => {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) {
     return false;
@@ -615,6 +630,23 @@ const TournamentManagementPage = () => {
   const totalParticipants = tournaments.reduce((total, tournament) => total + tournament.currentParticipants, 0);
   const totalTournamentCount = globalTournamentCount ?? tournaments.length;
   const editableTournamentStatuses = getEditableTournamentStatuses(selectedTournament);
+
+  const handleRaceTournamentChange = useCallback((updatedTournament: Tournament) => {
+    setTournaments((current) =>
+      current.map((tournament) =>
+        tournament.tournamentId === updatedTournament.tournamentId ? updatedTournament : tournament,
+      ),
+    );
+    setRaceModalTournament((current) =>
+      current?.tournamentId === updatedTournament.tournamentId ? updatedTournament : current,
+    );
+    setViewingTournament((current) =>
+      current?.tournamentId === updatedTournament.tournamentId ? updatedTournament : current,
+    );
+    setSelectedTournament((current) =>
+      current?.tournamentId === updatedTournament.tournamentId ? updatedTournament : current,
+    );
+  }, []);
 
   const openCreateModal = () => {
     setSelectedTournament(null);
@@ -1073,7 +1105,7 @@ const TournamentManagementPage = () => {
             setRaceModalTournament(null);
           }}
         >
-          <RaceCrudPanel tournament={raceModalTournament} />
+          <RaceCrudPanel tournament={raceModalTournament} onTournamentChange={handleRaceTournamentChange} />
         </Modal>
       )}
 
@@ -1591,7 +1623,13 @@ const TournamentPrizeForm = ({
   );
 };
 
-const RaceCrudPanel = ({ tournament }: { tournament: Tournament }) => {
+const RaceCrudPanel = ({
+  tournament,
+  onTournamentChange,
+}: {
+  tournament: Tournament;
+  onTournamentChange: (tournament: Tournament) => void;
+}) => {
   const [races, setRaces] = useState<RaceCrudItem[]>([]);
   const [scheduleOptions, setScheduleOptions] = useState<RaceScheduleOption[]>([]);
   const [raceForm, setRaceForm] = useState<RaceFormData>(emptyRaceFormData);
@@ -1622,12 +1660,16 @@ const RaceCrudPanel = ({ tournament }: { tournament: Tournament }) => {
     try {
       const data = await raceCrudService.getRacesByTournament(tournament.tournamentId);
       setRaces(data);
+      const updatedTournament = inferTournamentStatusFromRaces(tournament, data);
+      if (updatedTournament.status !== tournament.status) {
+        onTournamentChange(updatedTournament);
+      }
     } catch (error) {
       setErrorMessage(getApiErrorMessage(error, 'Unable to load races.'));
     } finally {
       setIsLoadingRaces(false);
     }
-  }, [tournament.tournamentId]);
+  }, [onTournamentChange, tournament]);
 
   const loadScheduleOptions = useCallback(async () => {
     setIsLoadingSchedules(true);

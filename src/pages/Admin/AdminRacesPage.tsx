@@ -46,13 +46,12 @@ type PointRuleFormData = PointRuleRequest & {
 };
 type PointRuleFormErrors = Partial<Record<keyof PointRuleRequest, string>>;
 type RaceAction = 'openBetting' | 'cancel';
-type ConfirmableRaceAction = Exclude<RaceAction, 'openBetting'>;
 type PendingRaceAction = {
-  action: ConfirmableRaceAction;
+  action: RaceAction;
   race: AdminRaceItem;
 };
 type RaceActionSuccess = {
-  action: ConfirmableRaceAction;
+  action: RaceAction;
   raceName: string;
   text: string;
 };
@@ -617,7 +616,7 @@ const AdminRacesPage = () => {
     setError(null);
   };
 
-  const openRaceActionConfirmation = (race: AdminRaceItem, action: ConfirmableRaceAction) => {
+  const openRaceActionConfirmation = (race: AdminRaceItem, action: RaceAction) => {
     setNotice(null);
     setPendingRaceAction({ race, action });
   };
@@ -814,13 +813,6 @@ const AdminRacesPage = () => {
       cancel: 'cancel',
     };
 
-    if (
-      action === 'openBetting'
-      && !window.confirm(`Open betting for "${race.name}"?\n\nThis will move the race from ready to open_for_betting and generate bet options.`)
-    ) {
-      return;
-    }
-
     setActionRaceId(race.raceId);
     setNotice(null);
 
@@ -835,12 +827,8 @@ const AdminRacesPage = () => {
 
       await loadRaces();
 
-      if (action === 'openBetting') {
-        setNotice({ tone: 'success', text: successText });
-      } else {
-        setPendingRaceAction(null);
-        setRaceActionSuccess({ action, raceName: race.name, text: successText });
-      }
+      setPendingRaceAction(null);
+      setRaceActionSuccess({ action, raceName: race.name, text: successText });
     } catch (error) {
       const detail = getApiErrorMessage(error, `Unable to ${labels[action]} race.`);
       setNotice({
@@ -1022,7 +1010,7 @@ const AdminRacesPage = () => {
                         </IconButton>
                         <IconButton
                           label={canOpenBetting(race.status) ? `Open betting for ${race.name}` : `${race.name} cannot open betting from ${race.status}`}
-                          onClick={() => void handleRaceAction(race, 'openBetting')}
+                          onClick={() => openRaceActionConfirmation(race, 'openBetting')}
                           disabled={actionRaceId === race.raceId || !canOpenBetting(race.status)}
                         >
                           <BadgeDollarSign className="h-4 w-4" />
@@ -1233,7 +1221,7 @@ const Modal = ({
   </div>
 );
 
-const raceActionCopy: Record<ConfirmableRaceAction, {
+const raceActionCopy: Record<RaceAction, {
   title: string;
   question: string;
   description: string;
@@ -1241,6 +1229,14 @@ const raceActionCopy: Record<ConfirmableRaceAction, {
   processingLabel: string;
   successTitle: string;
 }> = {
+  openBetting: {
+    title: 'Open Betting',
+    question: 'Open betting for this race?',
+    description: 'The race will move from Ready to Open for Betting and betting options will be generated for spectators.',
+    confirmLabel: 'Open Betting',
+    processingLabel: 'Opening...',
+    successTitle: 'Betting Opened',
+  },
   cancel: {
     title: 'Cancel Race',
     question: 'Cancel this race?',
@@ -1258,13 +1254,21 @@ const RaceActionConfirmationModal = ({
   onConfirm,
   onClose,
 }: {
-  action: ConfirmableRaceAction;
+  action: RaceAction;
   race: AdminRaceItem;
   isProcessing: boolean;
   onConfirm: () => void;
   onClose: () => void;
 }) => {
   const copy = raceActionCopy[action];
+  const isCancelAction = action === 'cancel';
+  const ActionIcon = isCancelAction ? Ban : BadgeDollarSign;
+  const iconClassName = isCancelAction
+    ? 'bg-error-container/30 text-error'
+    : 'bg-secondary/10 text-secondary';
+  const confirmButtonClassName = isCancelAction
+    ? 'border-error/40 text-error hover:border-error hover:bg-error-container/20'
+    : 'border-secondary/40 bg-secondary text-on-secondary hover:bg-opacity-90';
 
   return (
     <Modal
@@ -1276,8 +1280,8 @@ const RaceActionConfirmationModal = ({
     >
       <div className="space-y-6 p-6">
         <div className="flex items-start gap-4">
-          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-md bg-error-container/30 text-error">
-            <Ban className="h-5 w-5" />
+          <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-md ${iconClassName}`}>
+            <ActionIcon className="h-5 w-5" />
           </div>
           <div className="min-w-0">
             <h3 className="text-body-lg font-bold text-on-surface">{copy.question}</h3>
@@ -1298,9 +1302,9 @@ const RaceActionConfirmationModal = ({
             type="button"
             onClick={onConfirm}
             disabled={isProcessing}
-            className="inline-flex items-center justify-center gap-2 rounded-md border border-error/40 px-6 py-3 text-body-sm font-bold text-error transition-colors hover:border-error hover:bg-error-container/20 disabled:cursor-not-allowed disabled:opacity-60"
+            className={`inline-flex items-center justify-center gap-2 rounded-md border px-6 py-3 text-body-sm font-bold transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${confirmButtonClassName}`}
           >
-            <Ban className={`h-4 w-4 ${isProcessing ? 'animate-pulse' : ''}`} />
+            <ActionIcon className={`h-4 w-4 ${isProcessing ? 'animate-pulse' : ''}`} />
             {isProcessing ? copy.processingLabel : copy.confirmLabel}
           </button>
         </div>

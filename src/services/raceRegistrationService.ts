@@ -25,6 +25,7 @@ export type RaceRegistrationItem = {
   tournamentName?: string;
   raceName?: string;
   raceNumber?: number;
+  raceStatus?: string;
   scheduledAt?: string;
   horseName?: string;
   ownerFullName?: string;

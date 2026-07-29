@@ -186,6 +186,50 @@ const normalizeMatchStatus = (value: unknown): MatchStatus => {
   return 'Scheduled';
 };
 
+const normalizeRaceWorkflowStatus = (value: unknown) =>
+  asString(value).trim().toLowerCase().replace(/[_\s-]+/g, '_');
+
+const isTournamentTerminalStatus = (status: TournamentStatus) =>
+  status === 'Completed' || status === 'Cancelled';
+
+const isTournamentActiveRaceStatus = (value: unknown) => {
+  const normalizedValue = normalizeRaceWorkflowStatus(value);
+
+  return normalizedValue === 'open_for_betting'
+    || normalizedValue === 'betting_open'
+    || normalizedValue === 'in_progress'
+    || normalizedValue === 'ongoing'
+    || normalizedValue === 'running'
+    || normalizedValue === 'live'
+    || (normalizedValue.includes('open') && normalizedValue.includes('betting'))
+    || normalizedValue.includes('progress');
+};
+
+const toRawRecordList = (value: unknown): RawRecord[] =>
+  Array.isArray(value)
+    ? value.filter((item): item is RawRecord => Boolean(item) && typeof item === 'object' && !Array.isArray(item))
+    : [];
+
+const getEmbeddedRaceRecords = (raw: RawRecord) => [
+  ...toRawRecordList(raw.races),
+  ...toRawRecordList(raw.raceList),
+  ...toRawRecordList(raw.schedule),
+  ...toRawRecordList(raw.schedules),
+  ...toRawRecordList(raw.matches),
+];
+
+const applyRaceWorkflowStatus = (tournament: Tournament, raceRecords: RawRecord[]) => {
+  if (isTournamentTerminalStatus(tournament.status) || tournament.status === 'Ongoing') {
+    return tournament;
+  }
+
+  const hasActiveRace = raceRecords.some((race) =>
+    isTournamentActiveRaceStatus(race.raceStatus ?? race.status ?? race.matchStatus),
+  );
+
+  return hasActiveRace ? { ...tournament, status: 'Ongoing' as TournamentStatus } : tournament;
+};
+
 const cleanTournamentPayload = (data: TournamentPayloadData) => ({
   name: (isManagementTournamentData(data) ? data.tournamentName : data.name).trim(),
   location: data.location.trim(),
@@ -310,7 +354,7 @@ const mapApiTournament = (raw: RawTournament, index: number): Tournament => {
   );
   const prizePool = asNumber(raw.prizePool);
 
-  return {
+  return applyRaceWorkflowStatus({
     tournamentId,
     id: asString(raw.code ?? raw.displayId, `T-${String(tournamentId).padStart(3, '0')}`),
     tournamentName: asString(raw.tournamentName ?? raw.name, 'Tournament'),
@@ -332,7 +376,7 @@ const mapApiTournament = (raw: RawTournament, index: number): Tournament => {
     schedule: mapApiMatches(raw.schedule ?? raw.schedules ?? raw.matches, startDate),
     createdAt: raw.createdAt ? asString(raw.createdAt) : undefined,
     updatedAt: raw.updatedAt ? asString(raw.updatedAt) : undefined,
-  };
+  }, getEmbeddedRaceRecords(raw));
 };
 
 const buildTournamentFromData = (
@@ -372,6 +416,23 @@ const buildTournamentFromData = (
   };
 };
 
+const getTournamentRaceRecords = async (tournamentId: number | string): Promise<RawRecord[]> => {
+  const response = await apiClient.get(`/api/tournaments/${tournamentId}/get-race-list`);
+  return unwrapApiList<RawRecord>(response);
+};
+
+const withInferredRaceWorkflowStatus = async (tournament: Tournament): Promise<Tournament> => {
+  if (!tournament.tournamentId || isTournamentTerminalStatus(tournament.status) || tournament.status === 'Ongoing') {
+    return tournament;
+  }
+
+  try {
+    return applyRaceWorkflowStatus(tournament, await getTournamentRaceRecords(tournament.tournamentId));
+  } catch {
+    return tournament;
+  }
+};
+
 export const tournamentService = {
   async getTournaments(status?: string): Promise<TournamentApiItem[]> {
     const response = await apiClient.get('/api/tournaments/get-tournament-list', {
@@ -381,6 +442,7 @@ export const tournamentService = {
   },
 
   async getGlobalTournamentCount(_useFallback = false): Promise<number> {
+    void _useFallback;
     const response = await apiClient.get('/api/tournaments/get-global-tournament-count');
     const data = unwrapApiData<TournamentCountResponse | number>(response);
 
@@ -391,6 +453,7 @@ export const tournamentService = {
     return asNumber(data.globalTournamentCount ?? data.count ?? data.total);
   },
   async getAllTournaments(_useFallback = true): Promise<Tournament[]> {
+    void _useFallback;
     const response = await apiClient.get('/api/tournaments/get-tournament-list');
     const tournaments = unwrapApiList<RawTournament>(response);
 
@@ -398,27 +461,32 @@ export const tournamentService = {
       tournaments.map(async (item, index) => {
         const tournamentId = item.tournamentId ?? item.id;
 
+        let tournament: Tournament;
+
         if (!tournamentId) {
-          return mapApiTournament(item, index);
+          tournament = mapApiTournament(item, index);
+        } else {
+          try {
+            const detailResponse = await apiClient.get(`/api/tournaments/get-tournament/${tournamentId}`);
+            tournament = mapApiTournament({
+              ...item,
+              ...unwrapApiData<RawTournament>(detailResponse),
+            }, index);
+          } catch {
+            tournament = mapApiTournament(item, index);
+          }
         }
 
-        try {
-          const detailResponse = await apiClient.get(`/api/tournaments/get-tournament/${tournamentId}`);
-          return mapApiTournament({
-            ...item,
-            ...unwrapApiData<RawTournament>(detailResponse),
-          }, index);
-        } catch {
-          return mapApiTournament(item, index);
-        }
+        return withInferredRaceWorkflowStatus(tournament);
       }),
     );
   },
   async getTournamentById(tournamentId: number | string): Promise<Tournament> {
     const response = await apiClient.get(`/api/tournaments/get-tournament/${tournamentId}`);
-    return mapApiTournament(unwrapApiData<RawTournament>(response), 0);
+    return withInferredRaceWorkflowStatus(mapApiTournament(unwrapApiData<RawTournament>(response), 0));
   },
   async createTournament(data: TournamentPayloadData, _useFallback = false): Promise<Tournament> {
+    void _useFallback;
     const response = await apiClient.post('/api/tournaments/create-tournament', cleanTournamentPayload(data));
     const apiTournament = mapApiTournament(unwrapApiData<RawTournament>(response), 0);
     return {
@@ -427,17 +495,21 @@ export const tournamentService = {
     };
   },
   async updateTournament(tournamentId: number | string, data: TournamentPayloadData, _useFallback = false): Promise<Tournament> {
+    void _useFallback;
     const response = await apiClient.put(`/api/tournaments/update-tournament/${tournamentId}`, cleanTournamentUpdatePayload(data));
     const apiTournament = mapApiTournament(unwrapApiData<RawTournament>(response), 0);
+    const tournament = await withInferredRaceWorkflowStatus(buildTournamentFromData(data, apiTournament.tournamentId, apiTournament));
     return {
-      ...buildTournamentFromData(data, apiTournament.tournamentId, apiTournament),
+      ...tournament,
       responseMessage: getApiResponseMessage(response),
     };
   },
   async deleteTournament(_tournamentId: number | string): Promise<void> {
+    void _tournamentId;
     throw new Error('Delete tournament API is not available in the backend.');
   },
   async cancelTournament(tournamentId: number | string, _useFallback = false): Promise<Tournament> {
+    void _useFallback;
     const response = await apiClient.patch(`/api/tournaments/cancel-tournament/${tournamentId}`);
     return mapApiTournament(unwrapApiData<RawTournament>(response), 0);
   },
