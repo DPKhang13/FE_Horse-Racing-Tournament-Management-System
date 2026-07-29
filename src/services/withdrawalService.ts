@@ -108,8 +108,14 @@ const mapWithdrawal = (raw: unknown): Withdrawal => {
 
 export const withdrawalService = {
   async createWithdrawal(data: WithdrawalRequest): Promise<Withdrawal> {
+    const pointsAmount = Number(data.pointsAmount);
+
+    if (!Number.isFinite(pointsAmount) || pointsAmount <= 0) {
+      throw new Error('Withdrawal points amount must be greater than 0.');
+    }
+
     const response = await apiClient.post('/api/withdrawals/request', {
-      pointsAmount: Number(data.pointsAmount),
+      pointsAmount,
     });
 
     return mapWithdrawal(unwrapApiData<unknown>(response));

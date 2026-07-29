@@ -5,6 +5,7 @@ import { betService, type BetItem } from '../../services/betService';
 import { dashboardService } from '../../services/dashboardService';
 import { predictionService } from '../../services/predictionService';
 import type { OpenRacePrediction } from '../../types/prediction';
+import ModalPortal from '../../components/ModalPortal';
 
 const formatPoints = (value: number) => new Intl.NumberFormat('en-US', {
   maximumFractionDigits: 0,
@@ -418,14 +419,9 @@ const PredictionPage = () => {
       )}
 
       {isPredictionModalOpen && selectedRace && selectedOption && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-surface/80 p-4 backdrop-blur-sm"
-          role="presentation"
-          onMouseDown={(event) => {
-            if (event.target === event.currentTarget) {
-              setIsPredictionModalOpen(false);
-            }
-          }}
+        <ModalPortal
+          className="fixed inset-0 z-[220] flex items-center justify-center bg-surface/80 p-4 backdrop-blur-sm"
+          onClose={() => setIsPredictionModalOpen(false)}
         >
           <section
             role="dialog"
@@ -575,7 +571,7 @@ const PredictionPage = () => {
               </div>
             </form>
           </section>
-        </div>
+        </ModalPortal>
       )}
     </div>
   );
@@ -592,33 +588,10 @@ const ActivePredictionDetailModal = ({
   errorMessage: string;
   onClose: () => void;
 }) => {
-  useEffect(() => {
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
-        onClose();
-      }
-    };
-
-    window.addEventListener('keydown', handleKeyDown);
-
-    return () => {
-      document.body.style.overflow = previousOverflow;
-      window.removeEventListener('keydown', handleKeyDown);
-    };
-  }, [onClose]);
-
   return (
-    <div
-      className="fixed inset-0 z-[60] flex items-center justify-center overflow-hidden bg-surface/80 p-4 backdrop-blur-sm"
-      role="presentation"
-      onMouseDown={(event) => {
-        if (event.target === event.currentTarget) {
-          onClose();
-        }
-      }}
+    <ModalPortal
+      className="fixed inset-0 z-[220] flex items-center justify-center overflow-hidden bg-surface/80 p-4 backdrop-blur-sm"
+      onClose={onClose}
     >
       <section
         role="dialog"
@@ -678,7 +651,7 @@ const ActivePredictionDetailModal = ({
           )}
         </div>
       </section>
-    </div>
+    </ModalPortal>
   );
 };
 

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { BarChart3, CheckCircle2, ChevronDown, Eye, Loader2, X } from 'lucide-react';
 import { getApiErrorMessage } from '../../services/apiClient';
 import { betService, type BetItem } from '../../services/betService';
+import ModalPortal from '../../components/ModalPortal';
 
 type StatusFilter = 'all' | 'won' | 'lost';
 
@@ -383,7 +384,10 @@ const ResultTrackingPage = () => {
       </div>
 
       {selectedBet && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-scrim/50 px-4 py-6">
+        <ModalPortal
+          className="fixed inset-0 z-[220] flex items-center justify-center bg-surface/80 px-4 py-6 backdrop-blur-sm"
+          onClose={closeDetail}
+        >
           <section className="max-h-[90vh] w-full max-w-[760px] overflow-y-auto rounded-3xl border border-outline-variant bg-white p-6 shadow-xl">
             <div className="mb-6 flex items-start justify-between gap-4">
               <div>
@@ -436,7 +440,7 @@ const ResultTrackingPage = () => {
               </div>
             )}
           </section>
-        </div>
+        </ModalPortal>
       )}
     </div>
   );

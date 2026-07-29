@@ -103,6 +103,7 @@ const WalletWithdrawalsPage = () => {
   const estimatedTax = validAmount > 0 ? validAmount * WITHDRAWAL_TAX_RATE : 0;
   const estimatedNetAmount = Math.max(0, validAmount - estimatedTax);
   const requestedPoints = validAmount > 0 ? validAmount * POINTS_PER_VND : 0;
+  const canConvertToWholePoints = Number.isInteger(requestedPoints);
   const approvedWithdrawal = useMemo(
     () => withdrawals.find((withdrawal) =>
       ['approved', 'paid'].includes(normalizeStatus(withdrawal.status)) && withdrawal.pickupCode,
@@ -141,7 +142,17 @@ const WalletWithdrawalsPage = () => {
       return;
     }
 
-    if (walletBalance !== undefined && requestedPoints > walletBalance) {
+    if (!canConvertToWholePoints || requestedPoints <= 0) {
+      setErrorMessage('Withdrawal amount must convert to a whole number of points.');
+      return;
+    }
+
+    if (walletBalance === undefined) {
+      setErrorMessage('Wallet balance is not available yet. Please refresh and try again.');
+      return;
+    }
+
+    if (requestedPoints > walletBalance) {
       setErrorMessage('The converted points cannot exceed your current wallet balance.');
       return;
     }
@@ -307,7 +318,7 @@ const WalletWithdrawalsPage = () => {
 
               <button
                 type="submit"
-                disabled={isSubmitting || isLoading}
+                disabled={isSubmitting || isLoading || walletBalance === undefined}
                 className="inline-flex items-center justify-center gap-2 rounded-lg bg-secondary px-5 py-3 text-sm font-bold text-on-secondary transition hover:bg-secondary/90 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
