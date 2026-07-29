@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useLocation, useParams } from 'react-router-dom';
 import { motion } from 'motion/react';
-import { ArrowLeft, CheckCircle2, Loader2, WalletCards } from 'lucide-react';
+import { ArrowLeft, CheckCircle2, Loader2 } from 'lucide-react';
 import { getApiErrorMessage } from '../../services/apiClient';
 import { withdrawalService, type Withdrawal } from '../../services/withdrawalService';
 
@@ -76,6 +76,8 @@ const statusClassName = (status: unknown) => {
 
 const WalletWithdrawalDetailPage = () => {
   const { withdrawalId } = useParams();
+  const location = useLocation();
+  const requestNo = Number((location.state as { requestNo?: unknown } | null)?.requestNo);
   const [withdrawal, setWithdrawal] = useState<Withdrawal | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState('');
@@ -192,17 +194,14 @@ const WalletWithdrawalDetailPage = () => {
           ) : withdrawal ? (
             <>
               <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
-                <div className="flex items-center gap-3">
-                  <span className="rounded-lg bg-primary/15 p-3">
-                    <WalletCards className="h-6 w-6 text-primary" />
-                  </span>
-                  <div>
-                    <p className="text-xs font-bold uppercase tracking-[0.18em] text-outline">Request ID</p>
-                    <p className="mt-1 text-xl font-bold text-on-surface">
-                      {withdrawal.withdrawalId ?? withdrawal.id ?? withdrawalId}
-                    </p>
+                {Number.isFinite(requestNo) ? (
+                  <div className="inline-flex items-center gap-2 rounded-full border border-outline-variant/60 bg-surface-container-lowest px-4 py-2 text-sm font-bold text-on-surface">
+                    <span className="text-xs uppercase tracking-[0.14em] text-outline">Request No.</span>
+                    <span>{requestNo}</span>
                   </div>
-                </div>
+                ) : (
+                  <div />
+                )}
                 <span className={`inline-flex rounded-full border px-4 py-2 text-sm font-bold ${statusClassName(withdrawal.status)}`}>
                   {statusLabel(withdrawal.status)}
                 </span>

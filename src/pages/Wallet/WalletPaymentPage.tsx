@@ -6,7 +6,8 @@ import { getApiErrorMessage } from '../../services/apiClient';
 import { paymentProviders, paymentService, type PaymentProviderId } from '../../services/paymentService';
 import { walletService } from '../../services/walletService';
 
-const amountOptions = [10000, 20000, 50000, 100000];
+const MIN_TOP_UP_AMOUNT = 50000;
+const amountOptions = [50000, 100000, 200000, 500000];
 
 const revealContainer = {
   hidden: {},
@@ -33,7 +34,7 @@ const formatPoints = (value: number) => new Intl.NumberFormat('vi-VN', {
 }).format(value);
 
 const WalletPaymentPage = () => {
-  const [amount, setAmount] = useState(10000);
+  const [amount, setAmount] = useState(MIN_TOP_UP_AMOUNT);
   const [selectedProvider, setSelectedProvider] = useState<PaymentProviderId>('zalopay');
   const [walletBalance, setWalletBalance] = useState<number | undefined>();
   const [walletStatus, setWalletStatus] = useState('');
@@ -71,8 +72,8 @@ const WalletPaymentPage = () => {
   const handleCreatePayment = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
-    if (!Number.isFinite(amount) || amount < 10000) {
-      setErrorMessage('Minimum top-up amount is 10.000 VND.');
+    if (!Number.isFinite(amount) || amount < MIN_TOP_UP_AMOUNT) {
+      setErrorMessage(`Minimum top-up amount is ${formatCurrency(MIN_TOP_UP_AMOUNT)}.`);
       return;
     }
 
@@ -226,7 +227,7 @@ const WalletPaymentPage = () => {
                 <input
                   id="wallet-amount"
                   type="number"
-                  min={10000}
+                  min={MIN_TOP_UP_AMOUNT}
                   step={1000}
                   value={amount}
                   onChange={(event) => setAmount(Number(event.target.value))}
