@@ -1,4 +1,4 @@
-import { apiClient, getApiResponseMessage, unwrapApiData, unwrapApiList } from '../../services/apiClient';
+import { apiClient, getApiResponseMessage, unwrapApiData, unwrapApiList } from './apiClient';
 
 export type AdminTournamentOption = {
   tournamentId: number;
@@ -241,7 +241,7 @@ const mapRace = (raw: RawRecord, index: number): AdminRaceItem => ({
   distanceM: asNumber(raw.distanceM),
   trackType: asString(raw.trackType, '-'),
   maxHorses: asNumber(raw.maxHorses, 8),
-  maxReferees: asNumber(raw.maxReferees, 3),
+  maxReferees: asNumber(getRawMaxReferees(raw), 3),
   status: asString(raw.status, 'ready'),
   registeredHorseCount: raw.registeredHorseCount === undefined ? undefined : asNumber(raw.registeredHorseCount),
   acceptedJockeyCount: raw.acceptedJockeyCount === undefined ? undefined : asNumber(raw.acceptedJockeyCount),
@@ -254,6 +254,44 @@ const getResponseObject = (value: unknown) => {
   }
 
   return {};
+};
+
+const getRawMaxReferees = (raw: RawRecord) =>
+  raw.maxReferees ?? raw.maxReferee ?? raw.maxRefereeCount ?? raw.refereeLimit ?? raw.maxRefs;
+
+const hasRawMaxReferees = (raw: RawRecord) => {
+  const value = getRawMaxReferees(raw);
+  return value !== undefined && value !== null && value !== '';
+};
+
+const mergeRaceDetail = (race: AdminRaceItem, detail: AdminRaceItem): AdminRaceItem => ({
+  ...race,
+  ...detail,
+  tournamentId: race.tournamentId ?? detail.tournamentId,
+  tournamentName: race.tournamentName ?? detail.tournamentName,
+  scheduleId: race.scheduleId ?? detail.scheduleId,
+  scheduleTitle: race.scheduleTitle ?? detail.scheduleTitle,
+  scheduleNote: race.scheduleNote ?? detail.scheduleNote,
+  raceDate: race.raceDate ?? detail.raceDate,
+  dayNumber: race.dayNumber ?? detail.dayNumber,
+  location: race.location ?? detail.location,
+  registeredHorseCount: race.registeredHorseCount ?? detail.registeredHorseCount,
+  acceptedJockeyCount: race.acceptedJockeyCount ?? detail.acceptedJockeyCount,
+  assignedRefereeCount: race.assignedRefereeCount ?? detail.assignedRefereeCount,
+});
+
+const getRaceDetail = async (raceId: number | string): Promise<AdminRaceItem> => {
+  let rawItem: RawRecord;
+
+  try {
+    const response = await apiClient.get(`/api/v1/admin/races/get-race/${raceId}`);
+    rawItem = getResponseObject(unwrapApiData<unknown>(response));
+  } catch {
+    const response = await apiClient.get(`/api/races/get-by-id/${raceId}`);
+    rawItem = getResponseObject(unwrapApiData<unknown>(response));
+  }
+
+  return mapRace(rawItem, 0);
 };
 
 const toSchedulePayload = (data: AdminScheduleFormData) => ({
@@ -362,24 +400,27 @@ export const adminScheduleRaceApi = {
     const response = await apiClient.get(`/api/tournaments/${tournamentId}/get-race-list`);
     const rawItems = unwrapListFromResponse<RawRecord>(response);
 
-    return rawItems
-      .map(mapRace)
+    const races = await Promise.all(rawItems.map(async (item, index) => {
+      const race = mapRace(item, index);
+
+      if (race.raceId <= 0 || hasRawMaxReferees(item)) {
+        return race;
+      }
+
+      try {
+        return mergeRaceDetail(race, await getRaceDetail(race.raceId));
+      } catch {
+        return race;
+      }
+    }));
+
+    return races
       .filter((race) => race.raceId > 0)
       .sort((first, second) => new Date(first.scheduledAt).getTime() - new Date(second.scheduledAt).getTime());
   },
 
   async getRace(raceId: number | string): Promise<AdminRaceItem> {
-    let rawItem: RawRecord;
-
-    try {
-      const response = await apiClient.get(`/api/v1/admin/races/get-race/${raceId}`);
-      rawItem = getResponseObject(unwrapApiData<unknown>(response));
-    } catch {
-      const response = await apiClient.get(`/api/races/get-by-id/${raceId}`);
-      rawItem = getResponseObject(unwrapApiData<unknown>(response));
-    }
-
-    return mapRace(rawItem, 0);
+    return getRaceDetail(raceId);
   },
 
   async createRace(scheduleId: number | string, data: AdminRaceFormData): Promise<AdminRaceItem> {

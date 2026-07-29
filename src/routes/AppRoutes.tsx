@@ -24,6 +24,7 @@ const RegistrationManagementPage = lazy(() => import('../pages/Admin/Registratio
 const AdminRacesPage = lazy(() => import('../pages/Admin/AdminRacesPage'));
 const AdminSchedulePage = lazy(() => import('../pages/Admin/AdminSchedulePage'));
 const AdminBetManagementPage = lazy(() => import('../pages/Admin/AdminBetManagementPage'));
+const WithdrawalManagementPage = lazy(() => import('../pages/Admin/WithdrawalManagementPage'));
 const RaceRegistrationPage = lazy(() => import('../pages/Race/RaceRegistrationPage'));
 const OwnerInvitationsPage = lazy(() => import('../pages/Owner/OwnerInvitationsPage'));
 const JockeyInvitationsPage = lazy(() => import('../pages/Jockey/JockeyInvitationsPage'));
@@ -99,6 +100,7 @@ const AppRoutes = () => {
       <Route path="/admin/race-results" element={protectedPage(<AdminRaceResultsPage />, ['admin'])} />
       <Route path="/admin/prize-awards" element={protectedPage(<AdminPrizeAwardsPage />, ['admin'])} />
       <Route path="/admin/bets" element={protectedPage(<AdminBetManagementPage />, ['admin'])} />
+      <Route path="/admin/withdrawals" element={protectedPage(<WithdrawalManagementPage />, ['admin'])} />
       <Route path="/admin/race-schedule" element={<Navigate to="/admin/schedule" replace />} />
       <Route path="/tournaments" element={protectedPage(<TournamentManagementPage />, ['admin'])} />
       <Route path="/tournaments/:tournamentId/schedule" element={protectedPage(<TournamentSchedulePage />, ['admin'])} />
@@ -118,3 +120,4 @@ const AppRoutes = () => {
 };
 
 export default AppRoutes;
+

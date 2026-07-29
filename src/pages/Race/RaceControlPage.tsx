@@ -4,6 +4,8 @@ import { useSearchParams } from 'react-router-dom';
 import { getApiErrorMessage } from '../../services/apiClient';
 import {
   raceOperationsService,
+  type ChiefInspectionRegistrationItem,
+  type ChiefInspectionRequest,
   type ChiefRaceParticipantItem,
   type RaceResultWorkflowItem,
   type RefereeAssignedRaceItem,
@@ -17,6 +19,10 @@ import { formatRefereeRoleLabel } from '../../utils/permissions';
 type DraftTimeMap = Record<string, string>;
 type DisqualificationReasonMap = Record<string, string>;
 type ResultView = 'overall' | string;
+type ChiefInspectionAction = {
+  status: ChiefInspectionRequest['status'];
+  registration: ChiefInspectionRegistrationItem;
+};
 
 const initialReportForm: RefereeReportFormData = {
   reportType: 'inspection',
@@ -31,6 +37,7 @@ const MAIN_INSPECTION_REPORT_TYPE = 'inspection';
 const MAIN_VIOLATION_REPORT_TYPE = 'violation';
 const getMainReportType = (verdict?: string) => (normalizeStatus(verdict) === 'violation' ? MAIN_VIOLATION_REPORT_TYPE : MAIN_INSPECTION_REPORT_TYPE);
 const getAssignmentId = (item: ChiefRaceParticipantItem | RaceResultWorkflowItem) => item.assignmentId ?? ('id' in item ? item.id : undefined) ?? 0;
+const getRegistrationId = (item: ChiefInspectionRegistrationItem) => item.registrationId ?? item.regId ?? item.id ?? 0;
 const getLapViewValue = (lap: number) => 'lap:' + lap;
 
 const formatDateTime = (value?: string) => {
@@ -83,10 +90,24 @@ const statusClassName = (status?: string) => {
   if (normalized === 'in_progress' || normalized === 'confirmed') return 'border-primary/30 bg-primary/10 text-primary';
   if (normalized === 'draft' || normalized === 'ready') return 'border-tertiary/30 bg-tertiary/10 text-tertiary';
   if (normalized === 'cancelled' || normalized === 'rejected' || normalized === 'disqualified') return 'border-error/30 bg-error-container/20 text-error';
-  if (normalized === 'qualified') return 'border-secondary/30 bg-secondary/10 text-secondary';
+  if (normalized === 'qualified' || normalized === 'approved') return 'border-secondary/30 bg-secondary/10 text-secondary';
   return 'border-outline-variant bg-surface-container text-on-surface-variant';
 };
 
+const isRegistrationClosedStatus = (status?: string) => normalizeStatus(status) === 'registration_closed';
+const isOpenForBettingStatus = (status?: string) => ['open_for_betting', 'betting_open'].includes(normalizeStatus(status));
+const isConfirmedStatus = (status?: string) => normalizeStatus(status) === 'confirmed';
+
+const getInspectionWorkflowLabel = (registration: ChiefInspectionRegistrationItem) => {
+  const registrationStatus = normalizeStatus(registration.status);
+  const chiefStatus = normalizeStatus(registration.chiefInspectionStatus);
+
+  if (registrationStatus === 'rejected' || chiefStatus === 'rejected') return 'Rejected';
+  if (registrationStatus === 'approved') return 'Final approved';
+  if (chiefStatus === 'approved') return 'Chief approved - waiting admin';
+  if (!isConfirmedStatus(registration.ownerConfirmationStatus) || !isConfirmedStatus(registration.jockeyStatus)) return 'Pending jockey confirmation';
+  return 'Waiting chief inspection';
+};
 const getStoredApprovedIds = (raceId: string) => {
   if (typeof window === 'undefined') return new Set<number>();
   try {
@@ -138,6 +159,7 @@ const RaceControlPage = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const [selectedRaceId, setSelectedRaceId] = useState(() => searchParams.get('raceId') ?? '');
   const [assignedRaces, setAssignedRaces] = useState<RefereeAssignedRaceItem[]>([]);
+  const [inspectionRegistrations, setInspectionRegistrations] = useState<ChiefInspectionRegistrationItem[]>([]);
   const [participants, setParticipants] = useState<ChiefRaceParticipantItem[]>([]);
   const [reports, setReports] = useState<RefereeReportItem[]>([]);
   const [draftResults, setDraftResults] = useState<RaceResultWorkflowItem[]>([]);
@@ -155,6 +177,9 @@ const RaceControlPage = () => {
   const [isBusy, setIsBusy] = useState(false);
   const [isStartConfirmOpen, setIsStartConfirmOpen] = useState(false);
   const [isResultConfirmOpen, setIsResultConfirmOpen] = useState(false);
+  const [inspectionAction, setInspectionAction] = useState<ChiefInspectionAction | null>(null);
+  const [inspectionNote, setInspectionNote] = useState('');
+  const [inspectionError, setInspectionError] = useState('');
   const [isReportHistoryOpen, setIsReportHistoryOpen] = useState(false);
   const [selectedReportDetail, setSelectedReportDetail] = useState<RefereeReportItem | null>(null);
   const [message, setMessage] = useState('');
@@ -170,6 +195,8 @@ const RaceControlPage = () => {
   const refereeRole = normalizeStatus(activeRace?.refereeRole);
   const visibleRaceStatus = activeRace?.status ?? draftStatus;
   const activeRaceStatus = normalizeStatus(visibleRaceStatus);
+  const isRegistrationClosedRace = isRegistrationClosedStatus(visibleRaceStatus);
+  const isOpenForBettingRace = isOpenForBettingStatus(visibleRaceStatus);
   const hasRaceStarted = ['in_progress', 'in_process', 'running', 'started', 'completed', 'published'].includes(activeRaceStatus);
   const isChiefReferee = refereeRole === 'chief_referee';
   const isMainReferee = refereeRole === 'main_referee';
@@ -184,7 +211,8 @@ const RaceControlPage = () => {
     const assignmentId = getAssignmentId(participant);
     return !approvedAssignmentIds.has(assignmentId) && !disqualifiedAssignmentIds.has(assignmentId);
   }), [approvedAssignmentIds, disqualifiedAssignmentIds, participants]);
-  const canStartRace = !isBusy && participants.length > 0 && pendingParticipants.length === 0 && !hasRaceStarted;
+  const inspectedRegistrationCount = inspectionRegistrations.filter((registration) => normalizeStatus(registration.chiefInspectionStatus)).length;
+  const canStartRace = !isBusy && isChiefReferee && isOpenForBettingRace && !hasRaceStarted;
   const sortedDraftResults = useMemo(() => [...draftResults].sort((first, second) => (
     (first.finishPosition ?? Number.MAX_SAFE_INTEGER) - (second.finishPosition ?? Number.MAX_SAFE_INTEGER)
     || (first.finishTimeSec ?? Number.MAX_SAFE_INTEGER) - (second.finishTimeSec ?? Number.MAX_SAFE_INTEGER)
@@ -214,15 +242,18 @@ const RaceControlPage = () => {
       const data = await raceOperationsService.getAssignedRaces();
       setAssignedRaces(data);
       if (!normalizedRaceId && data.length > 0) handleSelectRace(String(data[0].raceId));
+      return data;
     } catch (error) {
       setErrorMessage(getApiErrorMessage(error, 'Unable to load assigned races.'));
+      return [];
     } finally {
       setIsLoadingAssigned(false);
     }
   }, [handleSelectRace, normalizedRaceId]);
 
-  const loadRaceData = async (raceId: string, role: string) => {
+  const loadRaceData = async (raceId: string, role: string, raceStatus = activeRaceStatus) => {
     if (!raceId) {
+      setInspectionRegistrations([]);
       setParticipants([]);
       setReports([]);
       setDraftResults([]);
@@ -234,14 +265,18 @@ const RaceControlPage = () => {
       return;
     }
 
+    const shouldLoadInspection = role === 'chief_referee' && isRegistrationClosedStatus(raceStatus);
+    const shouldLoadParticipants = role === 'chief_referee' && !shouldLoadInspection;
+
     setIsLoadingRaceData(true);
     setErrorMessage('');
     try {
-      const [reportData, draftData, roundData, participantData] = await Promise.all([
+      const [reportData, draftData, roundData, participantData, inspectionData] = await Promise.all([
         raceOperationsService.getReports(raceId).catch(() => []),
         raceOperationsService.getDraft(raceId).catch(() => null),
         raceRoundService.getRoundsByRace(raceId).catch(() => []),
-        role === 'chief_referee' ? raceOperationsService.getChiefParticipants(raceId).catch(() => []) : Promise.resolve([]),
+        shouldLoadParticipants ? raceOperationsService.getChiefParticipants(raceId).catch(() => []) : Promise.resolve([]),
+        shouldLoadInspection ? raceOperationsService.getChiefInspectionRegistrations(raceId) : Promise.resolve([]),
       ]);
       const nextDraftResults = draftData?.results ?? [];
       const nextTimeDrafts = nextDraftResults.reduce<DraftTimeMap>((draftMap, item) => {
@@ -264,6 +299,7 @@ const RaceControlPage = () => {
       setDraftStatus(draftData?.status ?? '');
       setRaceRounds(roundData);
       setParticipants(participantData);
+      setInspectionRegistrations(inspectionData);
       setTimeDrafts(nextTimeDrafts);
       setApprovedAssignmentIds(storedApprovedIds);
       setDisqualifiedAssignmentIds(storedDisqualifiedIds);
@@ -273,6 +309,7 @@ const RaceControlPage = () => {
       persistDisqualifyReasons(raceId, storedReasons);
     } catch (error) {
       setErrorMessage(getApiErrorMessage(error, 'Unable to load race control data.'));
+      setInspectionRegistrations([]);
     } finally {
       setIsLoadingRaceData(false);
     }
@@ -284,10 +321,9 @@ const RaceControlPage = () => {
   }, [loadAssignedRaces]);
 
   useEffect(() => {
-    const timeoutId = window.setTimeout(() => void loadRaceData(normalizedRaceId, refereeRole), 0);
+    const timeoutId = window.setTimeout(() => void loadRaceData(normalizedRaceId, refereeRole, activeRaceStatus), 0);
     return () => window.clearTimeout(timeoutId);
-  }, [normalizedRaceId, refereeRole]);
-
+  }, [normalizedRaceId, refereeRole, activeRaceStatus]);
   const withBusy = async (work: () => Promise<void>) => {
     setIsBusy(true);
     setMessage('');
@@ -365,13 +401,56 @@ const RaceControlPage = () => {
       return next;
     });
   };
+  const openInspectionAction = (status: ChiefInspectionRequest['status'], registration: ChiefInspectionRegistrationItem) => {
+    setInspectionAction({ status, registration });
+    setInspectionNote('');
+    setInspectionError('');
+    setErrorMessage('');
+  };
+
+  const closeInspectionAction = () => {
+    setInspectionAction(null);
+    setInspectionNote('');
+    setInspectionError('');
+  };
+
+  const handleInspectionSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+
+    if (!inspectionAction || !normalizedRaceId) return;
+
+    const registrationId = getRegistrationId(inspectionAction.registration);
+    const trimmedNote = inspectionNote.trim();
+
+    if (!registrationId) {
+      setInspectionError('Registration id is missing.');
+      return;
+    }
+
+    if (!trimmedNote) {
+      setInspectionError('Inspection note is required.');
+      return;
+    }
+
+    await withBusy(async () => {
+      await raceOperationsService.inspectRegistration(normalizedRaceId, registrationId, {
+        status: inspectionAction.status,
+        note: trimmedNote,
+      });
+      const refreshedRaces = await loadAssignedRaces();
+      const refreshedRace = refreshedRaces.find((race) => String(race.raceId) === normalizedRaceId);
+      closeInspectionAction();
+      setMessage(inspectionAction.status === 'approved' ? 'Horse inspection approved.' : 'Horse inspection rejected.');
+      await loadRaceData(normalizedRaceId, refereeRole, normalizeStatus(refreshedRace?.status ?? activeRaceStatus));
+    });
+  };
   const handleRequestStartRace = () => {
     if (!normalizedRaceId) {
       setErrorMessage('Select a race before starting it.');
       return;
     }
-    if (participants.length > 0 && pendingParticipants.length > 0) {
-      setErrorMessage('Review every participant before starting the race.');
+    if (!isOpenForBettingRace) {
+      setErrorMessage('Admin must open betting before the Chief referee can start this race.');
       return;
     }
     if (hasRaceStarted) {
@@ -387,8 +466,8 @@ const RaceControlPage = () => {
       setErrorMessage('Select a race before starting it.');
       return;
     }
-    if (participants.length > 0 && pendingParticipants.length > 0) {
-      setErrorMessage('Review every participant before starting the race.');
+    if (!isOpenForBettingRace) {
+      setErrorMessage('Admin must open betting before the Chief referee can start this race.');
       return;
     }
     if (hasRaceStarted) {
@@ -557,8 +636,8 @@ const RaceControlPage = () => {
         <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
           <MetricCard icon={<Flag className="h-4 w-4" />} label="Race status" value={formatStatusLabel(visibleRaceStatus)} />
           <MetricCard icon={<ShieldCheck className="h-4 w-4" />} label="Referee role" value={roleLabel} />
-          <MetricCard icon={<Users className="h-4 w-4" />} label="Participants" value={isChiefReferee ? String(participants.length) : String(draftResults.length)} />
-          <MetricCard icon={<CheckCircle2 className="h-4 w-4" />} label="Reviewed" value={isChiefReferee ? reviewedParticipants.length + '/' + participants.length : draftStatus || '-'} />
+          <MetricCard icon={<Users className="h-4 w-4" />} label="Participants" value={isChiefReferee ? String(isRegistrationClosedRace ? inspectionRegistrations.length : participants.length) : String(draftResults.length)} />
+          <MetricCard icon={<CheckCircle2 className="h-4 w-4" />} label="Reviewed" value={isChiefReferee ? (isRegistrationClosedRace ? inspectedRegistrationCount + '/' + inspectionRegistrations.length : reviewedParticipants.length + '/' + participants.length) : draftStatus || '-'} />
           <MetricCard icon={<FileText className="h-4 w-4" />} label="Reports" value={String(reports.length)} />
         </section>
 
@@ -566,62 +645,79 @@ const RaceControlPage = () => {
         {isUnsupportedReferee && <EmptyState title="No Chief/Main assignment" description="This race is assigned to a referee role that does not have a dedicated workflow on this screen." />}
         {normalizedRaceId && isChiefReferee && (
           <div className="grid gap-6">
-            <section className="glass-panel rounded-xl p-5 md:p-6">
-              <SectionTitle icon={<ClipboardCheck className="h-5 w-5" />} eyebrow="Chief referee" title="Participant inspection" />
-              <div className="mt-5 grid gap-3 lg:grid-cols-2 xl:grid-cols-3">
-                {pendingParticipants.map((participant) => {
-                  const assignmentId = getAssignmentId(participant);
-                  return (
-                    <ParticipantCard
-                      key={assignmentId}
-                      participant={participant}
-                      disqualifyReason={disqualifyReasons[String(assignmentId)] ?? ''}
-                      onReasonChange={(value) => updateDisqualifyReason(assignmentId, value)}
-                      onPass={() => approveParticipant(participant)}
-                      onDisqualify={() => disqualifyParticipant(participant)}
-                    />
-                  );
-                })}
-                {pendingParticipants.length === 0 && <div className="rounded-lg border border-secondary/30 bg-secondary/10 p-4 text-body-sm font-semibold text-secondary">All {participants.length} participants have been reviewed and moved to the result draft.</div>}
-              </div>
-              <div className="mt-5 flex flex-col gap-3 border-t border-outline-variant pt-4 md:flex-row md:items-center md:justify-between">
-                <p className="text-body-sm text-on-surface-variant">Start is available after every participant has been reviewed. Current race status: <StatusBadge status={visibleRaceStatus} /></p>
-                <button type="button" onClick={handleRequestStartRace} disabled={!canStartRace} className="inline-flex cursor-pointer items-center justify-center gap-2 rounded-md bg-primary px-5 py-3 text-body-sm font-bold text-on-primary transition-opacity hover:bg-opacity-90 disabled:cursor-not-allowed disabled:bg-outline-variant disabled:text-on-surface-variant disabled:opacity-80"><Flag className="h-4 w-4" /> {hasRaceStarted ? 'Race started' : 'Start race'}</button>
-              </div>
-            </section>
+            {isRegistrationClosedRace ? (
+              <section className="glass-panel rounded-xl p-5 md:p-6">
+                <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+                  <SectionTitle icon={<ClipboardCheck className="h-5 w-5" />} eyebrow="Chief referee" title="Horse inspection" />
+                  <StatusBadge status={visibleRaceStatus} />
+                </div>
+                <ChiefInspectionTable
+                  registrations={inspectionRegistrations}
+                  isLoading={isLoadingRaceData}
+                  isBusy={isBusy}
+                  onApprove={(registration) => openInspectionAction('approved', registration)}
+                  onReject={(registration) => openInspectionAction('rejected', registration)}
+                />
+              </section>
+            ) : (
+              <>
+                <section className="glass-panel rounded-xl p-5 md:p-6">
+                  <SectionTitle icon={<ClipboardCheck className="h-5 w-5" />} eyebrow="Chief referee" title="Race start" />
+                  <div className="mt-5 grid gap-3 lg:grid-cols-2 xl:grid-cols-3">
+                    {pendingParticipants.map((participant) => {
+                      const assignmentId = getAssignmentId(participant);
+                      return (
+                        <ParticipantCard
+                          key={assignmentId}
+                          participant={participant}
+                          disqualifyReason={disqualifyReasons[String(assignmentId)] ?? ''}
+                          onReasonChange={(value) => updateDisqualifyReason(assignmentId, value)}
+                          onPass={() => approveParticipant(participant)}
+                          onDisqualify={() => disqualifyParticipant(participant)}
+                        />
+                      );
+                    })}
+                    {pendingParticipants.length === 0 && <div className="rounded-lg border border-secondary/30 bg-secondary/10 p-4 text-body-sm font-semibold text-secondary">Final approved participants are ready for race operations.</div>}
+                  </div>
+                  <div className="mt-5 flex flex-col gap-3 border-t border-outline-variant pt-4 md:flex-row md:items-center md:justify-between">
+                    <p className="text-body-sm text-on-surface-variant">Chief start is available after Admin opens betting. Current race status: <StatusBadge status={visibleRaceStatus} /></p>
+                    <button type="button" onClick={handleRequestStartRace} disabled={!canStartRace} className="inline-flex cursor-pointer items-center justify-center gap-2 rounded-md bg-primary px-5 py-3 text-body-sm font-bold text-on-primary transition-opacity hover:bg-opacity-90 disabled:cursor-not-allowed disabled:bg-outline-variant disabled:text-on-surface-variant disabled:opacity-80"><Flag className="h-4 w-4" /> {hasRaceStarted ? 'Race started' : 'Start race'}</button>
+                  </div>
+                </section>
 
-            <section className="glass-panel rounded-xl p-5 md:p-6">
-              <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-                <SectionTitle icon={<Trophy className="h-5 w-5" />} eyebrow="Draft result" title="Checked horses" />
-                <ResultViewSelect value={selectedView} lapNumbers={lapNumbers} onChange={setSelectedView} />
-              </div>
-              {selectedView === 'overall' ? (
-                <ChiefDraftTable participants={reviewedParticipants} disqualifiedAssignmentIds={disqualifiedAssignmentIds} disqualifyReasons={disqualifyReasons} draftByAssignment={draftByAssignment} timeDrafts={timeDrafts} isBusy={isBusy || isLoadingRaceData} onReturn={returnParticipantToInspection} onTimeChange={(assignmentId, value) => setTimeDrafts((current) => ({ ...current, [String(assignmentId)]: value }))} />
-              ) : (
-                <LapResultTable rows={selectedLapRows} participantByAssignment={participantByAssignment} />
-              )}
-              <div className="mt-5 flex flex-wrap justify-end gap-3 border-t border-outline-variant pt-4">
-                <button type="button" onClick={() => void handleSaveDraft()} disabled={isBusy || selectedView !== 'overall' || reviewedParticipants.length === 0} className="inline-flex cursor-pointer items-center gap-2 rounded-md bg-secondary px-5 py-3 text-body-sm font-bold text-white transition-opacity hover:bg-opacity-90 disabled:cursor-not-allowed disabled:opacity-50"><Save className="h-4 w-4" /> Save draft</button>
-                <button type="button" onClick={handleRequestConfirmResults} disabled={isBusy || draftResults.length === 0} className="inline-flex cursor-pointer items-center gap-2 rounded-md border border-primary/40 px-5 py-3 text-body-sm font-bold text-primary transition-colors hover:bg-primary/10 disabled:cursor-not-allowed disabled:opacity-50"><CheckCircle2 className="h-4 w-4" /> Confirm result</button>
-              </div>
-            </section>
+                <section className="glass-panel rounded-xl p-5 md:p-6">
+                  <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+                    <SectionTitle icon={<Trophy className="h-5 w-5" />} eyebrow="Draft result" title="Checked horses" />
+                    <ResultViewSelect value={selectedView} lapNumbers={lapNumbers} onChange={setSelectedView} />
+                  </div>
+                  {selectedView === 'overall' ? (
+                    <ChiefDraftTable participants={reviewedParticipants} disqualifiedAssignmentIds={disqualifiedAssignmentIds} disqualifyReasons={disqualifyReasons} draftByAssignment={draftByAssignment} timeDrafts={timeDrafts} isBusy={isBusy || isLoadingRaceData} onReturn={returnParticipantToInspection} onTimeChange={(assignmentId, value) => setTimeDrafts((current) => ({ ...current, [String(assignmentId)]: value }))} />
+                  ) : (
+                    <LapResultTable rows={selectedLapRows} participantByAssignment={participantByAssignment} />
+                  )}
+                  <div className="mt-5 flex flex-wrap justify-end gap-3 border-t border-outline-variant pt-4">
+                    <button type="button" onClick={() => void handleSaveDraft()} disabled={isBusy || selectedView !== 'overall' || reviewedParticipants.length === 0} className="inline-flex cursor-pointer items-center gap-2 rounded-md bg-secondary px-5 py-3 text-body-sm font-bold text-white transition-opacity hover:bg-opacity-90 disabled:cursor-not-allowed disabled:opacity-50"><Save className="h-4 w-4" /> Save draft</button>
+                    <button type="button" onClick={handleRequestConfirmResults} disabled={isBusy || draftResults.length === 0} className="inline-flex cursor-pointer items-center gap-2 rounded-md border border-primary/40 px-5 py-3 text-body-sm font-bold text-primary transition-colors hover:bg-primary/10 disabled:cursor-not-allowed disabled:opacity-50"><CheckCircle2 className="h-4 w-4" /> Confirm result</button>
+                  </div>
+                </section>
 
-            <section className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_420px]">
-              <article className="glass-panel rounded-xl p-5 md:p-6">
-                <SectionTitle icon={<Eye className="h-5 w-5" />} eyebrow="Main referee" title="Submitted reports" />
-                <ReportTable reports={submittedReports} onViewDetail={setSelectedReportDetail} />
-              </article>
-              <article className="glass-panel rounded-xl p-5 md:p-6">
-                <SectionTitle icon={<Send className="h-5 w-5" />} eyebrow="Admin handoff" title="Final report" />
-                <form className="mt-5 grid gap-4" onSubmit={(event) => void handleSubmitChiefFinalReport(event)}>
-                  <TextArea label="Final notes" value={chiefFinalNotes} onChange={setChiefFinalNotes} placeholder="Race completion summary for Admin" />
-                  <button type="submit" disabled={isBusy} className="inline-flex cursor-pointer items-center justify-center gap-2 rounded-md bg-primary px-5 py-3 text-body-sm font-bold text-on-primary transition-opacity hover:bg-opacity-90 disabled:cursor-not-allowed disabled:opacity-50"><Send className="h-4 w-4" /> Submit final report</button>
-                </form>
-              </article>
-            </section>
+                <section className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_420px]">
+                  <article className="glass-panel rounded-xl p-5 md:p-6">
+                    <SectionTitle icon={<Eye className="h-5 w-5" />} eyebrow="Main referee" title="Submitted reports" />
+                    <ReportTable reports={submittedReports} onViewDetail={setSelectedReportDetail} />
+                  </article>
+                  <article className="glass-panel rounded-xl p-5 md:p-6">
+                    <SectionTitle icon={<Send className="h-5 w-5" />} eyebrow="Admin handoff" title="Final report" />
+                    <form className="mt-5 grid gap-4" onSubmit={(event) => void handleSubmitChiefFinalReport(event)}>
+                      <TextArea label="Final notes" value={chiefFinalNotes} onChange={setChiefFinalNotes} placeholder="Race completion summary for Admin" />
+                      <button type="submit" disabled={isBusy} className="inline-flex cursor-pointer items-center justify-center gap-2 rounded-md bg-primary px-5 py-3 text-body-sm font-bold text-on-primary transition-opacity hover:bg-opacity-90 disabled:cursor-not-allowed disabled:opacity-50"><Send className="h-4 w-4" /> Submit final report</button>
+                    </form>
+                  </article>
+                </section>
+              </>
+            )}
           </div>
         )}
-
         {normalizedRaceId && isMainReferee && (
           <div className="grid gap-6">
             <section className="glass-panel rounded-xl p-5 md:p-6">
@@ -685,6 +781,17 @@ const RaceControlPage = () => {
           </div>
         )}
 
+        {inspectionAction && (
+          <ChiefInspectionActionModal
+            action={inspectionAction}
+            note={inspectionNote}
+            error={inspectionError}
+            isBusy={isBusy}
+            onNoteChange={setInspectionNote}
+            onSubmit={handleInspectionSubmit}
+            onClose={closeInspectionAction}
+          />
+        )}
         {isStartConfirmOpen && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 px-4 py-6" role="presentation">
             <section className="w-full max-w-md rounded-lg border border-outline-variant bg-white p-6 shadow-2xl" role="dialog" aria-modal="true" aria-labelledby="start-race-confirm-title">
@@ -736,6 +843,122 @@ const RaceControlPage = () => {
   );
 };
 
+const ChiefInspectionTable = ({
+  registrations,
+  isLoading,
+  isBusy,
+  onApprove,
+  onReject,
+}: {
+  registrations: ChiefInspectionRegistrationItem[];
+  isLoading: boolean;
+  isBusy: boolean;
+  onApprove: (registration: ChiefInspectionRegistrationItem) => void;
+  onReject: (registration: ChiefInspectionRegistrationItem) => void;
+}) => (
+  <div className="mt-5 overflow-x-auto rounded-lg border border-outline-variant bg-white">
+    <table className="w-full min-w-[1080px] text-left">
+      <thead className="border-b border-outline-variant bg-surface-container">
+        <tr>
+          <TableHead>Horse</TableHead>
+          <TableHead>Owner</TableHead>
+          <TableHead>Jockey</TableHead>
+          <TableHead>Gate</TableHead>
+          <TableHead>Owner confirm</TableHead>
+          <TableHead>Chief inspection</TableHead>
+          <TableHead>Note</TableHead>
+          <TableHead>Actions</TableHead>
+        </tr>
+      </thead>
+      <tbody className="divide-y divide-outline-variant">
+        {!isLoading && registrations.map((registration) => {
+          const registrationId = getRegistrationId(registration);
+          const workflowLabel = getInspectionWorkflowLabel(registration);
+          const chiefStatus = normalizeStatus(registration.chiefInspectionStatus);
+          const isRejected = workflowLabel === 'Rejected';
+          const canInspect = !isBusy && !isRejected && chiefStatus !== 'approved';
+
+          return (
+            <tr key={registrationId || `${registration.raceId ?? 'race'}-${registration.horseId ?? 'horse'}`} className="align-top transition-colors hover:bg-surface-container-low/70">
+              <td className="px-4 py-4"><HorseIdentity horseName={registration.horseName} avatarUrl={registration.horseAvatarUrl} subtext={'Registration #' + (registrationId || '-')} /></td>
+              <td className="px-4 py-4 text-body-sm font-semibold text-on-surface-variant">{registration.ownerFullName ?? '-'}<span className="mt-1 block text-label-sm text-outline">{registration.ownerStableName ?? 'No stable'}</span></td>
+              <td className="px-4 py-4 text-body-sm font-semibold text-on-surface-variant">{registration.jockeyFullName ?? '-'}<span className="mt-1 block text-label-sm text-outline">{formatStatusLabel(registration.jockeyStatus)}</span></td>
+              <td className="px-4 py-4 text-body-sm font-bold text-primary">{registration.gateNumber ?? '-'}</td>
+              <td className="px-4 py-4"><StatusBadge status={registration.ownerConfirmationStatus} /></td>
+              <td className="px-4 py-4"><InspectionWorkflowBadge label={workflowLabel} /><span className="mt-2 block text-label-sm text-on-surface-variant">Chief: {formatStatusLabel(registration.chiefInspectionStatus)}</span></td>
+              <td className="max-w-xs px-4 py-4 text-body-sm text-on-surface-variant">{registration.chiefInspectionNote?.trim() || '-'}</td>
+              <td className="px-4 py-4">
+                <div className="flex flex-wrap gap-2">
+                  <button type="button" onClick={() => onApprove(registration)} disabled={!canInspect} className="inline-flex cursor-pointer items-center gap-2 rounded-md bg-secondary px-3 py-2 text-label-sm font-bold text-white transition-opacity hover:bg-opacity-90 disabled:cursor-not-allowed disabled:opacity-50"><CheckCircle2 className="h-4 w-4" /> Approve</button>
+                  <button type="button" onClick={() => onReject(registration)} disabled={!canInspect} className="inline-flex cursor-pointer items-center gap-2 rounded-md border border-error/40 px-3 py-2 text-label-sm font-bold text-error transition-colors hover:bg-error-container/20 disabled:cursor-not-allowed disabled:opacity-50"><Flag className="h-4 w-4" /> Reject</button>
+                </div>
+              </td>
+            </tr>
+          );
+        })}
+        {isLoading && <TableEmpty colSpan={8} text="Loading registrations waiting for chief inspection..." />}
+        {!isLoading && registrations.length === 0 && <TableEmpty colSpan={8} text="No registrations are waiting for chief inspection on this race." />}
+      </tbody>
+    </table>
+  </div>
+);
+
+const InspectionWorkflowBadge = ({ label }: { label: string }) => {
+  const className = label === 'Rejected'
+    ? 'border-error/30 bg-error-container/20 text-error'
+    : label === 'Final approved' || label === 'Chief approved - waiting admin'
+      ? 'border-secondary/30 bg-secondary/10 text-secondary'
+      : label === 'Waiting chief inspection'
+        ? 'border-primary/30 bg-primary/10 text-primary'
+        : 'border-tertiary/30 bg-tertiary/10 text-tertiary';
+
+  return <span className={['inline-flex rounded-md border px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider', className].join(' ')}>{label}</span>;
+};
+
+const ChiefInspectionActionModal = ({
+  action,
+  note,
+  error,
+  isBusy,
+  onNoteChange,
+  onSubmit,
+  onClose,
+}: {
+  action: ChiefInspectionAction;
+  note: string;
+  error: string;
+  isBusy: boolean;
+  onNoteChange: (value: string) => void;
+  onSubmit: (event: FormEvent<HTMLFormElement>) => void;
+  onClose: () => void;
+}) => {
+  const isApprove = action.status === 'approved';
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 px-4 py-6" role="presentation">
+      <section className="w-full max-w-xl rounded-lg border border-outline-variant bg-white p-6 shadow-2xl" role="dialog" aria-modal="true" aria-labelledby="chief-inspection-action-title">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+          <SectionTitle icon={isApprove ? <CheckCircle2 className="h-5 w-5" /> : <Flag className="h-5 w-5" />} eyebrow="Chief inspection" title={isApprove ? 'Approve inspection' : 'Reject inspection'} />
+          <button type="button" onClick={onClose} disabled={isBusy} className="cursor-pointer rounded-md border border-outline-variant px-4 py-2.5 text-body-sm font-bold text-on-surface-variant transition-colors hover:border-primary hover:text-primary disabled:cursor-not-allowed disabled:opacity-50">Close</button>
+        </div>
+        <form className="mt-5 grid gap-4" onSubmit={onSubmit}>
+          <div className="rounded-md border border-outline-variant bg-surface-container-low p-4">
+            <HorseIdentity horseName={action.registration.horseName} avatarUrl={action.registration.horseAvatarUrl} subtext={action.registration.jockeyFullName ? 'Jockey: ' + action.registration.jockeyFullName : undefined} />
+          </div>
+          <TextArea label="Inspection note" value={note} onChange={onNoteChange} placeholder="Required chief inspection note" />
+          {error && <div className="rounded-md border border-error/30 bg-error-container/20 px-4 py-3 text-body-sm font-semibold text-error">{error}</div>}
+          <div className="flex flex-col-reverse gap-3 border-t border-outline-variant pt-4 sm:flex-row sm:justify-end">
+            <button type="button" onClick={onClose} disabled={isBusy} className="cursor-pointer rounded-md border border-outline-variant px-4 py-2.5 text-body-sm font-bold text-on-surface-variant transition-colors hover:border-primary hover:text-primary disabled:cursor-not-allowed disabled:opacity-50">Cancel</button>
+            <button type="submit" disabled={isBusy} className={['inline-flex cursor-pointer items-center justify-center gap-2 rounded-md px-5 py-2.5 text-body-sm font-bold transition-opacity disabled:cursor-not-allowed disabled:opacity-50', isApprove ? 'bg-secondary text-white hover:bg-opacity-90' : 'border border-error/40 text-error hover:bg-error-container/20'].join(' ')}>
+              {isApprove ? <CheckCircle2 className="h-4 w-4" /> : <Flag className="h-4 w-4" />}
+              {isBusy ? 'Saving...' : isApprove ? 'Approve inspection' : 'Reject inspection'}
+            </button>
+          </div>
+        </form>
+      </section>
+    </div>
+  );
+};
 const ChiefDraftTable = ({
   participants,
   disqualifiedAssignmentIds,

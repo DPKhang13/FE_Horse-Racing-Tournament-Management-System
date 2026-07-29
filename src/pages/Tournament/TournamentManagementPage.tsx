@@ -840,7 +840,7 @@ const TournamentManagementPage = () => {
     <div className="min-h-screen bg-surface py-8">
       <div className="mx-auto max-w-[1440px] px-4 md:px-8">
         <motion.div 
-          className="glass-panel mb-6 rounded-2xl p-6"
+          className="admin-surface-panel mb-6 rounded-xl p-6"
           initial="hidden"
           animate="visible"
           variants={revealContainer}
@@ -878,7 +878,7 @@ const TournamentManagementPage = () => {
           variants={revealContainer}
         >
           <motion.div 
-            className="glass-panel flex-1 rounded-xl p-4"
+            className="admin-surface-panel flex-1 rounded-xl p-4"
             variants={revealUp}
           >
             <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(220px,1fr)_180px_180px_180px]">
@@ -936,7 +936,7 @@ const TournamentManagementPage = () => {
         </motion.div>
 
         <motion.div 
-          className="glass-panel overflow-hidden rounded-xl"
+          className="admin-surface-panel overflow-hidden rounded-xl"
           initial="hidden"
           animate="visible"
           variants={revealUp}
@@ -1831,7 +1831,7 @@ const RaceCrudPanel = ({ tournament }: { tournament: Tournament }) => {
     setErrorMessage('');
 
     try {
-      await raceCrudService.deleteRace(race.raceId, tournament.tournamentId);
+      await raceCrudService.deleteRace(race.raceId);
       setMessage('Race cancelled.');
       await loadRaces();
     } catch (error) {
@@ -1861,7 +1861,7 @@ const RaceCrudPanel = ({ tournament }: { tournament: Tournament }) => {
         <motion.button 
           type="button" 
           onClick={resetRaceForm} 
-          className="gold-gradient inline-flex items-center justify-center gap-3 rounded-2xl px-8 py-4 text-label-lg font-extrabold text-on-primary shadow-lg shadow-primary/20 hover:shadow-xl hover:shadow-primary/30 transition-all"
+          className="gold-gradient inline-flex items-center justify-center gap-3 rounded-xl px-8 py-4 text-label-lg font-extrabold text-on-primary shadow-lg shadow-primary/20 hover:shadow-lg shadow-black/10 hover:shadow-primary/30 transition-all"
           whileHover="hover"
           whileTap="tap"
         >
@@ -1881,7 +1881,7 @@ const RaceCrudPanel = ({ tournament }: { tournament: Tournament }) => {
           variants={revealUp}
         >
           <div className="flex items-center gap-3 mb-6">
-            <div className="h-12 w-12 rounded-2xl bg-secondary/10 flex items-center justify-center">
+            <div className="h-12 w-12 rounded-xl bg-secondary/10 flex items-center justify-center">
               <Flag className="h-6 w-6 text-secondary" />
             </div>
             <div>
@@ -1891,14 +1891,14 @@ const RaceCrudPanel = ({ tournament }: { tournament: Tournament }) => {
           </div>
 
           {isLoadingRaces ? (
-            <div className="glass-panel rounded-3xl p-12 text-center">
+            <div className="admin-surface-panel rounded-xl p-12 text-center">
               <div className="mx-auto mb-6 h-16 w-16 rounded-full bg-surface-container flex items-center justify-center">
                 <div className="h-8 w-8 text-outline animate-spin">⚙</div>
               </div>
               <p className="text-body-lg font-semibold text-on-surface-variant">Loading races...</p>
             </div>
           ) : races.length === 0 ? (
-            <div className="glass-panel rounded-3xl p-12 text-center border-2 border-dashed border-outline-variant">
+            <div className="admin-surface-panel rounded-xl p-12 text-center border-2 border-dashed border-outline-variant">
               <div className="mx-auto mb-6 h-20 w-20 rounded-full bg-surface-container flex items-center justify-center">
                 <Flag className="h-10 w-10 text-outline" />
               </div>
@@ -1907,7 +1907,7 @@ const RaceCrudPanel = ({ tournament }: { tournament: Tournament }) => {
               <motion.button 
                 type="button" 
                 onClick={resetRaceForm} 
-                className="gold-gradient inline-flex items-center justify-center gap-3 rounded-2xl px-8 py-4 text-label-lg font-extrabold text-on-primary"
+                className="gold-gradient inline-flex items-center justify-center gap-3 rounded-xl px-8 py-4 text-label-lg font-extrabold text-on-primary"
                 whileHover="hover"
                 whileTap="tap"
               >
@@ -1923,7 +1923,7 @@ const RaceCrudPanel = ({ tournament }: { tournament: Tournament }) => {
               {races.map((race) => (
                 <motion.div
                   key={race.raceId}
-                  className="glass-panel rounded-3xl border-2 border-outline-variant p-6 transition-all duration-300 hover:border-primary/50 hover:shadow-lg hover:shadow-primary/10"
+                  className="admin-surface-panel rounded-xl border-2 border-outline-variant p-6 transition-all duration-300 hover:border-primary/50 hover:shadow-lg hover:shadow-primary/10"
                   variants={revealUp}
                   whileHover="hover"
                 >
@@ -2052,7 +2052,7 @@ const RaceFormPanel = ({
   if (showRaceSuccess && lastCreatedRace) {
     return (
       <motion.div 
-        className="glass-panel rounded-3xl p-8 space-y-8"
+        className="admin-surface-panel rounded-xl p-8 space-y-8"
         initial="hidden"
         animate="visible"
         variants={revealContainer}
@@ -2072,7 +2072,7 @@ const RaceFormPanel = ({
           <motion.button
             type="button"
             onClick={onDone}
-            className="w-full rounded-2xl border-2 border-outline-variant px-8 py-4 text-label-lg font-bold text-on-surface-variant hover:text-primary hover:border-primary"
+            className="w-full rounded-xl border-2 border-outline-variant px-8 py-4 text-label-lg font-bold text-on-surface-variant hover:text-primary hover:border-primary"
             variants={revealUp}
             whileHover="hover"
             whileTap="tap"
@@ -2087,14 +2087,14 @@ const RaceFormPanel = ({
   return (
     <motion.form 
       onSubmit={onSubmit} 
-      className="glass-panel rounded-3xl p-6"
+      className="admin-surface-panel rounded-xl p-6"
       initial="hidden"
       animate="visible"
       variants={revealContainer}
     >
       <motion.div className="mb-6 flex items-center justify-between gap-4" variants={revealUp}>
         <div className="flex items-center gap-3">
-          <div className="h-10 w-10 rounded-2xl bg-secondary/10 flex items-center justify-center">
+          <div className="h-10 w-10 rounded-xl bg-secondary/10 flex items-center justify-center">
             <Flag className="h-5 w-5 text-secondary" />
           </div>
           <h4 className="font-display text-xl font-extrabold text-primary">
@@ -2218,7 +2218,7 @@ const RaceFormPanel = ({
           ) : (
             <div className="space-y-3">
               {pointRules.map((rule, index) => (
-                <div key={`${index}-${rule.finishPosition}`} className="grid gap-2 rounded-2xl border border-outline-variant p-3 sm:grid-cols-[90px_90px_minmax(0,1fr)_40px]">
+                <div key={`${index}-${rule.finishPosition}`} className="grid gap-2 rounded-xl border border-outline-variant p-3 sm:grid-cols-[90px_90px_minmax(0,1fr)_40px]">
                   <label className="space-y-1">
                     <span className="text-label-xs font-bold text-on-surface-variant">Position</span>
                     <input
@@ -2270,7 +2270,7 @@ const RaceFormPanel = ({
 
       <motion.button 
         type="submit" 
-        className="mt-8 w-full gold-gradient rounded-2xl px-8 py-4 text-label-lg font-extrabold text-on-primary shadow-lg shadow-primary/20 hover:shadow-xl hover:shadow-primary/30 transition-all"
+        className="mt-8 w-full gold-gradient rounded-xl px-8 py-4 text-label-lg font-extrabold text-on-primary shadow-lg shadow-primary/20 hover:shadow-lg shadow-black/10 hover:shadow-primary/30 transition-all"
         disabled={isLoadingPointRules}
         variants={revealUp}
         whileHover="hover"
@@ -2452,8 +2452,8 @@ const Modal = ({
   onClose: () => void;
   children: ReactNode;
 }) => (
-  <div className="fixed inset-0 z-[60] overflow-y-auto bg-black/50 px-4 py-8">
-    <div className="mx-auto max-w-7xl rounded-lg border border-outline-variant bg-white shadow-xl">
+  <div className="fixed inset-0 z-[60] overflow-y-auto bg-black/60 px-4 py-8">
+    <div className="mx-auto max-w-7xl rounded-lg border border-outline-variant bg-surface-container-low shadow-lg shadow-black/10" role="dialog" aria-modal="true" aria-label={title}>
       <div className="flex items-start justify-between gap-6 border-b border-outline-variant p-8">
         <div>
           <p className="mb-2 text-label-sm font-bold uppercase tracking-widest text-outline">{subtitle}</p>

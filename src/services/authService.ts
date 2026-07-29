@@ -56,6 +56,7 @@ export type AuthUserResponse = {
     licenseNumber?: string;
     rankingPoints?: number;
     totalWins?: number;
+    totalRaces?: number;
     experienceYears?: number;
     status?: string;
   };

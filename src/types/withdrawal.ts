@@ -1,0 +1,48 @@
+export const withdrawalStatuses = ['pending', 'approved', 'paid', 'rejected'] as const;
+
+export type WithdrawalStatus = (typeof withdrawalStatuses)[number];
+export type WithdrawalStatusFilter = 'all' | WithdrawalStatus;
+
+export type WithdrawalResponse = {
+  withdrawalId: number | null;
+  txId: number | null;
+  userId: number | null;
+  username: string | null;
+  userFullName: string | null;
+  userEmail: string | null;
+  walletId: number | null;
+  requestedPoints: number | string | null;
+  grossCashAmount: number | string | null;
+  taxRate: number | string | null;
+  taxAmount: number | string | null;
+  netCashAmount: number | string | null;
+  exchangeRate: number | string | null;
+  bankName: string | null;
+  bankAccountNumber: string | null;
+  bankAccountName: string | null;
+  status: string | null;
+  approvedBy: number | null;
+  approvedAt: string | null;
+  rejectedBy: number | null;
+  rejectedAt: string | null;
+  paidBy: number | null;
+  paidAt: string | null;
+  rejectReason: string | null;
+  bankTransactionCode: string | null;
+  paymentNote: string | null;
+  invoiceNumber: string | null;
+  invoiceUrl: string | null;
+  invoiceGeneratedAt: string | null;
+  invoiceEmailedAt: string | null;
+  emailSentTo: string | null;
+  createdAt: string | null;
+};
+
+export type RejectWithdrawalPayload = {
+  rejectReason: string;
+};
+
+export type MarkWithdrawalPaidPayload = {
+  bankTransactionCode: string;
+  paymentNote?: string;
+};

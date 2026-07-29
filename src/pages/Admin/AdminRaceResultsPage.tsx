@@ -12,7 +12,7 @@ import {
   X,
 } from 'lucide-react';
 import { useAdminRaceResults } from '../../hooks/useAdminRaceResults';
-import { adminScheduleRaceApi, type AdminRaceItem, type AdminTournamentOption } from './adminScheduleRaceApi';
+import { adminScheduleRaceApi, type AdminRaceItem, type AdminTournamentOption } from '../../services/adminScheduleRaceApi';
 import type {
   AdminRaceResult,
   AdminRaceResultCreatePayload,

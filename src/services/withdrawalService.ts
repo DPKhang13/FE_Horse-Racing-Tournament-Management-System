@@ -1,0 +1,109 @@
+import { apiClient, unwrapApiData, unwrapApiList } from './apiClient';
+import type {
+  MarkWithdrawalPaidPayload,
+  RejectWithdrawalPayload,
+  WithdrawalResponse,
+  WithdrawalStatus,
+} from '../types/withdrawal';
+
+type RawObject = Record<string, unknown>;
+
+const asNullableNumber = (value: unknown): number | null => {
+  if (value === null || value === undefined || value === '') {
+    return null;
+  }
+
+  const numericValue = Number(value);
+  return Number.isFinite(numericValue) ? numericValue : null;
+};
+
+const asNullableString = (value: unknown): string | null => {
+  if (value === null || value === undefined) {
+    return null;
+  }
+
+  const text = String(value).trim();
+  return text ? text : null;
+};
+
+const asNullableAmount = (value: unknown): number | string | null => {
+  if (value === null || value === undefined || value === '') {
+    return null;
+  }
+
+  if (typeof value === 'number') {
+    return Number.isFinite(value) ? value : null;
+  }
+
+  return asNullableString(value);
+};
+
+const mapWithdrawal = (raw: unknown): WithdrawalResponse => {
+  const item = raw && typeof raw === 'object' ? raw as RawObject : {};
+
+  return {
+    withdrawalId: asNullableNumber(item.withdrawalId),
+    txId: asNullableNumber(item.txId),
+    userId: asNullableNumber(item.userId),
+    username: asNullableString(item.username),
+    userFullName: asNullableString(item.userFullName),
+    userEmail: asNullableString(item.userEmail),
+    walletId: asNullableNumber(item.walletId),
+    requestedPoints: asNullableAmount(item.requestedPoints),
+    grossCashAmount: asNullableAmount(item.grossCashAmount),
+    taxRate: asNullableAmount(item.taxRate),
+    taxAmount: asNullableAmount(item.taxAmount),
+    netCashAmount: asNullableAmount(item.netCashAmount),
+    exchangeRate: asNullableAmount(item.exchangeRate),
+    bankName: asNullableString(item.bankName),
+    bankAccountNumber: asNullableString(item.bankAccountNumber),
+    bankAccountName: asNullableString(item.bankAccountName),
+    status: asNullableString(item.status),
+    approvedBy: asNullableNumber(item.approvedBy),
+    approvedAt: asNullableString(item.approvedAt),
+    rejectedBy: asNullableNumber(item.rejectedBy),
+    rejectedAt: asNullableString(item.rejectedAt),
+    paidBy: asNullableNumber(item.paidBy),
+    paidAt: asNullableString(item.paidAt),
+    rejectReason: asNullableString(item.rejectReason),
+    bankTransactionCode: asNullableString(item.bankTransactionCode),
+    paymentNote: asNullableString(item.paymentNote),
+    invoiceNumber: asNullableString(item.invoiceNumber),
+    invoiceUrl: asNullableString(item.invoiceUrl),
+    invoiceGeneratedAt: asNullableString(item.invoiceGeneratedAt),
+    invoiceEmailedAt: asNullableString(item.invoiceEmailedAt),
+    emailSentTo: asNullableString(item.emailSentTo),
+    createdAt: asNullableString(item.createdAt),
+  };
+};
+
+export const withdrawalService = {
+  async getAdminWithdrawals(status?: WithdrawalStatus, signal?: AbortSignal): Promise<WithdrawalResponse[]> {
+    const response = await apiClient.get('/api/withdrawals/admin/get-all', {
+      params: status ? { status } : undefined,
+      signal,
+    });
+
+    return unwrapApiList<unknown>(response).map(mapWithdrawal);
+  },
+
+  async approveWithdrawal(withdrawalId: number): Promise<WithdrawalResponse> {
+    const response = await apiClient.patch(`/api/withdrawals/admin/${withdrawalId}/approve`);
+    return mapWithdrawal(unwrapApiData<unknown>(response));
+  },
+
+  async rejectWithdrawal(withdrawalId: number, payload: RejectWithdrawalPayload): Promise<WithdrawalResponse> {
+    const response = await apiClient.patch(`/api/withdrawals/admin/${withdrawalId}/reject`, payload);
+    return mapWithdrawal(unwrapApiData<unknown>(response));
+  },
+
+  async markWithdrawalAsPaid(withdrawalId: number, payload: MarkWithdrawalPaidPayload): Promise<WithdrawalResponse> {
+    const response = await apiClient.patch(`/api/withdrawals/admin/${withdrawalId}/mark-paid`, payload);
+    return mapWithdrawal(unwrapApiData<unknown>(response));
+  },
+
+  async resendWithdrawalInvoice(withdrawalId: number): Promise<WithdrawalResponse> {
+    const response = await apiClient.post(`/api/withdrawals/admin/${withdrawalId}/resend-invoice`);
+    return mapWithdrawal(unwrapApiData<unknown>(response));
+  },
+};

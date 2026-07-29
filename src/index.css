@@ -201,6 +201,110 @@ select option {
   }
 }
 
+
+/* Admin workspace dialogs and grouped sidebar */
+:where(.admin-workspace, .role-workspace) .role-sidebar-group {
+  position: relative;
+}
+
+:where(.admin-workspace, .role-workspace) .role-sidebar-group + .role-sidebar-group {
+  padding-top: 8px;
+}
+
+:where(.admin-workspace, .role-workspace) .role-sidebar-group + .role-sidebar-group::before {
+  position: absolute;
+  inset: 0 8px auto;
+  height: 1px;
+  content: "";
+  background: linear-gradient(90deg, transparent, rgba(242, 202, 80, 0.16), transparent);
+}
+
+:where(.admin-workspace, .role-workspace) .role-sidebar-group-trigger {
+  background: transparent;
+}
+
+:where(.admin-workspace, .role-workspace) .role-sidebar-link {
+  background: transparent;
+  will-change: transform, border-color, color, box-shadow;
+}
+
+:where(.admin-workspace, .role-workspace) .role-sidebar-link:hover {
+  background: color-mix(in srgb, var(--color-surface-container-highest) 26%, transparent);
+  transform: translateX(3px);
+}
+
+:where(.admin-workspace, .role-workspace) .role-sidebar-link[aria-current="page"] {
+  background: transparent;
+  box-shadow:
+    0 0 0 1px rgba(242, 202, 80, 0.18),
+    inset 0 1px 0 rgba(242, 202, 80, 0.1);
+}
+
+:where(.admin-workspace, .role-workspace) .role-sidebar-icon {
+  background: color-mix(in srgb, var(--color-surface-container-low) 84%, transparent);
+}
+
+:where(.admin-workspace, .role-workspace) .role-sidebar-link[aria-current="page"] .role-sidebar-icon {
+  background: color-mix(in srgb, var(--color-primary) 12%, var(--color-surface-container-low));
+}
+
+:where(.admin-workspace, .role-workspace) .fixed.inset-0[class*="bg-black"],
+:where(.admin-workspace, .role-workspace) .fixed.inset-0[class*="bg-scrim"] {
+  background: rgba(2, 6, 23, 0.74) !important;
+  -webkit-backdrop-filter: blur(10px) saturate(118%);
+  backdrop-filter: blur(10px) saturate(118%);
+}
+
+:where(.admin-workspace, .role-workspace) [role="dialog"]:not(.fixed) {
+  position: relative;
+  overflow: hidden;
+  border-color: color-mix(in srgb, var(--color-primary) 24%, var(--color-outline-variant)) !important;
+  background:
+    linear-gradient(145deg, rgba(23, 31, 51, 0.98), rgba(6, 14, 32, 0.98)) !important;
+  box-shadow:
+    0 28px 90px rgba(0, 0, 0, 0.54),
+    0 0 0 1px rgba(242, 202, 80, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.04) !important;
+  color: var(--color-on-surface);
+}
+
+:where(.admin-workspace, .role-workspace) [role="dialog"]:not(.fixed)::before {
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 3px;
+  content: "";
+  background: linear-gradient(90deg, var(--color-primary), var(--color-secondary), transparent 82%);
+  opacity: 0.95;
+}
+
+:where(.admin-workspace, .role-workspace) [role="dialog"]:not(.fixed) > :first-child {
+  border-bottom-color: color-mix(in srgb, var(--color-primary) 20%, var(--color-outline-variant)) !important;
+  background:
+    radial-gradient(circle at top left, rgba(242, 202, 80, 0.12), transparent 24rem),
+    linear-gradient(180deg, rgba(34, 42, 61, 0.72), rgba(19, 27, 46, 0.36));
+}
+
+:where(.admin-workspace, .role-workspace) [role="dialog"]:not(.fixed) input,
+:where(.admin-workspace, .role-workspace) [role="dialog"]:not(.fixed) select,
+:where(.admin-workspace, .role-workspace) [role="dialog"]:not(.fixed) textarea {
+  border-color: color-mix(in srgb, var(--color-outline-variant) 78%, var(--color-primary) 22%) !important;
+  background: rgba(6, 14, 32, 0.72) !important;
+  color: var(--color-on-surface) !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.025);
+}
+
+:where(.admin-workspace, .role-workspace) [role="dialog"]:not(.fixed) input:focus,
+:where(.admin-workspace, .role-workspace) [role="dialog"]:not(.fixed) select:focus,
+:where(.admin-workspace, .role-workspace) [role="dialog"]:not(.fixed) textarea:focus {
+  border-color: var(--color-primary) !important;
+  box-shadow: 0 0 0 3px rgba(242, 202, 80, 0.14), inset 0 1px 0 rgba(255, 255, 255, 0.03);
+}
+
+:where(.admin-workspace, .role-workspace) [role="dialog"]:not(.fixed) button[aria-label*="Close"],
+:where(.admin-workspace, .role-workspace) [role="dialog"]:not(.fixed) button[title*="Close"] {
+  background: rgba(6, 14, 32, 0.48);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
 /* Shared interaction and motion language */
 .navbar-transition {
   transition: all 400ms ease-in-out !important;
@@ -354,5 +458,729 @@ select option {
   to {
     opacity: 1;
     transform: translateY(0) scale(1);
+  }
+}
+
+/* Admin dashboard lightweight chart motion */
+.cash-flow-draw {
+  stroke-dasharray: 1200;
+  stroke-dashoffset: 1200;
+  animation: dashboard-line-draw 520ms ease-out forwards;
+}
+
+.donut-segment {
+  transition: stroke-dasharray 420ms ease-out, stroke-dashoffset 420ms ease-out;
+}
+
+
+@keyframes dashboard-line-draw {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+/* Admin dashboard clarity and motion upgrade */
+.admin-dashboard-shell {
+  position: relative;
+  isolation: isolate;
+  overflow: visible;
+  background:
+    linear-gradient(135deg, rgba(242, 202, 80, 0.07), transparent 34%),
+    linear-gradient(180deg, #0d162b 0%, #081123 100%);
+}
+
+.admin-dashboard-shell::before {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  content: "";
+  background-image:
+    linear-gradient(90deg, rgba(242, 202, 80, 0.055) 1px, transparent 1px),
+    linear-gradient(180deg, rgba(136, 217, 130, 0.04) 1px, transparent 1px);
+  background-size: 54px 54px;
+  mask-image: linear-gradient(180deg, rgba(0, 0, 0, 0.8), transparent 82%);
+  animation: dashboard-grid-drift 22s linear infinite;
+}
+
+.admin-dashboard-content {
+  position: relative;
+  z-index: 1;
+}
+
+.admin-dashboard-hero,
+.admin-dashboard-panel,
+.admin-kpi-card,
+.admin-chart-surface,
+.admin-mini-surface {
+  border: 1px solid rgba(242, 202, 80, 0.16);
+  background: linear-gradient(145deg, rgba(31, 42, 65, 0.98), rgba(13, 23, 43, 0.98));
+  box-shadow: 0 18px 45px rgba(0, 0, 0, 0.28), inset 0 1px 0 rgba(255, 255, 255, 0.035);
+}
+
+.admin-dashboard-hero,
+.admin-dashboard-panel,
+.admin-kpi-card {
+  position: relative;
+  overflow: hidden;
+}
+
+.admin-dashboard-hero::after,
+.admin-dashboard-panel::after,
+.admin-kpi-card::after {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  content: "";
+  background: linear-gradient(120deg, rgba(255, 255, 255, 0.055), transparent 32%, rgba(242, 202, 80, 0.035));
+  opacity: 0.8;
+}
+
+.admin-dashboard-hero > *,
+.admin-dashboard-panel > *,
+.admin-kpi-card > * {
+  position: relative;
+  z-index: 1;
+}
+
+.admin-dashboard-hero {
+  box-shadow: 0 22px 70px rgba(0, 0, 0, 0.34), 0 0 0 1px rgba(242, 202, 80, 0.08);
+  animation: dashboard-surface-in 520ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.admin-dashboard-eyebrow {
+  color: var(--color-secondary);
+  text-shadow: 0 0 18px rgba(136, 217, 130, 0.18);
+}
+
+.admin-dashboard-panel {
+  transition: transform 260ms cubic-bezier(0.22, 1, 0.36, 1), border-color 260ms ease, box-shadow 260ms ease;
+}
+
+.admin-dashboard-panel:hover {
+  transform: translateY(-3px);
+  border-color: rgba(242, 202, 80, 0.28);
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.34), 0 0 0 1px rgba(242, 202, 80, 0.08);
+}
+
+.admin-kpi-card {
+  transition: transform 260ms cubic-bezier(0.22, 1, 0.36, 1), border-color 260ms ease, box-shadow 260ms ease, background 260ms ease;
+}
+
+.admin-kpi-card::before {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 3px;
+  content: "";
+  background: linear-gradient(90deg, var(--color-primary), var(--color-secondary));
+  transform: scaleX(0.18);
+  transform-origin: left center;
+  transition: transform 320ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.admin-kpi-card:hover {
+  border-color: rgba(242, 202, 80, 0.34);
+  background: linear-gradient(145deg, rgba(36, 49, 75, 1), rgba(16, 29, 52, 1));
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.38), 0 0 0 1px rgba(242, 202, 80, 0.08);
+}
+
+.admin-kpi-card:hover::before {
+  transform: scaleX(1);
+}
+
+.admin-kpi-icon {
+  border: 1px solid rgba(242, 202, 80, 0.24);
+  background: linear-gradient(145deg, rgba(242, 202, 80, 0.16), rgba(242, 202, 80, 0.055));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 10px 24px rgba(0, 0, 0, 0.22);
+  transition: transform 260ms cubic-bezier(0.22, 1, 0.36, 1), box-shadow 260ms ease;
+}
+
+.admin-kpi-card:hover .admin-kpi-icon {
+  transform: translateY(-2px) rotate(-2deg);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.1), 0 14px 30px rgba(242, 202, 80, 0.14);
+}
+
+.admin-kpi-title {
+  color: color-mix(in srgb, var(--color-primary) 72%, var(--color-on-surface));
+}
+
+.admin-kpi-value {
+  color: #f3f7ff;
+  text-shadow: 0 8px 22px rgba(0, 0, 0, 0.22);
+}
+
+.admin-kpi-helper {
+  color: color-mix(in srgb, var(--color-on-surface-variant) 84%, #ffffff);
+}
+
+.admin-live-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--color-secondary);
+  background: rgba(136, 217, 130, 0.1);
+  border: 1px solid rgba(136, 217, 130, 0.18);
+}
+
+.admin-live-chip::before {
+  width: 6px;
+  height: 6px;
+  content: "";
+  border-radius: 9999px;
+  background: var(--color-secondary);
+  box-shadow: 0 0 0 0 rgba(136, 217, 130, 0.38);
+  animation: dashboard-live-pulse 1.8s ease-out infinite;
+}
+
+.admin-chart-surface,
+.admin-mini-surface {
+  background: linear-gradient(145deg, rgba(9, 18, 36, 0.9), rgba(21, 31, 51, 0.92));
+}
+
+.admin-chart-surface svg {
+  filter: drop-shadow(0 12px 22px rgba(0, 0, 0, 0.18));
+}
+
+.admin-chart-surface svg circle[fill="var(--color-primary)"] {
+  animation: dashboard-point-pop 520ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.cash-flow-draw {
+  stroke-dasharray: 1200;
+  stroke-dashoffset: 1200;
+  animation: dashboard-line-draw 900ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+.donut-segment {
+  transition: stroke-dasharray 640ms cubic-bezier(0.22, 1, 0.36, 1), stroke-dashoffset 640ms cubic-bezier(0.22, 1, 0.36, 1), filter 240ms ease;
+  animation: dashboard-donut-pop 620ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.donut-segment:hover {
+  filter: drop-shadow(0 0 10px rgba(242, 202, 80, 0.2));
+}
+
+
+@keyframes dashboard-grid-drift {
+  from {
+    background-position: 0 0, 0 0;
+  }
+
+  to {
+    background-position: 54px 0, 0 54px;
+  }
+}
+
+@keyframes dashboard-surface-in {
+  from {
+    opacity: 0;
+    transform: translateY(12px) scale(0.992);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes dashboard-live-pulse {
+  70% {
+    box-shadow: 0 0 0 8px rgba(136, 217, 130, 0);
+  }
+
+  100% {
+    box-shadow: 0 0 0 0 rgba(136, 217, 130, 0);
+  }
+}
+
+@keyframes dashboard-point-pop {
+  from {
+    opacity: 0;
+    transform: scale(0.65);
+  }
+
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes dashboard-donut-pop {
+  from {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .admin-dashboard-shell::before {
+    animation-duration: 22s !important;
+    animation-iteration-count: infinite !important;
+  }
+
+  .admin-dashboard-shell .admin-dashboard-hero {
+    animation-duration: 520ms !important;
+  }
+
+  .admin-dashboard-shell .admin-live-chip::before {
+    animation-duration: 1.8s !important;
+    animation-iteration-count: infinite !important;
+  }
+
+  .admin-dashboard-shell .cash-flow-draw {
+    animation-duration: 900ms !important;
+  }
+
+  .admin-dashboard-shell .donut-segment {
+    animation-duration: 620ms !important;
+  }
+
+
+  .admin-dashboard-shell .admin-chart-surface svg circle[fill="var(--color-primary)"] {
+    animation-duration: 520ms !important;
+  }
+
+  .admin-dashboard-shell .admin-kpi-card,
+  .admin-dashboard-shell .admin-dashboard-panel,
+  .admin-dashboard-shell .admin-kpi-icon {
+    transition-duration: 260ms !important;
+  }
+}
+/* Admin operations theme, aligned with Admin Race Results */
+.admin-surface-panel {
+  border: 1px solid color-mix(in srgb, var(--color-outline-variant) 55%, transparent);
+  background: color-mix(in srgb, var(--color-surface-container-low) 72%, transparent);
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.18);
+}
+
+.admin-surface-panel:is(section, div, article) {
+  color: var(--color-on-surface);
+}
+
+.admin-surface-panel table thead {
+  background: color-mix(in srgb, var(--color-surface-container-low) 72%, transparent);
+}
+
+.admin-surface-panel table tbody tr:hover {
+  background: color-mix(in srgb, var(--color-surface-container-low) 62%, transparent);
+}
+
+.admin-dashboard-shell {
+  background: var(--color-surface);
+}
+
+.admin-dashboard-shell::before {
+  display: none;
+}
+
+.admin-dashboard-hero,
+.admin-dashboard-panel,
+.admin-kpi-card,
+.admin-chart-surface,
+.admin-mini-surface {
+  border-color: color-mix(in srgb, var(--color-outline-variant) 55%, transparent);
+  background: color-mix(in srgb, var(--color-surface-container-low) 72%, transparent);
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.18);
+}
+
+.admin-dashboard-hero::after,
+.admin-dashboard-panel::after,
+.admin-kpi-card::after {
+  opacity: 0.18;
+}
+
+.admin-dashboard-eyebrow {
+  color: var(--color-secondary);
+  text-shadow: none;
+}
+
+.admin-kpi-card::before {
+  background: var(--color-primary);
+}
+
+.admin-kpi-title {
+  color: var(--color-on-surface-variant);
+}
+
+.admin-kpi-helper {
+  color: var(--color-on-surface-variant);
+}
+
+.admin-chart-surface,
+.admin-mini-surface {
+  background: color-mix(in srgb, var(--color-surface-container-lowest) 52%, transparent);
+}
+/* Admin Race Results tone override for legacy admin pages */
+.admin-surface-panel {
+  border-color: color-mix(in srgb, var(--color-outline-variant) 52%, transparent) !important;
+  background: color-mix(in srgb, var(--color-surface-container-lowest) 44%, transparent) !important;
+  box-shadow: 0 14px 34px rgba(0, 0, 0, 0.16) !important;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+.admin-surface-panel [class*="bg-surface-container"] {
+  background: color-mix(in srgb, var(--color-surface-container-lowest) 54%, transparent) !important;
+}
+
+.admin-surface-panel thead,
+.admin-surface-panel [class*="bg-surface-container-low/45"],
+.admin-surface-panel [class*="bg-surface-container-low/70"] {
+  background: color-mix(in srgb, var(--color-surface-container-low) 46%, transparent) !important;
+}
+
+.admin-surface-panel tbody tr:hover,
+.admin-surface-panel [class*="hover:bg-surface-container-lowest"]:hover,
+.admin-surface-panel [class*="hover:bg-surface-container-low/60"]:hover {
+  background: color-mix(in srgb, var(--color-surface-container-low) 58%, transparent) !important;
+}
+
+.admin-surface-panel [class*="border-outline-variant"] {
+  border-color: color-mix(in srgb, var(--color-outline-variant) 62%, transparent) !important;
+}
+
+.admin-surface-panel input,
+.admin-surface-panel select,
+.admin-surface-panel textarea,
+.admin-surface-panel [class*="bg-surface"]:is(input, select, textarea) {
+  background: color-mix(in srgb, var(--color-surface-container-lowest) 76%, transparent) !important;
+  border-color: color-mix(in srgb, var(--color-outline-variant) 62%, transparent) !important;
+}
+
+
+/* Shared role page theme - keeps non-admin workspaces visually aligned with Admin. */
+.role-workspace:not(.admin-workspace) main {
+  background:
+    radial-gradient(circle at top left, rgba(242, 202, 80, 0.07), transparent 34rem),
+    radial-gradient(circle at bottom right, rgba(136, 217, 130, 0.055), transparent 30rem),
+    linear-gradient(180deg, rgba(11, 19, 38, 0.98), rgba(6, 14, 32, 0.99));
+}
+
+.role-workspace:not(.admin-workspace) main :is(.min-h-screen, main.min-h-screen) {
+  background: transparent !important;
+}
+
+.role-workspace:not(.admin-workspace) main > :is(div, main, section) {
+  color: var(--color-on-surface);
+}
+
+.role-workspace:not(.admin-workspace) main :is(.glass-panel, .glass-card) {
+  border-color: color-mix(in srgb, var(--color-primary) 20%, var(--color-outline-variant)) !important;
+  background:
+    linear-gradient(145deg, rgba(23, 31, 51, 0.92), rgba(6, 14, 32, 0.86)) !important;
+  box-shadow: 0 22px 70px rgba(0, 0, 0, 0.34), inset 0 1px 0 rgba(255, 255, 255, 0.035) !important;
+}
+
+.role-workspace:not(.admin-workspace) main :is(.glass-panel, .glass-card, section[class*="border"], article[class*="border"], div[class*="border"]):not([class*="rounded-full"]):not([class*="h-"]):not([class*="w-"]) {
+  border-color: color-mix(in srgb, var(--color-outline-variant) 70%, var(--color-primary) 12%) !important;
+}
+
+.role-workspace:not(.admin-workspace) main :is([class*="bg-white"], [class*="bg-surface-container-low"], [class*="bg-surface-container-lowest"]):not(option):not([class*="rounded-full"]):not([class*="h-"]):not([class*="w-"]) {
+  background: color-mix(in srgb, var(--color-surface-container-low) 84%, transparent) !important;
+}
+
+.role-workspace:not(.admin-workspace) main :is(section, article, div)[class*="rounded-xl"][class*="border"]:not([class*="rounded-full"]),
+.role-workspace:not(.admin-workspace) main :is(section, article, div)[class*="rounded-2xl"][class*="border"]:not([class*="rounded-full"]) {
+  box-shadow: 0 16px 46px rgba(0, 0, 0, 0.22), inset 0 1px 0 rgba(255, 255, 255, 0.025);
+}
+
+.role-workspace:not(.admin-workspace) main :is(h1, h2, h3, .text-primary) {
+  color: var(--color-primary) !important;
+}
+
+.role-workspace:not(.admin-workspace) main :is(p, span, td, li).text-on-surface-variant,
+.role-workspace:not(.admin-workspace) main .text-outline {
+  color: color-mix(in srgb, var(--color-on-surface-variant) 88%, var(--color-on-surface) 12%) !important;
+}
+
+.role-workspace:not(.admin-workspace) main table {
+  background: color-mix(in srgb, var(--color-surface-container-lowest) 80%, transparent);
+}
+
+.role-workspace:not(.admin-workspace) main thead {
+  background: color-mix(in srgb, var(--color-surface-container-high) 72%, transparent) !important;
+}
+
+.role-workspace:not(.admin-workspace) main tbody tr:hover {
+  background: color-mix(in srgb, var(--color-surface-container-highest) 38%, transparent) !important;
+}
+
+.role-workspace:not(.admin-workspace) main :is(input, select, textarea) {
+  border-color: color-mix(in srgb, var(--color-outline-variant) 74%, var(--color-primary) 14%) !important;
+  background: color-mix(in srgb, var(--color-surface-container-lowest) 78%, transparent) !important;
+  color: var(--color-on-surface) !important;
+}
+
+.role-workspace:not(.admin-workspace) main :is(input, select, textarea)::placeholder {
+  color: color-mix(in srgb, var(--color-on-surface-variant) 55%, transparent) !important;
+}
+
+.role-workspace:not(.admin-workspace) main :is(input, select, textarea):focus {
+  border-color: var(--color-primary) !important;
+  box-shadow: 0 0 0 3px rgba(242, 202, 80, 0.14) !important;
+}
+
+.role-workspace:not(.admin-workspace) main :is(button, a[href])[class*="border-outline"] {
+  background: color-mix(in srgb, var(--color-surface-container-lowest) 45%, transparent);
+}
+
+.role-workspace:not(.admin-workspace) main :is(button, a[href])[class*="border-outline"]:hover {
+  border-color: color-mix(in srgb, var(--color-primary) 58%, var(--color-outline-variant)) !important;
+  color: var(--color-primary) !important;
+}
+
+.role-workspace:not(.admin-workspace) main :is([class*="bg-primary/10"], [class*="bg-primary/15"], [class*="bg-primary-container/5"]) {
+  background: color-mix(in srgb, var(--color-primary) 12%, transparent) !important;
+}
+
+.role-workspace:not(.admin-workspace) main :is([class*="bg-secondary/10"], [class*="bg-secondary-container/10"], [class*="bg-secondary-container/20"], [class*="bg-secondary-container/45"]) {
+  background: color-mix(in srgb, var(--color-secondary) 13%, transparent) !important;
+}
+
+.role-workspace:not(.admin-workspace) main :is([class*="bg-error-container/10"], [class*="bg-error-container/20"], [class*="bg-error-container/25"], [class*="bg-error-container/30"], [class*="bg-error-container/35"]) {
+  background: color-mix(in srgb, var(--color-error-container) 34%, transparent) !important;
+}
+
+.role-workspace:not(.admin-workspace) main [class*="shadow-sm"],
+.role-workspace:not(.admin-workspace) main [class*="shadow-xl"],
+.role-workspace:not(.admin-workspace) main [class*="shadow-2xl"] {
+  box-shadow: 0 18px 52px rgba(0, 0, 0, 0.28) !important;
+}
+
+.role-workspace:not(.admin-workspace) main .gold-gradient {
+  color: var(--color-on-primary) !important;
+}
+/* Shared admin workspace motion system */
+:where(.admin-workspace, .role-workspace) {
+  background:
+    linear-gradient(180deg, rgba(11, 19, 38, 0.96), rgba(6, 14, 32, 0.98)),
+    var(--color-surface);
+}
+
+.admin-route-motion {
+  min-height: calc(100vh - 57px);
+  will-change: opacity, transform, filter;
+}
+
+:where(.admin-workspace, .role-workspace) main > :is(div, main, section, article),
+:where(.admin-workspace, .role-workspace) main :is(.glass-panel, .glass-card),
+:where(.admin-workspace, .role-workspace) main :is(section, article)[class*="rounded"][class*="border"],
+:where(.admin-workspace, .role-workspace) main > div > :is(section, article)[class*="rounded"],
+:where(.admin-workspace, .role-workspace) main [class*="grid"] > :is(section, article, div)[class*="rounded"][class*="border"] {
+  animation: admin-surface-enter 380ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+:where(.admin-workspace, .role-workspace) main > :is(div, main, section, article):nth-child(2),
+:where(.admin-workspace, .role-workspace) main [class*="grid"] > :is(section, article, div)[class*="rounded"][class*="border"]:nth-child(2) {
+  animation-delay: 45ms;
+}
+
+:where(.admin-workspace, .role-workspace) main > :is(div, main, section, article):nth-child(3),
+:where(.admin-workspace, .role-workspace) main [class*="grid"] > :is(section, article, div)[class*="rounded"][class*="border"]:nth-child(3) {
+  animation-delay: 90ms;
+}
+
+:where(.admin-workspace, .role-workspace) main > :is(div, main, section, article):nth-child(4),
+:where(.admin-workspace, .role-workspace) main [class*="grid"] > :is(section, article, div)[class*="rounded"][class*="border"]:nth-child(4) {
+  animation-delay: 135ms;
+}
+
+:where(.admin-workspace, .role-workspace) .admin-surface-panel,
+:where(.admin-workspace, .role-workspace) .admin-dashboard-hero,
+:where(.admin-workspace, .role-workspace) .admin-dashboard-panel,
+:where(.admin-workspace, .role-workspace) .admin-kpi-card,
+:where(.admin-workspace, .role-workspace) main > section {
+  animation: admin-surface-enter 360ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+:where(.admin-workspace, .role-workspace) .admin-surface-panel,
+:where(.admin-workspace, .role-workspace) .admin-dashboard-panel,
+:where(.admin-workspace, .role-workspace) .admin-kpi-card,
+:where(.admin-workspace, .role-workspace) .admin-chart-surface,
+:where(.admin-workspace, .role-workspace) .admin-mini-surface,
+:where(.admin-workspace, .role-workspace) main section[class*="border"],
+:where(.admin-workspace, .role-workspace) article[class*="border"],
+:where(.admin-workspace, .role-workspace) main :is(.glass-panel, .glass-card),
+:where(.admin-workspace, .role-workspace) main :is(section, article, div)[class*="rounded-xl"][class*="border"],
+:where(.admin-workspace, .role-workspace) main :is(section, article, div)[class*="rounded-2xl"][class*="border"] {
+  transition:
+    transform 240ms cubic-bezier(0.22, 1, 0.36, 1),
+    border-color 240ms ease,
+    box-shadow 240ms ease,
+    background-color 240ms ease,
+    filter 240ms ease;
+}
+
+:where(.admin-workspace, .role-workspace) .admin-surface-panel,
+:where(.admin-workspace, .role-workspace) .admin-dashboard-panel,
+:where(.admin-workspace, .role-workspace) .admin-kpi-card,
+:where(.admin-workspace, .role-workspace) main :is(.glass-panel, .glass-card) {
+  position: relative;
+  overflow: hidden;
+}
+
+:where(.admin-workspace, .role-workspace) .admin-surface-panel::before,
+:where(.admin-workspace, .role-workspace) .admin-dashboard-panel::before,
+:where(.admin-workspace, .role-workspace) .admin-kpi-card::before,
+:where(.admin-workspace, .role-workspace) main :is(.glass-panel, .glass-card)::before {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  content: "";
+  border-radius: inherit;
+  background: linear-gradient(120deg, transparent 18%, rgba(242, 202, 80, 0.055), transparent 42%);
+  opacity: 0;
+  transform: translateX(-18%);
+  transition: opacity 240ms ease, transform 420ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+:where(.admin-workspace, .role-workspace) .admin-surface-panel:hover,
+:where(.admin-workspace, .role-workspace) .admin-dashboard-panel:hover,
+:where(.admin-workspace, .role-workspace) .admin-kpi-card:hover,
+:where(.admin-workspace, .role-workspace) article[class*="border"]:hover,
+:where(.admin-workspace, .role-workspace) main :is(.glass-panel, .glass-card):hover,
+:where(.admin-workspace, .role-workspace) main :is(section, article)[class*="rounded"][class*="border"]:hover {
+  transform: translateY(-2px);
+  border-color: color-mix(in srgb, var(--color-primary) 32%, var(--color-outline-variant)) !important;
+  box-shadow: 0 18px 44px rgba(0, 0, 0, 0.24), 0 0 0 1px rgba(242, 202, 80, 0.06) !important;
+}
+
+:where(.admin-workspace, .role-workspace) .admin-surface-panel:hover::before,
+:where(.admin-workspace, .role-workspace) .admin-dashboard-panel:hover::before,
+:where(.admin-workspace, .role-workspace) .admin-kpi-card:hover::before,
+:where(.admin-workspace, .role-workspace) main :is(.glass-panel, .glass-card):hover::before {
+  opacity: 1;
+  transform: translateX(0);
+}
+
+:where(.admin-workspace, .role-workspace) .admin-surface-panel > *,
+:where(.admin-workspace, .role-workspace) .admin-dashboard-panel > *,
+:where(.admin-workspace, .role-workspace) .admin-kpi-card > *,
+:where(.admin-workspace, .role-workspace) main :is(.glass-panel, .glass-card) > * {
+  position: relative;
+  z-index: 1;
+}
+
+:where(.admin-workspace, .role-workspace) .gold-gradient,
+:where(.admin-workspace, .role-workspace) button,
+:where(.admin-workspace, .role-workspace) a[href],
+:where(.admin-workspace, .role-workspace) [role="button"] {
+  transition:
+    transform 180ms cubic-bezier(0.22, 1, 0.36, 1),
+    box-shadow 220ms ease,
+    border-color 180ms ease,
+    color 180ms ease,
+    background-color 180ms ease,
+    opacity 180ms ease,
+    filter 180ms ease;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  :where(.admin-workspace, .role-workspace) button:not(:disabled):hover,
+  :where(.admin-workspace, .role-workspace) a[href]:hover,
+  :where(.admin-workspace, .role-workspace) [role="button"]:not(:disabled):hover {
+    transform: translateY(-1px);
+  }
+
+  :where(.admin-workspace, .role-workspace) .gold-gradient:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 10px 26px rgba(242, 202, 80, 0.24), 0 0 0 1px rgba(242, 202, 80, 0.16);
+  }
+}
+
+:where(.admin-workspace, .role-workspace) tbody tr,
+:where(.admin-workspace, .role-workspace) [role="row"] {
+  animation: admin-row-enter 280ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+:where(.admin-workspace, .role-workspace) tbody tr:nth-child(2n) {
+  animation-delay: 18ms;
+}
+
+:where(.admin-workspace, .role-workspace) tbody tr:nth-child(3n) {
+  animation-delay: 36ms;
+}
+
+:where(.admin-workspace, .role-workspace) :is(tbody tr, [role="row"]):hover {
+  filter: brightness(1.08);
+  transform: translateX(2px);
+}
+
+:where(.admin-workspace, .role-workspace) main :is([class*="empty"], [class*="loading"], [class*="skeleton"], [class*="animate-pulse"]) {
+  animation: admin-soft-pulse 1500ms ease-in-out infinite;
+}
+
+:where(.admin-workspace, .role-workspace) main :is(.admin-chart-surface, .admin-dashboard-panel) :is(.recharts-wrapper, canvas, svg) {
+  filter: drop-shadow(0 16px 28px rgba(0, 0, 0, 0.18));
+}
+
+:where(.admin-workspace, .role-workspace) :is(input, select, textarea):focus {
+  box-shadow: 0 0 0 3px rgba(242, 202, 80, 0.12);
+}
+
+:where(.admin-workspace, .role-workspace) :is(input, select, textarea) {
+  transition: border-color 180ms ease, box-shadow 180ms ease, background-color 180ms ease;
+}
+
+:where(.admin-workspace, .role-workspace) [class*="animate-spin"] {
+  animation-duration: 800ms;
+}
+
+@keyframes admin-surface-enter {
+  from {
+    opacity: 0;
+    transform: translateY(12px) scale(0.992);
+    filter: blur(4px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+    filter: blur(0);
+  }
+}
+
+@keyframes admin-row-enter {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes admin-soft-pulse {
+  0%,
+  100% {
+    opacity: 0.72;
+  }
+
+  50% {
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :where(.admin-workspace, .role-workspace) .admin-route-motion,
+  :where(.admin-workspace, .role-workspace) .admin-surface-panel,
+  :where(.admin-workspace, .role-workspace) .admin-dashboard-hero,
+  :where(.admin-workspace, .role-workspace) .admin-dashboard-panel,
+  :where(.admin-workspace, .role-workspace) .admin-kpi-card,
+  :where(.admin-workspace, .role-workspace) tbody tr,
+  :where(.admin-workspace, .role-workspace) [role="row"],
+  :where(.admin-workspace, .role-workspace) main > :is(div, main, section, article),
+  :where(.admin-workspace, .role-workspace) main :is(.glass-panel, .glass-card),
+  :where(.admin-workspace, .role-workspace) main :is(section, article)[class*="rounded"][class*="border"] {
+    animation-duration: 260ms !important;
+    transition-duration: 180ms !important;
   }
 }

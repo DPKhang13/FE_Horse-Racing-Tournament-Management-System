@@ -193,7 +193,7 @@ const TournamentPrizeAwardsPage = () => {
     <div className="min-h-screen bg-surface py-8">
       <div className="mx-auto max-w-[1440px] px-4 md:px-8">
         <motion.div
-          className="glass-panel mb-6 rounded-2xl p-6"
+          className="admin-surface-panel mb-6 rounded-xl p-6"
           initial="hidden"
           animate="visible"
           variants={revealContainer}
@@ -286,7 +286,7 @@ const TournamentPrizeAwardsPage = () => {
           />
         ) : (
           <>
-            <div className="glass-panel hidden overflow-hidden rounded-xl lg:block">
+            <div className="admin-surface-panel hidden overflow-hidden rounded-xl lg:block">
               <div className="overflow-x-auto">
                 <table className="w-full min-w-[1080px] text-left">
                   <thead className="border-b border-outline-variant bg-surface-container">
@@ -447,7 +447,7 @@ const AwardCard = ({
   isMarking: boolean;
   onMarkAwarded: () => void;
 }) => (
-  <article className="glass-panel rounded-xl p-5">
+  <article className="admin-surface-panel rounded-xl p-5">
     <div className="mb-5 flex items-start justify-between gap-4">
       <div className="flex min-w-0 items-center gap-3">
         <PlaceBadge position={award.finishPosition} />
@@ -480,7 +480,7 @@ const AwardDetail = ({ label, value, valueClassName = '' }: { label: string; val
 );
 
 const EmptyState = ({ title, description }: { title: string; description: string }) => (
-  <div className="glass-panel rounded-xl px-6 py-16 text-center">
+  <div className="admin-surface-panel rounded-xl px-6 py-16 text-center">
     <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-surface-container">
       <CircleDollarSign className="h-6 w-6 text-outline" />
     </div>

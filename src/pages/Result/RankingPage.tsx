@@ -3,8 +3,8 @@ import { BarChart3, Trophy } from 'lucide-react';
 import { useToastNotifications } from '../../hooks/useToastNotifications';
 import { raceResultService } from '../../services/raceResultService';
 import type { RankingBoard, RankingCategory } from '../../types/raceResult';
-import RankingTable from './components/RankingTable';
-import ResultNav from './components/ResultNav';
+import RankingTable from '../../components/Result/RankingTable';
+import ResultNav from '../../components/Result/ResultNav';
 
 const categoryOptions: { value: RankingCategory; label: string }[] = [
   { value: 'horse', label: 'Horses' },

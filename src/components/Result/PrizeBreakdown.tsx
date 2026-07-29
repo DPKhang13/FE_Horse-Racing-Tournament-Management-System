@@ -1,4 +1,4 @@
-import type { PrizeDistribution } from '../../../types/raceResult';
+import type { PrizeDistribution } from '../../types/raceResult';
 
 type PrizeBreakdownProps = {
   distributions: PrizeDistribution[];

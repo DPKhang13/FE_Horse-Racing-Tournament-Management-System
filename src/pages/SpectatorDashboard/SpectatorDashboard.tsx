@@ -10,7 +10,6 @@ import { predictionService } from '../../services/predictionService';
 import { raceResultService } from '../../services/raceResultService';
 import { scheduleService, type RaceParticipantItem, type RaceScheduleItem } from '../../services/scheduleService';
 import type { RaceResultEntry, RaceResultListItem, RaceResultSummary } from '../../types/raceResult';
-import { spectatorDashboardMockData } from './mockData';
 
 // Animation variants
 const revealUp = {
@@ -184,10 +183,10 @@ const SpectatorDashboard: React.FC = () => {
           setErrorMessage(getApiErrorMessage(error, 'Unable to load spectator dashboard.'));
           setSummaryCount(undefined);
           setOpenPredictionRaceCount(0);
-          setUpcomingRaces(getUpcomingRaces(spectatorDashboardMockData.upcomingRaces));
-          setMyPredictions(getLatestPredictions(spectatorDashboardMockData.myPredictions));
-          setLatestResults(getLatestRaceResults(spectatorDashboardMockData.latestResults));
-          setNotifications(spectatorDashboardMockData.notifications);
+          setUpcomingRaces([]);
+          setMyPredictions([]);
+          setLatestResults([]);
+          setNotifications([]);
         }
       } finally {
         if (isMounted) {

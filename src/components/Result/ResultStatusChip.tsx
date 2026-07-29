@@ -1,4 +1,4 @@
-import type { RaceResultStatus } from '../../../types/raceResult';
+import type { RaceResultStatus } from '../../types/raceResult';
 
 type ResultStatusChipProps = {
   status: RaceResultStatus;

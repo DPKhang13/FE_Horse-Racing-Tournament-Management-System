@@ -17,7 +17,7 @@ import {
   type AdminScheduleFormData,
   type AdminScheduleItem,
   type AdminTournamentOption,
-} from './adminScheduleRaceApi';
+} from '../../services/adminScheduleRaceApi';
 
 type Notice = {
   tone: 'success' | 'error';
@@ -282,7 +282,7 @@ const AdminSchedulePage = () => {
   return (
     <div className="min-h-screen bg-surface py-8">
       <div className="mx-auto max-w-[1440px] px-4 md:px-8">
-        <section className="glass-panel mb-6 rounded-2xl p-6">
+        <section className="admin-surface-panel mb-6 rounded-2xl p-6">
           <div className="flex flex-col gap-6 xl:flex-row xl:items-end xl:justify-between">
             <div>
               <p className="text-xs font-bold uppercase tracking-[0.2em] text-secondary">Admin Schedule</p>
@@ -303,7 +303,7 @@ const AdminSchedulePage = () => {
         {notice && <StatusBanner tone={notice.tone} text={notice.text} />}
 
         <section className="mb-6 flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
-          <div className="glass-panel flex-1 rounded-xl p-4">
+          <div className="admin-surface-panel flex-1 rounded-xl p-4">
             <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(220px,1fr)_minmax(220px,1fr)_180px_140px]">
               <div className="relative">
                 <Trophy className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-outline" />
@@ -364,7 +364,7 @@ const AdminSchedulePage = () => {
           </button>
         </section>
 
-        <section className="glass-panel overflow-hidden rounded-lg">
+        <section className="admin-surface-panel overflow-hidden rounded-lg">
           <div className="overflow-x-auto">
             <table className="w-full min-w-[920px] text-left">
               <thead className="border-b border-outline-variant bg-surface-container">

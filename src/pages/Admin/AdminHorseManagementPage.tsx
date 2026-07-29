@@ -688,7 +688,7 @@ const AdminHorseManagementPage = () => {
   return (
     <div className="min-h-screen bg-surface py-8">
       <div className="mx-auto max-w-[1440px] px-4 md:px-8">
-        <div className="glass-panel mb-6 rounded-2xl p-6">
+        <div className="admin-surface-panel mb-6 rounded-2xl p-6">
           <div className="flex flex-col gap-6 xl:flex-row xl:items-end xl:justify-between">
             <div className="min-w-0 flex-1">
               <p className="mb-3 text-label-sm font-bold uppercase tracking-[0.18em] text-secondary">Admin Horse Management</p>
@@ -709,7 +709,7 @@ const AdminHorseManagementPage = () => {
         </div>
 
         <div className="mb-6 flex flex-col gap-4 xl:flex-row xl:items-stretch xl:justify-between">
-          <div className="glass-panel flex-1 rounded-xl p-4">
+          <div className="admin-surface-panel flex-1 rounded-xl p-4">
             <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(260px,1fr)_180px_180px]">
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-outline" />
@@ -890,7 +890,7 @@ const HorseTable = ({
   onEdit: (horse: Horse) => void;
   onDelete: (horse: Horse) => void;
 }) => (
-  <div className="glass-panel overflow-hidden rounded-lg">
+  <div className="admin-surface-panel overflow-hidden rounded-lg">
     <div className="overflow-x-auto">
       <table className="w-full min-w-[1040px] text-left">
         <thead className="border-b border-outline-variant bg-surface-container">
@@ -988,7 +988,7 @@ const HorseRequestsTable = ({
   onAccept: (horse: Horse) => void;
   onDecline: (horse: Horse) => void;
 }) => (
-  <div className="glass-panel overflow-hidden rounded-lg">
+  <div className="admin-surface-panel overflow-hidden rounded-lg">
     <div className="overflow-x-auto">
       <table className="w-full min-w-[1080px] text-left">
         <thead className="border-b border-outline-variant bg-surface-container">
@@ -1076,7 +1076,7 @@ const HorseRequestsTable = ({
 );
 
 const RankingTable = ({ rankedHorses, isLoading }: { rankedHorses: RankedHorse[]; isLoading: boolean }) => (
-  <div className="glass-panel overflow-hidden rounded-lg">
+  <div className="admin-surface-panel overflow-hidden rounded-lg">
     <div className="overflow-x-auto">
       <table className="w-full min-w-[920px] text-left">
         <thead className="border-b border-outline-variant bg-surface-container">

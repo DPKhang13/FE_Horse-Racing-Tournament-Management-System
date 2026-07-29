@@ -17,9 +17,9 @@ import { raceResultService } from '../../services/raceResultService';
 import { raceRoundService, type RaceRoundItem } from '../../services/raceRoundService';
 import type { RaceResultEntry, RaceResultSummary } from '../../types/raceResult';
 import type { UserProfile } from '../../types/user';
-import PrizeBreakdown from './components/PrizeBreakdown';
-import ResultStatusChip from './components/ResultStatusChip';
-import RankBadge from './components/RankBadge';
+import PrizeBreakdown from '../../components/Result/PrizeBreakdown';
+import ResultStatusChip from '../../components/Result/ResultStatusChip';
+import RankBadge from '../../components/Result/RankBadge';
 
 const normalizeText = (value?: string) => String(value ?? '').trim().toLowerCase();
 

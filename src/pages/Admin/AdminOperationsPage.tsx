@@ -1,57 +1,89 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { Component, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { motion } from 'motion/react';
 import {
-  AlertTriangle,
+  Activity,
+  AlertCircle,
+  ArrowDownToLine,
+  ArrowUpFromLine,
   Banknote,
-  CalendarClock,
+  CalendarDays,
   CircleDollarSign,
-  Download,
+  Clock,
   Flag,
-  LineChart,
+  Filter,
   Loader2,
   RefreshCw,
   Ticket,
-  TrendingUp,
+  Trophy,
   Users,
   WalletCards,
 } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import { getApiErrorMessage } from '../../services/apiClient';
 import {
-  activeRaceStatuses,
   adminDashboardService,
-  dateRangeLabels,
-  getDateRangeBounds,
-  isWithinDateRange,
-  type AdminDashboardCashFlowPoint,
-  type AdminDashboardData,
-  type AdminDashboardDateRange,
+  type AdminDashboardCashFlowByDay,
+  type AdminDashboardRecentTransaction,
+  type AdminDashboardSummaryQuery,
+  type AdminDashboardSummary,
 } from '../../services/adminDashboardService';
-import type { AdminRaceItem } from './adminScheduleRaceApi';
-import type { BetItem } from '../../services/betService';
+import { adminScheduleRaceApi, type AdminTournamentOption } from '../../services/adminScheduleRaceApi';
+import { showToast } from '../../utils/toast';
+import { formatVndAmountInput } from '../../utils/currency';
 
-const dateRangeOptions: AdminDashboardDateRange[] = ['today', 'last7', 'last30', 'all'];
+const metricCardVariants = {
+  hidden: { opacity: 0, y: 22, scale: 0.97 },
+  visible: (index: number) => ({
+    opacity: 1,
+    y: 0,
+    scale: 1,
+    transition: { delay: 0.08 + index * 0.055, duration: 0.38, ease: [0.22, 1, 0.36, 1] as const },
+  }),
+};
 
-const formatInteger = (value: number | undefined) => {
-  if (value === undefined) {
+const pageVariants = {
+  hidden: { opacity: 0, y: 18, scale: 0.992 },
+  visible: { opacity: 1, y: 0, scale: 1, transition: { duration: 0.42, ease: [0.22, 1, 0.36, 1] as const } },
+};
+
+const panelVariants = {
+  hidden: { opacity: 0, y: 18 },
+  visible: { opacity: 1, y: 0, transition: { duration: 0.34, ease: [0.22, 1, 0.36, 1] as const } },
+};
+
+const formatInteger = (value: number | null | undefined) => {
+  if (value === null || value === undefined || !Number.isFinite(Number(value))) {
     return 'N/A';
   }
 
-  return new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 }).format(value);
+  return new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 }).format(Number(value));
 };
 
-const formatMoneyCents = (value: bigint | undefined) => {
-  if (value === undefined) {
-    return 'N/A';
+const moneyToCents = (value: number | string | null | undefined): bigint | null => {
+  if (value === null || value === undefined || value === '') {
+    return null;
   }
 
-  const sign = value < 0n ? '-' : '';
-  const absoluteValue = value < 0n ? -value : value;
-  const wholeUnits = absoluteValue / 100n;
-  const formattedUnits = wholeUnits.toString().replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+  const text = String(value).trim().replace(/,/g, '');
+  const sign = text.startsWith('-') ? -1n : 1n;
+  const unsignedText = text.replace(/^[+-]/, '');
+  const [unitText = '0', decimalText = ''] = unsignedText.split('.');
+  const units = BigInt(unitText.replace(/\D/g, '') || '0');
+  const cents = BigInt(`${decimalText.replace(/\D/g, '')}00`.slice(0, 2));
 
-  return `${sign}${formattedUnits} VND`;
+  return sign * (units * 100n + cents);
 };
 
-const formatDateTime = (value?: string) => {
+
+const formatMoneyFromCents = (cents: bigint) => {
+  const sign = cents < 0n ? '-' : '';
+  const absoluteCents = cents < 0n ? -cents : cents;
+
+  return `${sign}${formatVndAmountInput((absoluteCents / 100n).toString())} VND`;
+};
+
+const sumCents = (values: bigint[]) => values.reduce((total, value) => total + value, 0n);
+
+const formatDateTime = (value?: string | null) => {
   if (!value) {
     return '-';
   }
@@ -71,7 +103,11 @@ const formatDateTime = (value?: string) => {
   });
 };
 
-const formatShortDate = (value: string) => {
+const formatShortDate = (value?: string | null) => {
+  if (!value) {
+    return '-';
+  }
+
   const date = new Date(`${value}T00:00:00`);
 
   if (Number.isNaN(date.getTime())) {
@@ -81,413 +117,782 @@ const formatShortDate = (value: string) => {
   return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 };
 
-const normalizeStatus = (value: unknown) => String(value ?? '').trim().toLowerCase().replace(/[\s-]+/g, '_');
+const humanizeLabel = (value?: string | null, fallback = 'Unknown') => {
+  const text = String(value ?? '').trim();
 
-const getDateKey = (value?: string) => {
-  if (!value) {
-    return undefined;
+  if (!text) {
+    return fallback;
   }
 
-  const date = new Date(value);
-
-  if (Number.isNaN(date.getTime())) {
-    return undefined;
-  }
-
-  return date.toISOString().slice(0, 10);
+  return text
+    .replace(/[_-]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .replace(/\b\w/g, (letter) => letter.toUpperCase());
 };
 
-const compareByTimeDesc = (left?: string, right?: string) => {
-  const leftTime = left ? new Date(left).getTime() : 0;
-  const rightTime = right ? new Date(right).getTime() : 0;
+const getTransactionAmount = (transaction: AdminDashboardRecentTransaction) => {
+  const cashAmount = moneyToCents(transaction.cashAmount);
 
-  return (Number.isNaN(rightTime) ? 0 : rightTime) - (Number.isNaN(leftTime) ? 0 : leftTime);
-};
-
-const getPeriodSubtitle = (range: AdminDashboardDateRange) => {
-  if (range === 'all') {
-    return 'All completed records exposed by the backend';
+  if (cashAmount !== null && cashAmount !== 0n) {
+    return formatMoneyFromCents(cashAmount);
   }
 
-  const bounds = getDateRangeBounds(range);
-  return bounds.from ? `Filtered from ${formatDateTime(bounds.from)}` : 'Filtered by selected period';
-};
+  const points = moneyToCents(transaction.pointsAmount);
 
-const buildBettingSeries = (bets: BetItem[], range: AdminDashboardDateRange): ChartPoint[] => {
-  const counts = new Map<string, number>();
-
-  bets.forEach((bet) => {
-    const dateKey = getDateKey(bet.createdAt);
-
-    if (dateKey) {
-      counts.set(dateKey, (counts.get(dateKey) ?? 0) + 1);
-    }
-  });
-
-  if (range === 'all') {
-    return Array.from(counts.entries())
-      .sort(([leftDate], [rightDate]) => leftDate.localeCompare(rightDate))
-      .slice(-14)
-      .map(([date, value]) => ({ date, value }));
+  if (points === null) {
+    return 'N/A';
   }
 
-  const bounds = getDateRangeBounds(range);
-  const start = bounds.from ? new Date(bounds.from) : new Date();
-  const end = bounds.to ? new Date(bounds.to) : new Date();
-  const series: ChartPoint[] = [];
-  const cursor = new Date(start);
-
-  cursor.setHours(0, 0, 0, 0);
-  end.setHours(0, 0, 0, 0);
-
-  while (cursor.getTime() <= end.getTime()) {
-    const date = cursor.toISOString().slice(0, 10);
-    series.push({ date, value: counts.get(date) ?? 0 });
-    cursor.setDate(cursor.getDate() + 1);
-  }
-
-  return series;
+  return `${formatVndAmountInput((points / 100n).toString())} pts`;
 };
 
-const AdminOperationsPage = () => {
-  const [dateRange, setDateRange] = useState<AdminDashboardDateRange>('last30');
-  const [dashboardData, setDashboardData] = useState<AdminDashboardData | null>(null);
+type DashboardDateMode = 'all' | 'day' | 'month' | 'year';
+
+type DashboardFilters = {
+  dateMode: DashboardDateMode;
+  day: string;
+  month: string;
+  year: string;
+  tournamentId: string;
+};
+
+const toDateInputFromDate = (date: Date) => {
+  const localTime = date.getTime() - date.getTimezoneOffset() * 60_000;
+  return new Date(localTime).toISOString().slice(0, 10);
+};
+
+const todayInputValue = () => toDateInputFromDate(new Date());
+const currentMonthInputValue = () => todayInputValue().slice(0, 7);
+const currentYearInputValue = () => String(new Date().getFullYear());
+
+const defaultFilters = (): DashboardFilters => ({
+  dateMode: 'all',
+  day: todayInputValue(),
+  month: currentMonthInputValue(),
+  year: currentYearInputValue(),
+  tournamentId: '',
+});
+
+const getMonthRange = (month: string) => {
+  const [yearText, monthText] = month.split('-');
+  const year = Number(yearText);
+  const monthIndex = Number(monthText) - 1;
+
+  if (!Number.isFinite(year) || !Number.isFinite(monthIndex)) {
+    return { from: undefined, to: undefined };
+  }
+
+  return {
+    from: `${month}-01`,
+    to: toDateInputFromDate(new Date(year, monthIndex + 1, 0)),
+  };
+};
+
+const getDashboardSummaryQuery = (filters: DashboardFilters): AdminDashboardSummaryQuery => {
+  const query: AdminDashboardSummaryQuery = {};
+
+  if (filters.dateMode === 'day' && filters.day) {
+    query.from = filters.day;
+    query.to = filters.day;
+    query.period = 'day';
+  }
+
+  if (filters.dateMode === 'month' && filters.month) {
+    const range = getMonthRange(filters.month);
+    query.from = range.from;
+    query.to = range.to;
+    query.period = 'day';
+  }
+
+  if (filters.dateMode === 'year' && filters.year) {
+    query.from = `${filters.year}-01-01`;
+    query.to = `${filters.year}-12-31`;
+    query.period = 'month';
+  }
+
+  if (filters.tournamentId) {
+    query.tournamentId = filters.tournamentId;
+  }
+
+  return query;
+};
+
+const AdminOperationsDashboard = () => {
+  const [summary, setSummary] = useState<AdminDashboardSummary | null>(null);
+  const [tournaments, setTournaments] = useState<AdminTournamentOption[]>([]);
+  const [filters, setFilters] = useState<DashboardFilters>(() => defaultFilters());
   const [isLoading, setIsLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [errorMessage, setErrorMessage] = useState('');
+  const [filterErrorMessage, setFilterErrorMessage] = useState('');
+  const [lastUpdatedAt, setLastUpdatedAt] = useState<string | null>(null);
   const requestIdRef = useRef(0);
+  const abortRef = useRef<AbortController | null>(null);
 
-  const loadDashboard = async (range: AdminDashboardDateRange) => {
+  const loadSummary = useCallback(async (mode: 'initial' | 'refresh' = 'initial') => {
     const requestId = requestIdRef.current + 1;
+    const controller = new AbortController();
     requestIdRef.current = requestId;
-    setIsLoading(true);
+    abortRef.current?.abort();
+    abortRef.current = controller;
+
+    if (mode === 'initial') {
+      setIsLoading(true);
+    } else {
+      setIsRefreshing(true);
+    }
+
+    setErrorMessage('');
 
     try {
-      const data = await adminDashboardService.loadDashboard(range);
+      const data = await adminDashboardService.getAdminDashboardSummary(getDashboardSummaryQuery(filters), controller.signal);
 
-      if (requestId === requestIdRef.current) {
-        setDashboardData(data);
+      if (requestId !== requestIdRef.current) {
+        return;
       }
+
+      setSummary(data);
+      setLastUpdatedAt(new Date().toISOString());
+
+      if (mode === 'refresh') {
+        showToast({ tone: 'success', text: 'Admin dashboard refreshed.' });
+      }
+    } catch (error) {
+      if (controller.signal.aborted || requestId !== requestIdRef.current) {
+        return;
+      }
+
+      const message = getApiErrorMessage(error, 'Unable to load admin dashboard summary.');
+      setErrorMessage(message);
+      showToast({ tone: 'error', text: message });
     } finally {
       if (requestId === requestIdRef.current) {
         setIsLoading(false);
+        setIsRefreshing(false);
       }
     }
-  };
+  }, [filters]);
 
   useEffect(() => {
     const timerId = window.setTimeout(() => {
-      void loadDashboard(dateRange);
+      void loadSummary('initial');
     }, 0);
 
-    return () => window.clearTimeout(timerId);
-  }, [dateRange]);
+    return () => {
+      window.clearTimeout(timerId);
+      abortRef.current?.abort();
+    };
+  }, [loadSummary]);
 
-  const periodBets = useMemo(
-    () => dashboardData?.bets.filter((bet) => isWithinDateRange(bet.createdAt, dateRange)) ?? [],
-    [dashboardData?.bets, dateRange],
+  useEffect(() => {
+    let isActive = true;
+
+    void adminScheduleRaceApi.getTournaments()
+      .then((items) => {
+        if (isActive) {
+          setTournaments(items);
+        }
+      })
+      .catch((error) => {
+        if (isActive) {
+          setFilterErrorMessage(getApiErrorMessage(error, 'Unable to load tournaments for dashboard filter.'));
+        }
+      });
+
+    return () => {
+      isActive = false;
+    };
+  }, []);
+
+  const cashFlowData = useMemo(() => normalizeCashFlow(summary?.cashFlowByDay), [summary?.cashFlowByDay]);
+  const recentTransactions = useMemo(
+    () => [...(summary?.recentTransactions ?? [])].slice(0, 10),
+    [summary?.recentTransactions],
   );
-
-  const raceBetCounts = useMemo(() => {
-    const counts = new Map<number, number>();
-
-    dashboardData?.bets.forEach((bet) => {
-      if (bet.raceId !== undefined) {
-        counts.set(bet.raceId, (counts.get(bet.raceId) ?? 0) + 1);
-      }
-    });
-
-    return counts;
-  }, [dashboardData?.bets]);
-
-  const activeRaceCount = useMemo(
-    () => dashboardData?.races.filter((race) => activeRaceStatuses.includes(normalizeStatus(race.status) as (typeof activeRaceStatuses)[number])).length ?? 0,
-    [dashboardData?.races],
+  const hasDateFilter = filters.dateMode !== 'all';
+  const totalDepositCents: bigint = moneyToCents(summary?.totalSuccessfulDepositAmount) ?? sumCents(cashFlowData.map((point) => point.depositCents));
+  const totalWithdrawalCents: bigint = moneyToCents(summary?.totalCompletedWithdrawalAmount) ?? sumCents(cashFlowData.map((point) => point.withdrawalCents));
+  const awardedPrizeCents: bigint = moneyToCents(summary?.totalAwardedPrizeAmount) ?? sumCents(cashFlowData.map((point) => point.prizeAwardCents));
+  const filteredNetCashFlowCents: bigint = moneyToCents(summary?.netCashFlow) ?? (totalDepositCents - totalWithdrawalCents - awardedPrizeCents);
+  const selectedTournament = useMemo(
+    () => tournaments.find((tournament) => String(tournament.tournamentId) === filters.tournamentId),
+    [filters.tournamentId, tournaments],
   );
+  const filterScopeLabel = getFilterScopeLabel(filters, selectedTournament?.tournamentName);
 
-  const recentRaces = useMemo(
-    () => [...(dashboardData?.races ?? [])]
-      .sort((first, second) => compareByTimeDesc(first.scheduledAt, second.scheduledAt))
-      .slice(0, 8),
-    [dashboardData?.races],
-  );
-
-  const bettingSeries = useMemo(() => buildBettingSeries(periodBets, dateRange), [periodBets, dateRange]);
-  const cashFlowSeries = dashboardData?.financialSummary?.cashFlowByDay ?? [];
-  const hasFinancialSummary = Boolean(dashboardData?.financialSummary);
-  const hasBlockingError = !dashboardData && !isLoading;
+  const metrics = useMemo(() => [
+    {
+      title: 'Total Users',
+      value: formatInteger(summary?.totalUsers),
+      helper: 'Registered accounts',
+      icon: <Users className="h-5 w-5" />,
+    },
+    {
+      title: 'Total Races',
+      value: formatInteger(summary?.totalRaces),
+      helper: 'All configured races',
+      icon: <Flag className="h-5 w-5" />,
+    },
+    {
+      title: 'Active Races',
+      value: formatInteger(summary?.activeRaces),
+      helper: 'Not completed or cancelled',
+      icon: <Activity className="h-5 w-5" />,
+    },
+    {
+      title: 'Total Bets',
+      value: formatInteger(summary?.totalBets),
+      helper: 'All betting tickets',
+      icon: <Ticket className="h-5 w-5" />,
+    },
+    {
+      title: 'Successful Deposits',
+      value: formatMoneyFromCents(totalDepositCents),
+      helper: hasDateFilter ? 'Completed top-ups in selected period' : 'Completed top-ups',
+      icon: <ArrowDownToLine className="h-5 w-5" />,
+    },
+    {
+      title: 'Completed Withdrawals',
+      value: formatMoneyFromCents(totalWithdrawalCents),
+      helper: hasDateFilter ? 'Paid withdrawals in selected period' : 'Paid withdrawal net cash',
+      icon: <ArrowUpFromLine className="h-5 w-5" />,
+    },
+    {
+      title: 'Pending Withdrawals',
+      value: formatInteger(summary?.pendingWithdrawalCount),
+      helper: 'Waiting admin processing',
+      icon: <WalletCards className="h-5 w-5" />,
+    },
+    {
+      title: 'Net Cash Flow',
+      value: formatMoneyFromCents(filteredNetCashFlowCents),
+      helper: 'Deposits - withdrawals - awarded prizes',
+      icon: <CircleDollarSign className="h-5 w-5" />,
+    },
+  ], [filteredNetCashFlowCents, hasDateFilter, summary, totalDepositCents, totalWithdrawalCents]);
 
   return (
-    <div className="min-h-screen bg-surface py-8">
-      <div className="mx-auto max-w-[1440px] px-4 md:px-8">
-        <section className="glass-panel mb-6 rounded-lg p-6">
+    <motion.div
+      className="admin-dashboard-shell min-h-screen py-8"
+      variants={pageVariants}
+      initial="hidden"
+      animate="visible"
+    >
+      <div className="admin-dashboard-content mx-auto max-w-[1440px] px-4 md:px-8">
+        <section className="admin-dashboard-hero mb-6 rounded-lg p-6">
           <div className="flex flex-col gap-5 xl:flex-row xl:items-end xl:justify-between">
             <div className="min-w-0">
-              <p className="text-xs font-bold uppercase tracking-[0.2em] text-secondary">Admin Dashboard</p>
-              <h1 className="font-display mt-2 text-headline-lg font-extrabold text-primary">Business overview</h1>
-              <p className="mt-2 max-w-3xl text-body-sm text-on-surface-variant">
-                Core system counts use existing list APIs. Cash-flow and withdrawal metrics stay separated from betting points and require the admin summary endpoint when backend data is not exposed.
+              <p className="admin-dashboard-eyebrow text-xs font-bold uppercase tracking-[0.2em]">Admin Dashboard</p>
+              <h1 className="font-display mt-2 text-headline-lg font-extrabold text-primary drop-shadow-sm">Admin Dashboard</h1>
+              <p className="mt-2 max-w-3xl text-body-sm font-medium text-on-surface">
+                Overview of users, races, bets, deposits, withdrawals, and system cash flow.
               </p>
+              <div className="mt-4 inline-flex items-center gap-2 rounded-md border border-primary/20 bg-surface-container-high/80 px-3 py-2 text-label-sm font-bold text-on-surface">
+                <Clock className="h-4 w-4 text-primary" />
+                Last updated: {lastUpdatedAt ? formatDateTime(lastUpdatedAt) : 'Not loaded yet'}
+              </div>
             </div>
 
-            <div className="flex flex-wrap gap-2">
-              {dateRangeOptions.map((option) => (
-                <button
-                  key={option}
-                  type="button"
-                  onClick={() => setDateRange(option)}
-                  className={`rounded-md border px-4 py-2 text-label-sm font-bold transition-colors ${
-                    dateRange === option
-                      ? 'border-primary bg-primary text-on-primary'
-                      : 'border-outline-variant bg-surface-container-low text-on-surface-variant hover:border-primary hover:text-primary'
-                  }`}
-                >
-                  {dateRangeLabels[option]}
-                </button>
-              ))}
-              <button
-                type="button"
-                onClick={() => void loadDashboard(dateRange)}
-                disabled={isLoading}
-                className="inline-flex items-center justify-center gap-2 rounded-md border border-outline-variant bg-surface-container-low px-4 py-2 text-label-sm font-bold text-on-surface-variant transition-colors hover:border-primary hover:text-primary disabled:opacity-60"
-              >
-                <RefreshCw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
-                Retry
-              </button>
-            </div>
+            <button
+              type="button"
+              onClick={() => void loadSummary('refresh')}
+              disabled={isLoading || isRefreshing}
+              aria-label="Refresh admin dashboard"
+              className="gold-gradient inline-flex items-center justify-center gap-2 rounded-md px-5 py-3 text-body-sm font-extrabold text-on-primary shadow-lg shadow-primary/15 transition-all duration-300 hover:-translate-y-0.5 hover:shadow-primary/25 disabled:cursor-not-allowed disabled:opacity-70"
+            >
+              <RefreshCw className={`h-4 w-4 ${isLoading || isRefreshing ? 'animate-spin' : ''}`} />
+              {isRefreshing ? 'Refreshing...' : 'Refresh'}
+            </button>
           </div>
         </section>
 
-        {hasBlockingError && (
-          <StatusBanner tone="error" text="Dashboard data could not be loaded. Use Retry after checking the backend service." />
+        <DashboardFilterBar
+          filters={filters}
+          tournaments={tournaments}
+          scopeLabel={filterScopeLabel}
+          isLoading={isRefreshing}
+          prizeAwardAmount={awardedPrizeCents}
+          onChange={setFilters}
+          onClear={() => setFilters(defaultFilters())}
+        />
+
+        <section className="mb-6 rounded-lg border border-primary/20 bg-primary/10 px-4 py-3 text-body-sm font-semibold text-on-surface-variant">
+          Tournament filtering applies to races, bets, and prize awards. Deposits and withdrawals are filtered by date only because they are not linked to tournaments in the database.
+        </section>
+
+        {filterErrorMessage && (
+          <section className="mb-6 rounded-lg border border-error/30 bg-error-container/20 px-4 py-3 text-body-sm font-semibold text-error">
+            {filterErrorMessage}
+          </section>
         )}
 
-        {dashboardData?.errors.length ? (
-          <section className="mb-6 grid gap-3 lg:grid-cols-2">
-            {dashboardData.errors.map((error) => (
-              <StatusBanner key={`${error.section}-${error.message}`} tone={error.section === 'financial' ? 'warning' : 'error'} text={error.message} />
-            ))}
-          </section>
-        ) : null}
+        {errorMessage && (
+          <DashboardError message={errorMessage} onRetry={() => void loadSummary(summary ? 'refresh' : 'initial')} />
+        )}
 
-        <section className="mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          <MetricCard icon={<Users className="h-5 w-5" />} title="Total Users" value={isLoading ? '...' : formatInteger(dashboardData?.totalUsers)} label="All-time users from admin page total" />
-          <MetricCard icon={<Flag className="h-5 w-5" />} title="Total Races" value={isLoading ? '...' : formatInteger(dashboardData?.races.length)} label="All loaded tournament races" />
-          <MetricCard icon={<CalendarClock className="h-5 w-5" />} title="Active Races" value={isLoading ? '...' : formatInteger(activeRaceCount)} label="registration_open, open_for_betting, ongoing, in_progress" />
-          <MetricCard icon={<Ticket className="h-5 w-5" />} title="Total Bets" value={isLoading ? '...' : formatInteger(periodBets.length)} label={getPeriodSubtitle(dateRange)} />
-          <MetricCard icon={<Download className="h-5 w-5" />} title="Total Deposits" value={isLoading ? '...' : formatMoneyCents(dashboardData?.financialSummary?.totalSuccessfulDepositAmountCents)} label="completed topup cash only" unavailable={!hasFinancialSummary} />
-          <MetricCard icon={<WalletCards className="h-5 w-5" />} title="Total Withdrawals" value={isLoading ? '...' : formatMoneyCents(dashboardData?.financialSummary?.totalCompletedWithdrawalAmountCents)} label="completed withdrawal cash only" unavailable={!hasFinancialSummary} />
-          <MetricCard icon={<AlertTriangle className="h-5 w-5" />} title="Pending Withdrawals" value={isLoading ? '...' : formatInteger(dashboardData?.financialSummary?.pendingWithdrawalCount)} label="pending withdrawal requests" unavailable={!hasFinancialSummary} />
-          <MetricCard icon={<CircleDollarSign className="h-5 w-5" />} title="Net Cash Flow" value={isLoading ? '...' : formatMoneyCents(dashboardData?.financialSummary?.netCashFlowCents)} label="successful deposits - completed withdrawals" unavailable={!hasFinancialSummary} />
+        <section className="mb-6 grid gap-5 sm:grid-cols-2 xl:grid-cols-4">
+          {isLoading && !summary
+            ? Array.from({ length: 8 }, (_, index) => <MetricSkeleton key={index} />)
+            : metrics.map((metric, index) => (
+                <DashboardMetricCard key={metric.title} metric={metric} index={index} reducedMotion={false} />
+              ))}
         </section>
 
-        <section className="mb-6 grid gap-6 xl:grid-cols-2">
-          <DashboardPanel
-            title="Cash Flow"
-            subtitle="Successful deposits and completed withdrawals by day"
-            action={<Link className="text-label-sm font-bold text-primary hover:underline" to="/admin-ops">Backend summary</Link>}
-          >
-            {isLoading ? <PanelLoading /> : <CashFlowChart points={cashFlowSeries} />}
+        <section className="mb-6 grid gap-6 xl:grid-cols-[minmax(0,2fr)_minmax(320px,1fr)]">
+          <DashboardPanel title="Cash Flow" subtitle="Deposits, withdrawals, awarded prizes, and net cash flow by day." isRefreshing={isRefreshing}>
+            {isLoading && !summary ? <ChartSkeleton /> : <CashFlowChart data={cashFlowData} reducedMotion={false} />}
           </DashboardPanel>
 
-          <DashboardPanel
-            title="Betting Activity"
-            subtitle="Bet count by placed date, filtered by selected range"
-            action={<Link className="text-label-sm font-bold text-primary hover:underline" to="/admin/bets">Manage Bets</Link>}
-          >
-            {isLoading ? <PanelLoading /> : <BarChart points={bettingSeries} />}
+          <DashboardPanel title="Financial Movement Overview" subtitle="Completed deposits, paid withdrawals, and awarded prizes." isRefreshing={isRefreshing}>
+            {isLoading && !summary ? (
+              <ChartSkeleton compact />
+            ) : (
+              <FinancialOverviewDonut
+                depositAmount={totalDepositCents}
+                withdrawalAmount={totalWithdrawalCents}
+                prizeAwardAmount={awardedPrizeCents}
+                reducedMotion={false}
+              />
+            )}
           </DashboardPanel>
         </section>
 
-        {dashboardData?.limitations.length ? <BackendLimitations limitations={dashboardData.limitations} /> : null}
-
-        <section className="grid gap-6 xl:grid-cols-2">
-          <DashboardPanel
-            title="Recent Transactions"
-            subtitle="Latest admin-visible wallet transactions"
-            action={<span className="text-label-sm font-bold text-outline">No admin transaction page</span>}
-          >
-            <RecentTransactionsTable isLoading={isLoading} data={dashboardData} />
-          </DashboardPanel>
-
-          <DashboardPanel
-            title="Recent Races"
-            subtitle="Latest races by scheduled start time"
-            action={<Link className="text-label-sm font-bold text-primary hover:underline" to="/admin/races">Manage Races</Link>}
-          >
-            <RecentRacesTable isLoading={isLoading} races={recentRaces} raceBetCounts={raceBetCounts} />
+        <section className="mb-6">
+          <DashboardPanel title="Recent Transactions" subtitle="Newest wallet transactions returned by the summary API." isRefreshing={isRefreshing}>
+            {isLoading && !summary ? <TransactionTableSkeleton /> : <RecentTransactionsTable transactions={recentTransactions} />}
           </DashboardPanel>
         </section>
       </div>
-    </div>
+    </motion.div>
   );
 };
 
-type ChartPoint = {
-  date: string;
-  value: number;
+const getFilterScopeLabel = (filters: DashboardFilters, tournamentName?: string) => {
+  const dateLabel = filters.dateMode === 'all'
+    ? 'All time'
+    : filters.dateMode === 'day'
+      ? filters.day
+      : filters.dateMode === 'month'
+        ? filters.month
+        : filters.year;
+  const tournamentLabel = tournamentName ?? (filters.tournamentId ? `Tournament #${filters.tournamentId}` : 'All tournaments');
+
+  return `${dateLabel} / ${tournamentLabel}`;
 };
 
-const MetricCard = ({
-  icon,
-  title,
-  value,
-  label,
-  unavailable = false,
+const DashboardFilterBar = ({
+  filters,
+  tournaments,
+  scopeLabel,
+  isLoading,
+  prizeAwardAmount,
+  onChange,
+  onClear,
 }: {
-  icon: ReactNode;
+  filters: DashboardFilters;
+  tournaments: AdminTournamentOption[];
+  scopeLabel: string;
+  isLoading: boolean;
+  prizeAwardAmount: bigint;
+  onChange: (filters: DashboardFilters) => void;
+  onClear: () => void;
+}) => {
+  const updateFilters = (changes: Partial<DashboardFilters>) => onChange({ ...filters, ...changes });
+
+  return (
+    <section className="admin-dashboard-panel mb-6 rounded-lg p-5">
+      <div className="mb-4 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+        <div>
+          <div className="flex items-center gap-2 text-label-sm font-bold uppercase tracking-[0.16em] text-secondary">
+            <Filter className="h-4 w-4" />
+            Dashboard Filters
+          </div>
+          <p className="mt-2 text-body-sm font-semibold text-on-surface-variant">Current scope: <span className="text-primary">{scopeLabel}</span></p>
+        </div>
+        <div className="flex flex-wrap items-center gap-3 text-body-sm font-semibold text-on-surface-variant">
+          <span className="inline-flex items-center gap-2 rounded-md border border-outline-variant/50 bg-surface-container-lowest/60 px-3 py-2">
+            <Trophy className="h-4 w-4 text-primary" />
+            Awarded prizes: <strong className="text-primary">{formatMoneyFromCents(prizeAwardAmount)}</strong>
+          </span>
+          {isLoading && <Loader2 className="h-4 w-4 animate-spin text-primary" aria-label="Loading prize award data" />}
+        </div>
+      </div>
+
+      <div className="grid gap-3 xl:grid-cols-[180px_minmax(180px,1fr)_minmax(180px,1fr)_auto]">
+        <label className="grid gap-1.5 text-label-sm font-bold uppercase tracking-[0.12em] text-on-surface-variant">
+          Period
+          <select
+            value={filters.dateMode}
+            onChange={(event) => updateFilters({ dateMode: event.target.value as DashboardDateMode })}
+            className="h-11 rounded-md border border-outline-variant bg-surface-container-low px-3 text-body-sm font-semibold text-on-surface focus:border-primary focus:outline-none"
+          >
+            <option value="all">All Time</option>
+            <option value="day">Day</option>
+            <option value="month">Month</option>
+            <option value="year">Year</option>
+          </select>
+        </label>
+
+        <label className="grid gap-1.5 text-label-sm font-bold uppercase tracking-[0.12em] text-on-surface-variant">
+          Date Value
+          {filters.dateMode === 'day' ? (
+            <input
+              type="date"
+              value={filters.day}
+              onChange={(event) => updateFilters({ day: event.target.value })}
+              className="h-11 rounded-md border border-outline-variant bg-surface-container-low px-3 text-body-sm font-semibold text-on-surface focus:border-primary focus:outline-none"
+            />
+          ) : filters.dateMode === 'month' ? (
+            <input
+              type="month"
+              value={filters.month}
+              onChange={(event) => updateFilters({ month: event.target.value })}
+              className="h-11 rounded-md border border-outline-variant bg-surface-container-low px-3 text-body-sm font-semibold text-on-surface focus:border-primary focus:outline-none"
+            />
+          ) : filters.dateMode === 'year' ? (
+            <input
+              type="number"
+              min="2020"
+              max="2100"
+              value={filters.year}
+              onChange={(event) => updateFilters({ year: event.target.value })}
+              className="h-11 rounded-md border border-outline-variant bg-surface-container-low px-3 text-body-sm font-semibold text-on-surface focus:border-primary focus:outline-none"
+            />
+          ) : (
+            <div className="flex h-11 items-center rounded-md border border-outline-variant bg-surface-container-low px-3 text-body-sm font-semibold text-on-surface-variant">
+              All available dates
+            </div>
+          )}
+        </label>
+
+        <label className="grid gap-1.5 text-label-sm font-bold uppercase tracking-[0.12em] text-on-surface-variant">
+          Tournament
+          <select
+            value={filters.tournamentId}
+            onChange={(event) => updateFilters({ tournamentId: event.target.value })}
+            className="h-11 rounded-md border border-outline-variant bg-surface-container-low px-3 text-body-sm font-semibold text-on-surface focus:border-primary focus:outline-none"
+          >
+            <option value="">All tournaments</option>
+            {tournaments.map((tournament) => (
+              <option key={tournament.tournamentId} value={String(tournament.tournamentId)}>
+                {tournament.tournamentName}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <button
+          type="button"
+          onClick={onClear}
+          className="mt-auto inline-flex h-11 items-center justify-center gap-2 rounded-md border border-outline-variant px-4 text-body-sm font-bold text-on-surface-variant transition-colors hover:border-primary hover:text-primary"
+        >
+          <CalendarDays className="h-4 w-4" />
+          Reset
+        </button>
+      </div>
+    </section>
+  );
+};
+
+type MetricItem = {
   title: string;
   value: string;
-  label: string;
-  unavailable?: boolean;
-}) => (
-  <article className={`rounded-lg border p-4 shadow-sm ${unavailable ? 'border-outline-variant/30 bg-surface-container-low/50' : 'border-outline-variant/40 bg-surface-container-lowest/70'}`}>
-    <div className="mb-4 flex items-start justify-between gap-3 text-on-surface-variant">
-      <div className="min-w-0">
-        <h2 className="text-[10px] font-bold uppercase tracking-[0.16em] text-outline">{title}</h2>
-        <p className="mt-1 text-label-sm text-on-surface-variant">{label}</p>
+  helper: string;
+  icon: ReactNode;
+};
+
+type CashFlowPoint = {
+  date: string;
+  depositCents: bigint;
+  withdrawalCents: bigint;
+  prizeAwardCents: bigint;
+  netCashFlowCents: bigint;
+};
+
+const normalizeCashFlow = (items?: AdminDashboardCashFlowByDay[] | null): CashFlowPoint[] => {
+  if (!Array.isArray(items)) {
+    return [];
+  }
+
+  return items
+    .map((item) => {
+      const depositCents = moneyToCents(item.depositAmount) ?? 0n;
+      const withdrawalCents = moneyToCents(item.withdrawalAmount) ?? 0n;
+      const prizeAwardCents = moneyToCents(item.prizeAwardAmount) ?? 0n;
+      const explicitNet = moneyToCents(item.netCashFlow);
+
+      return {
+        date: item.date ?? '',
+        depositCents,
+        withdrawalCents,
+        prizeAwardCents,
+        netCashFlowCents: explicitNet ?? depositCents - withdrawalCents - prizeAwardCents,
+      };
+    })
+    .filter((item) => item.date)
+    .sort((first, second) => first.date.localeCompare(second.date));
+};
+
+const DashboardMetricCard = ({ metric, index, reducedMotion }: { metric: MetricItem; index: number; reducedMotion: boolean }) => (
+  <motion.article
+    custom={index}
+    variants={reducedMotion ? undefined : metricCardVariants}
+    initial={reducedMotion ? false : 'hidden'}
+    animate="visible"
+    whileHover={{ y: -5, transition: { duration: 0.22 } }}
+    className="admin-kpi-card group min-h-[158px] rounded-lg p-5"
+  >
+    <div className="mb-4 flex items-start justify-between gap-4">
+      <div className="admin-kpi-icon flex h-12 w-12 shrink-0 items-center justify-center rounded-md text-primary">
+        {metric.icon}
       </div>
-      <span className={unavailable ? 'text-outline' : 'text-primary'}>{icon}</span>
+      <span className="admin-live-chip rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.14em]">
+        Live
+      </span>
     </div>
-    <p className={`font-display break-words text-2xl font-extrabold ${unavailable ? 'text-outline' : 'text-on-surface'}`}>{value}</p>
-  </article>
+    <h2 className="admin-kpi-title text-label-sm font-extrabold uppercase tracking-[0.14em]">{metric.title}</h2>
+    <p className="admin-kpi-value font-display mt-2 break-words text-2xl font-extrabold md:text-3xl">{metric.value}</p>
+    <p className="admin-kpi-helper mt-2 text-body-sm font-semibold">{metric.helper}</p>
+  </motion.article>
+);
+
+const MetricSkeleton = () => (
+  <div className="admin-kpi-card min-h-[158px] rounded-lg p-5">
+    <div className="mb-5 h-11 w-11 animate-pulse rounded-md bg-surface-container-high" />
+    <div className="mb-3 h-3 w-28 animate-pulse rounded-full bg-surface-container-high" />
+    <div className="mb-3 h-8 w-36 animate-pulse rounded-full bg-surface-container-high" />
+    <div className="h-3 w-44 animate-pulse rounded-full bg-surface-container-high" />
+  </div>
 );
 
 const DashboardPanel = ({
   title,
   subtitle,
-  action,
+  isRefreshing,
   children,
 }: {
   title: string;
   subtitle: string;
-  action?: ReactNode;
+  isRefreshing: boolean;
   children: ReactNode;
 }) => (
-  <section className="glass-panel rounded-lg p-5">
-    <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+  <motion.section className="admin-dashboard-panel rounded-lg p-5" variants={panelVariants} initial="hidden" whileInView="visible" viewport={{ once: true, amount: 0.18 }}>
+    <div className="mb-5 flex items-start justify-between gap-4">
       <div>
         <h2 className="text-title-lg font-bold text-primary">{title}</h2>
         <p className="mt-1 text-body-sm text-on-surface-variant">{subtitle}</p>
       </div>
-      {action}
+      {isRefreshing && <Loader2 className="h-4 w-4 animate-spin text-primary" aria-label="Refreshing section" />}
     </div>
     {children}
-  </section>
+  </motion.section>
 );
 
-const PanelLoading = () => (
-  <div className="flex min-h-[240px] items-center justify-center gap-3 text-body-sm font-semibold text-on-surface-variant">
-    <Loader2 className="h-5 w-5 animate-spin text-primary" />
-    Loading section...
+const ChartSkeleton = ({ compact = false }: { compact?: boolean }) => (
+  <div className={`${compact ? 'min-h-[260px]' : 'min-h-[360px]'} admin-chart-surface rounded-lg p-4`}>
+    <div className="mb-6 h-4 w-48 animate-pulse rounded-full bg-surface-container-high" />
+    <div className="flex h-[220px] items-end gap-3">
+      {Array.from({ length: 9 }, (_, index) => (
+        <div key={index} className="flex flex-1 items-end">
+          <div className="w-full animate-pulse rounded-t-md bg-surface-container-high" style={{ height: `${48 + (index % 5) * 24}px` }} />
+        </div>
+      ))}
+    </div>
   </div>
 );
 
-const EmptyState = ({ icon, title, text }: { icon: ReactNode; title: string; text: string }) => (
-  <div className="flex min-h-[220px] flex-col items-center justify-center px-4 py-10 text-center">
-    <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-surface-container text-outline">{icon}</div>
+const ChartEmptyState = ({ title, text }: { title: string; text: string }) => (
+  <div className="flex min-h-[260px] flex-col items-center justify-center admin-chart-surface rounded-lg px-6 py-10 text-center">
+    <Banknote className="mb-4 h-8 w-8 text-outline" />
     <h3 className="text-body-lg font-bold text-primary">{title}</h3>
     <p className="mt-2 max-w-md text-body-sm text-on-surface-variant">{text}</p>
   </div>
 );
 
-const BarChart = ({ points }: { points: ChartPoint[] }) => {
-  const maxValue = Math.max(0, ...points.map((point) => point.value));
+const getSeriesRange = (points: CashFlowPoint[]) => {
+  const values = points.flatMap((point) => [point.depositCents, point.withdrawalCents, point.prizeAwardCents, point.netCashFlowCents, 0n]);
+  const min = values.reduce((current, value) => (value < current ? value : current), values[0] ?? 0n);
+  const max = values.reduce((current, value) => (value > current ? value : current), values[0] ?? 0n);
 
-  if (points.length === 0 || maxValue === 0) {
-    return <EmptyState icon={<LineChart className="h-5 w-5" />} title="No betting activity" text="No bets with a placed timestamp were returned for this period." />;
+  if (min === max) {
+    return { min: 0n, max: max === 0n ? 100n : max };
   }
 
-  return (
-    <div className="h-[260px] overflow-x-auto">
-      <div className="flex h-full min-w-[520px] items-end gap-2 border-b border-outline-variant px-2 pb-8">
-        {points.map((point) => {
-          const height = Math.max(8, (point.value / maxValue) * 190);
+  return { min, max };
+};
 
-          return (
-            <div key={point.date} className="flex h-full flex-1 flex-col justify-end gap-2">
-              <div className="flex flex-1 items-end">
-                <div
-                  className="w-full rounded-t-md bg-secondary/80"
-                  style={{ height }}
-                  title={`${formatShortDate(point.date)}: ${point.value} bets`}
-                />
-              </div>
-              <div className="h-6 truncate text-center text-[10px] font-semibold text-outline">{formatShortDate(point.date)}</div>
-            </div>
-          );
-        })}
+const CashFlowChart = ({ data, reducedMotion }: { data: CashFlowPoint[]; reducedMotion: boolean }) => {
+  if (data.length === 0) {
+    return <ChartEmptyState title="No cash-flow activity is available." text="Completed deposits, paid withdrawals, and awarded prizes have not produced chartable daily data yet." />;
+  }
+
+  const width = 720;
+  const height = 300;
+  const padding = { top: 22, right: 24, bottom: 48, left: 54 };
+  const range = getSeriesRange(data);
+  const span = Number(range.max - range.min || 1n);
+  const x = (index: number) => padding.left + (index / Math.max(data.length - 1, 1)) * (width - padding.left - padding.right);
+  const y = (value: bigint) => padding.top + (Number(range.max - value) / span) * (height - padding.top - padding.bottom);
+  const zeroY = y(0n);
+  const linePath = (selector: (point: CashFlowPoint) => bigint) => data.map((point, index) => `${index === 0 ? 'M' : 'L'} ${x(index)} ${y(selector(point))}`).join(' ');
+  const areaPath = (selector: (point: CashFlowPoint) => bigint) => `${linePath(selector)} L ${x(data.length - 1)} ${zeroY} L ${x(0)} ${zeroY} Z`;
+  const ticks = data.filter((_, index) => index === 0 || index === data.length - 1 || index % Math.ceil(data.length / 5) === 0);
+
+  return (
+    <div className="overflow-hidden admin-chart-surface rounded-lg p-4" role="img" aria-label="Cash flow by day chart">
+      <div className="mb-4 flex flex-wrap gap-4 text-label-sm font-semibold text-on-surface-variant">
+        <LegendItem color="bg-secondary" label="Successful Deposit" />
+        <LegendItem color="bg-tertiary" label="Completed Withdrawal" />
+        <LegendItem color="bg-error" label="Awarded Prize" />
+        <LegendItem color="bg-primary" label="Net Cash Flow" />
       </div>
+      <svg viewBox={`0 0 ${width} ${height}`} className="h-[320px] w-full" preserveAspectRatio="none">
+        <defs>
+          <linearGradient id="depositArea" x1="0" x2="0" y1="0" y2="1">
+            <stop offset="0%" stopColor="var(--color-secondary)" stopOpacity="0.32" />
+            <stop offset="100%" stopColor="var(--color-secondary)" stopOpacity="0.02" />
+          </linearGradient>
+        </defs>
+        {[0.25, 0.5, 0.75].map((ratio) => (
+          <line key={ratio} x1={padding.left} x2={width - padding.right} y1={padding.top + ratio * (height - padding.top - padding.bottom)} y2={padding.top + ratio * (height - padding.top - padding.bottom)} stroke="var(--color-outline-variant)" strokeOpacity="0.45" />
+        ))}
+        <line x1={padding.left} x2={width - padding.right} y1={zeroY} y2={zeroY} stroke="var(--color-outline)" strokeOpacity="0.45" />
+        <path d={areaPath((point) => point.depositCents)} fill="url(#depositArea)" className={reducedMotion ? '' : 'cash-flow-draw'} />
+        <path d={linePath((point) => point.depositCents)} fill="none" stroke="var(--color-secondary)" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className={reducedMotion ? '' : 'cash-flow-draw'} />
+        <path d={linePath((point) => point.withdrawalCents)} fill="none" stroke="var(--color-tertiary)" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className={reducedMotion ? '' : 'cash-flow-draw'} />
+        <path d={linePath((point) => point.prizeAwardCents)} fill="none" stroke="var(--color-error)" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className={reducedMotion ? '' : 'cash-flow-draw'} />
+        <path d={linePath((point) => point.netCashFlowCents)} fill="none" stroke="var(--color-primary)" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className={reducedMotion ? '' : 'cash-flow-draw'} />
+        {data.map((point, index) => (
+          <g key={`${point.date}-${index}`}>
+            <circle cx={x(index)} cy={y(point.netCashFlowCents)} r="4" fill="var(--color-primary)">
+              <title>{`${formatShortDate(point.date)} net: ${formatMoneyFromCents(point.netCashFlowCents)}`}</title>
+            </circle>
+          </g>
+        ))}
+        {ticks.map((point, index) => (
+          <text key={`${point.date}-${index}`} x={x(data.indexOf(point))} y={height - 14} textAnchor="middle" fill="var(--color-outline)" fontSize="12" fontWeight="700">
+            {formatShortDate(point.date)}
+          </text>
+        ))}
+      </svg>
     </div>
   );
 };
 
-const CashFlowChart = ({ points }: { points: AdminDashboardCashFlowPoint[] }) => {
-  const maxValue = points.reduce((max, point) => {
-    const deposit = Number(point.depositCents / 100n);
-    const withdrawal = Number(point.withdrawalCents / 100n);
-    return Math.max(max, deposit, withdrawal);
-  }, 0);
+const LegendItem = ({ color, label }: { color: string; label: string }) => (
+  <span className="inline-flex items-center gap-2">
+    <span className={`h-2.5 w-2.5 rounded-full ${color}`} />
+    {label}
+  </span>
+);
 
-  if (points.length === 0 || maxValue === 0) {
-    return (
-      <EmptyState
-        icon={<Banknote className="h-5 w-5" />}
-        title="Cash-flow data unavailable"
-        text="The current backend does not expose admin-wide deposit and withdrawal records or daily aggregates."
-      />
-    );
+const FinancialOverviewDonut = ({
+  depositAmount,
+  withdrawalAmount,
+  prizeAwardAmount,
+  reducedMotion,
+}: {
+  depositAmount?: bigint | number | string | null;
+  withdrawalAmount?: bigint | number | string | null;
+  prizeAwardAmount?: bigint | number | string | null;
+  reducedMotion: boolean;
+}) => {
+  const toCents = (value: bigint | number | string | null | undefined) => (
+    typeof value === 'bigint' ? value : moneyToCents(value) ?? 0n
+  );
+  const depositCents = toCents(depositAmount);
+  const withdrawalCents = toCents(withdrawalAmount);
+  const prizeCents = toCents(prizeAwardAmount);
+  const total = depositCents + withdrawalCents + prizeCents;
+
+  if (total === 0n) {
+    return <ChartEmptyState title="No completed financial transactions are available yet." text="Successful deposits, paid withdrawals, and awarded prizes are all zero in this scope." />;
   }
 
-  return (
-    <div className="h-[260px] overflow-x-auto">
-      <div className="flex h-full min-w-[520px] items-end gap-3 border-b border-outline-variant px-2 pb-8">
-        {points.map((point) => {
-          const deposit = Number(point.depositCents / 100n);
-          const withdrawal = Number(point.withdrawalCents / 100n);
-          const depositHeight = Math.max(6, (deposit / maxValue) * 190);
-          const withdrawalHeight = Math.max(6, (withdrawal / maxValue) * 190);
+  const depositPercent = Number((depositCents * 10000n) / total) / 100;
+  const withdrawalPercent = Number((withdrawalCents * 10000n) / total) / 100;
+  const prizePercent = Math.max(0, 100 - depositPercent - withdrawalPercent);
+  const circumference = 2 * Math.PI * 42;
+  const depositLength = (depositPercent / 100) * circumference;
+  const withdrawalLength = (withdrawalPercent / 100) * circumference;
 
-          return (
-            <div key={point.date} className="flex h-full flex-1 flex-col justify-end gap-2">
-              <div className="flex flex-1 items-end justify-center gap-1.5">
-                <div className="w-1/2 rounded-t-md bg-secondary/80" style={{ height: depositHeight }} title={`Deposits: ${formatMoneyCents(point.depositCents)}`} />
-                <div className="w-1/2 rounded-t-md bg-tertiary/80" style={{ height: withdrawalHeight }} title={`Withdrawals: ${formatMoneyCents(point.withdrawalCents)}`} />
-              </div>
-              <div className="h-6 truncate text-center text-[10px] font-semibold text-outline">{formatShortDate(point.date)}</div>
-            </div>
-          );
-        })}
-      </div>
-      <div className="mt-3 flex gap-4 text-label-sm font-semibold text-on-surface-variant">
-        <span className="inline-flex items-center gap-2"><span className="h-2 w-2 rounded-full bg-secondary" />Deposits</span>
-        <span className="inline-flex items-center gap-2"><span className="h-2 w-2 rounded-full bg-tertiary" />Withdrawals</span>
+  return (
+    <div className="grid min-h-[260px] place-items-center gap-5 md:grid-cols-[180px_minmax(0,1fr)] xl:grid-cols-1">
+      <svg viewBox="0 0 120 120" className="h-44 w-44" role="img" aria-label="Financial movement donut chart">
+        <circle cx="60" cy="60" r="42" fill="none" stroke="var(--color-surface-container-high)" strokeWidth="16" />
+        <circle
+          cx="60"
+          cy="60"
+          r="42"
+          fill="none"
+          stroke="var(--color-secondary)"
+          strokeWidth="16"
+          strokeDasharray={`${depositLength} ${circumference}`}
+          strokeLinecap="round"
+          transform="rotate(-90 60 60)"
+          className={reducedMotion ? '' : 'donut-segment'}
+        />
+        <circle
+          cx="60"
+          cy="60"
+          r="42"
+          fill="none"
+          stroke="var(--color-tertiary)"
+          strokeWidth="16"
+          strokeDasharray={`${withdrawalLength} ${circumference}`}
+          strokeDashoffset={-depositLength}
+          strokeLinecap="round"
+          transform="rotate(-90 60 60)"
+          className={reducedMotion ? '' : 'donut-segment'}
+        />
+        <circle
+          cx="60"
+          cy="60"
+          r="42"
+          fill="none"
+          stroke="var(--color-error)"
+          strokeWidth="16"
+          strokeDasharray={`${(prizePercent / 100) * circumference} ${circumference}`}
+          strokeDashoffset={-(depositLength + withdrawalLength)}
+          strokeLinecap="round"
+          transform="rotate(-90 60 60)"
+          className={reducedMotion ? '' : 'donut-segment'}
+        />
+        <text x="60" y="54" textAnchor="middle" fill="var(--color-primary)" fontSize="15" fontWeight="800">{depositPercent.toFixed(0)}%</text>
+        <text x="60" y="70" textAnchor="middle" fill="var(--color-outline)" fontSize="9" fontWeight="700">deposit</text>
+      </svg>
+      <div className="w-full space-y-3">
+        <FinancialLegendRow label="Successful Deposits" amount={formatMoneyFromCents(depositCents)} percent={depositPercent} tone="deposit" />
+        <FinancialLegendRow label="Completed Withdrawals" amount={formatMoneyFromCents(withdrawalCents)} percent={withdrawalPercent} tone="withdrawal" />
+        <FinancialLegendRow label="Awarded Prizes" amount={formatMoneyFromCents(prizeCents)} percent={prizePercent} tone="prize" />
       </div>
     </div>
   );
 };
+const FinancialLegendRow = ({ label, amount, percent, tone }: { label: string; amount: string; percent: number; tone: 'deposit' | 'withdrawal' | 'prize' }) => (
+  <div className="admin-mini-surface rounded-md p-3">
+    <div className="flex items-center justify-between gap-3">
+      <span className="inline-flex items-center gap-2 text-body-sm font-bold text-on-surface">
+        <span className={`h-2.5 w-2.5 rounded-full ${tone === 'deposit' ? 'bg-secondary' : tone === 'withdrawal' ? 'bg-tertiary' : 'bg-error'}`} />
+        {label}
+      </span>
+      <span className="text-label-sm font-bold text-primary">{percent.toFixed(1)}%</span>
+    </div>
+    <p className="mt-2 break-words text-body-sm font-semibold text-on-surface-variant">{amount}</p>
+  </div>
+);
 
-const RecentTransactionsTable = ({ isLoading, data }: { isLoading: boolean; data: AdminDashboardData | null }) => {
-  const transactions = data?.financialSummary?.recentTransactions ?? [];
-
-  if (isLoading) {
-    return <PanelLoading />;
-  }
-
+const RecentTransactionsTable = ({ transactions }: { transactions: AdminDashboardRecentTransaction[] }) => {
   if (transactions.length === 0) {
-    return (
-      <EmptyState
-        icon={<WalletCards className="h-5 w-5" />}
-        title="No admin transaction data"
-        text="TODO(BE-API): Missing backend capability - see Required Backend Additions report."
-      />
-    );
+    return <ChartEmptyState title="No recent transactions are available." text="The summary API returned an empty recentTransactions list." />;
   }
 
   return (
-    <div className="overflow-x-auto">
+    <div className="overflow-x-auto admin-chart-surface rounded-lg">
       <table className="w-full min-w-[760px] text-left">
-        <thead className="border-b border-outline-variant bg-surface-container">
+        <thead className="bg-surface-container">
           <tr>
-            <TableHeader>Transaction ID</TableHeader>
+            <TableHeader>Transaction</TableHeader>
             <TableHeader>User</TableHeader>
             <TableHeader>Type</TableHeader>
             <TableHeader>Amount</TableHeader>
@@ -495,14 +900,17 @@ const RecentTransactionsTable = ({ isLoading, data }: { isLoading: boolean; data
             <TableHeader>Created</TableHeader>
           </tr>
         </thead>
-        <tbody className="divide-y divide-outline-variant">
-          {transactions.slice(0, 8).map((transaction) => (
-            <tr key={transaction.txId} className="hover:bg-surface-container-lowest">
-              <TableCell strong>{transaction.txId}</TableCell>
-              <TableCell>{transaction.userName ?? (transaction.userId ? `User #${transaction.userId}` : '-')}</TableCell>
-              <TableCell>{transaction.type}</TableCell>
-              <TableCell>{formatMoneyCents(transaction.amountCents)}</TableCell>
-              <TableCell><StatusPill status={transaction.status} /></TableCell>
+        <tbody className="divide-y divide-outline-variant/40">
+          {transactions.map((transaction) => (
+            <tr key={`${transaction.txId ?? 'tx'}-${transaction.createdAt ?? ''}`} className="transition-all duration-200 hover:bg-surface-container-high/70">
+              <TableCell strong>#{transaction.txId ?? '-'}</TableCell>
+              <TableCell>
+                <p className="font-bold text-on-surface">{transaction.userFullName || transaction.username || `User #${transaction.userId ?? '-'}`}</p>
+                {transaction.username && <p className="mt-1 text-label-sm text-outline">@{transaction.username}</p>}
+              </TableCell>
+              <TableCell><TransactionTypeBadge type={transaction.txType} refType={transaction.refType} /></TableCell>
+              <TableCell>{getTransactionAmount(transaction)}</TableCell>
+              <TableCell><StatusBadge status={transaction.status} /></TableCell>
               <TableCell>{formatDateTime(transaction.createdAt)}</TableCell>
             </tr>
           ))}
@@ -512,54 +920,47 @@ const RecentTransactionsTable = ({ isLoading, data }: { isLoading: boolean; data
   );
 };
 
-const RecentRacesTable = ({
-  isLoading,
-  races,
-  raceBetCounts,
-}: {
-  isLoading: boolean;
-  races: AdminRaceItem[];
-  raceBetCounts: Map<number, number>;
-}) => {
-  if (isLoading) {
-    return <PanelLoading />;
-  }
+const TransactionTableSkeleton = () => (
+  <div className="admin-chart-surface rounded-lg p-4">
+    {Array.from({ length: 5 }, (_, index) => (
+      <div key={index} className="grid grid-cols-[1fr_1.4fr_1fr_1fr] gap-4 border-b border-outline-variant/20 py-4 last:border-b-0">
+        <span className="h-4 animate-pulse rounded-full bg-surface-container-high" />
+        <span className="h-4 animate-pulse rounded-full bg-surface-container-high" />
+        <span className="h-4 animate-pulse rounded-full bg-surface-container-high" />
+        <span className="h-4 animate-pulse rounded-full bg-surface-container-high" />
+      </div>
+    ))}
+  </div>
+);
 
-  if (races.length === 0) {
-    return <EmptyState icon={<Flag className="h-5 w-5" />} title="No races found" text="No race records were returned by the existing tournament race APIs." />;
-  }
+const TransactionTypeBadge = ({ type, refType }: { type?: string | null; refType?: string | null }) => {
+  const normalizedType = String(type ?? '').toLowerCase();
+  const icon = normalizedType === 'topup'
+    ? <ArrowDownToLine className="h-3.5 w-3.5" />
+    : normalizedType === 'withdrawal'
+      ? <ArrowUpFromLine className="h-3.5 w-3.5" />
+      : <Banknote className="h-3.5 w-3.5" />;
 
   return (
-    <div className="overflow-x-auto">
-      <table className="w-full min-w-[820px] text-left">
-        <thead className="border-b border-outline-variant bg-surface-container">
-          <tr>
-            <TableHeader>Race</TableHeader>
-            <TableHeader>Start Time</TableHeader>
-            <TableHeader>Status</TableHeader>
-            <TableHeader>Participants</TableHeader>
-            <TableHeader>Bets</TableHeader>
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-outline-variant">
-          {races.map((race) => (
-            <tr key={race.raceId} className="hover:bg-surface-container-lowest">
-              <TableCell strong>
-                <Link to="/admin/races" className="text-primary hover:underline">
-                  {race.name}
-                </Link>
-                <p className="mt-1 text-label-sm font-semibold text-outline">Race #{race.raceId}</p>
-              </TableCell>
-              <TableCell>{formatDateTime(race.scheduledAt)}</TableCell>
-              <TableCell><StatusPill status={race.status} /></TableCell>
-              <TableCell>{race.registeredHorseCount ?? '-'}</TableCell>
-              <TableCell>{raceBetCounts.get(race.raceId) ?? '-'}</TableCell>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
+    <span className="inline-flex items-center gap-2 rounded-full border border-outline-variant bg-surface-container-low px-3 py-1 text-label-sm font-bold text-on-surface-variant">
+      {icon}
+      {humanizeLabel(type)}
+      {refType && <span className="text-outline">/{humanizeLabel(refType)}</span>}
+    </span>
   );
+};
+
+const StatusBadge = ({ status }: { status?: string | null }) => {
+  const normalizedStatus = String(status ?? '').toLowerCase();
+  const toneClass = normalizedStatus === 'completed' || normalizedStatus === 'paid'
+    ? 'border-secondary/30 bg-secondary/10 text-secondary'
+    : normalizedStatus === 'pending'
+      ? 'border-primary/30 bg-primary/10 text-primary'
+      : normalizedStatus === 'failed' || normalizedStatus === 'cancelled' || normalizedStatus === 'rejected'
+        ? 'border-error/30 bg-error-container/20 text-error'
+        : 'border-outline-variant bg-surface-container text-on-surface-variant';
+
+  return <span className={`inline-flex rounded-full border px-3 py-1 text-label-sm font-bold uppercase ${toneClass}`}>{humanizeLabel(status)}</span>;
 };
 
 const TableHeader = ({ children }: { children: ReactNode }) => (
@@ -570,43 +971,62 @@ const TableCell = ({ children, strong = false }: { children: ReactNode; strong?:
   <td className={`px-4 py-4 text-body-sm ${strong ? 'font-bold text-primary' : 'font-semibold text-on-surface-variant'}`}>{children}</td>
 );
 
-const StatusPill = ({ status }: { status?: string }) => {
-  const normalizedStatus = normalizeStatus(status);
-  const toneClass = normalizedStatus === 'completed' || normalizedStatus === 'won' || normalizedStatus === 'open_for_betting'
-    ? 'border-secondary/30 bg-secondary/10 text-secondary'
-    : normalizedStatus === 'pending' || normalizedStatus === 'ready' || normalizedStatus === 'registration_open'
-      ? 'border-primary/30 bg-primary/10 text-primary'
-      : normalizedStatus === 'failed' || normalizedStatus === 'cancelled' || normalizedStatus === 'lost'
-        ? 'border-error/30 bg-error-container/20 text-error'
-        : 'border-outline-variant bg-surface-container text-on-surface-variant';
-
-  return (
-    <span className={`inline-flex rounded-full border px-3 py-1 text-label-sm font-bold uppercase ${toneClass}`}>
-      {status || '-'}
-    </span>
-  );
-};
-
-const StatusBanner = ({ tone, text }: { tone: 'error' | 'warning'; text: string }) => (
-  <div className={`rounded-md border px-4 py-3 text-body-sm font-semibold ${tone === 'error' ? 'border-error/30 bg-error-container/20 text-error' : 'border-primary/30 bg-primary/10 text-primary'}`}>
-    {text}
-  </div>
-);
-
-const BackendLimitations = ({ limitations }: { limitations: string[] }) => (
-  <section className="mb-6 rounded-lg border border-primary/30 bg-primary/10 p-5">
-    <div className="flex items-start gap-3">
-      <TrendingUp className="mt-1 h-5 w-5 shrink-0 text-primary" />
-      <div>
-        <h2 className="text-title-md font-bold text-primary">Backend data requirements</h2>
-        <ul className="mt-3 space-y-2 text-body-sm font-semibold text-on-surface-variant">
-          {limitations.map((limitation) => (
-            <li key={limitation}>{limitation}</li>
-          ))}
-        </ul>
+const DashboardError = ({ message, onRetry }: { message: string; onRetry: () => void }) => (
+  <section className="mb-6 rounded-lg border border-error/30 bg-error-container/20 p-5 text-error">
+    <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex items-start gap-3">
+        <AlertCircle className="mt-0.5 h-5 w-5 shrink-0" />
+        <div>
+          <h2 className="font-bold">Dashboard summary could not be loaded.</h2>
+          <p className="mt-1 text-body-sm font-semibold">{message}</p>
+        </div>
       </div>
+      <button
+        type="button"
+        onClick={onRetry}
+        className="inline-flex items-center justify-center gap-2 rounded-md border border-error/40 px-4 py-2 text-body-sm font-bold transition-colors hover:bg-error-container/30"
+      >
+        <RefreshCw className="h-4 w-4" />
+        Retry
+      </button>
     </div>
   </section>
+);
+
+class AdminDashboardErrorBoundary extends Component<{ children: ReactNode }, { message: string }> {
+  state = { message: '' };
+
+  static getDerivedStateFromError(error: unknown) {
+    return {
+      message: error instanceof Error ? error.message : 'Unexpected dashboard rendering error.',
+    };
+  }
+
+  render() {
+    if (this.state.message) {
+      return (
+        <div className="min-h-screen bg-surface py-8">
+          <div className="admin-dashboard-content mx-auto max-w-[1440px] px-4 md:px-8">
+            <DashboardError
+              message={this.state.message}
+              onRetry={() => {
+                this.setState({ message: '' });
+                window.location.reload();
+              }}
+            />
+          </div>
+        </div>
+      );
+    }
+
+    return this.props.children;
+  }
+}
+
+const AdminOperationsPage = () => (
+  <AdminDashboardErrorBoundary>
+    <AdminOperationsDashboard />
+  </AdminDashboardErrorBoundary>
 );
 
 export default AdminOperationsPage;

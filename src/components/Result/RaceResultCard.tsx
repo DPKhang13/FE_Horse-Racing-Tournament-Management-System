@@ -1,6 +1,6 @@
 import { ChevronRight } from 'lucide-react';
 import { Link } from 'react-router-dom';
-import type { RaceResultListItem } from '../../../types/raceResult';
+import type { RaceResultListItem } from '../../types/raceResult';
 import ResultStatusChip from './ResultStatusChip';
 import RankBadge from './RankBadge';
 

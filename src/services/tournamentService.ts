@@ -335,183 +335,6 @@ const mapApiTournament = (raw: RawTournament, index: number): Tournament => {
   };
 };
 
-const createMatch = (
-  tournamentCode: string,
-  index: number,
-  matchName: string,
-  round: string,
-  matchDate: string,
-  startTime: string,
-  arenaLocation: string,
-  participant1: string,
-  participant2: string,
-  matchStatus: MatchStatus,
-): TournamentMatch => ({
-  matchId: `${tournamentCode}-M${index}`,
-  matchName,
-  round,
-  matchDate,
-  startTime,
-  endTime: addMinutesToTime(startTime, 75),
-  arenaLocation,
-  participant1,
-  participant2,
-  matchStatus,
-});
-
-const createParticipants = (tournamentCode: string, names: string[]): TournamentParticipant[] =>
-  names.map((horseName, index) => ({
-    participantId: `${tournamentCode}-P${index + 1}`,
-    horseName,
-    ownerName: ['Avery Stone', 'Maya Tran', 'Lucas Reid', 'Nora Vale', 'Ethan Park', 'Iris Moon'][index] ?? 'Stable Owner',
-    jockeyName: ['Kai Bennett', 'Linh Pham', 'Theo Miles', 'Sara Kim', 'Noah Blake', 'Mina Chen'][index] ?? 'Assigned Jockey',
-    stableName: ['Golden Spur', 'Rivergate', 'Northwind', 'Silverline', 'Cedar Track', 'Blue Ribbon'][index] ?? 'Independent',
-    status: 'Registered',
-  }));
-
-const cloneTournament = (tournament: Tournament): Tournament => ({
-  ...tournament,
-  participants: tournament.participants.map((participant) => ({ ...participant })),
-  schedule: tournament.schedule.map((match) => ({ ...match })),
-});
-
-let mockTournaments: Tournament[] = [
-  {
-    tournamentId: 1,
-    id: 'T-001',
-    tournamentName: 'Saigon Summer Derby',
-    tournamentType: 'Derby',
-    description: 'Premier summer derby for elite sprinters and tactical race teams.',
-    startDate: '2026-07-10',
-    endDate: '2026-07-12',
-    location: 'Ho Chi Minh City Grand Track',
-    registrationDeadline: '2026-07-01',
-    maximumParticipants: 24,
-    currentParticipants: 18,
-    entryFee: 2500000,
-    prize: 'VND 450,000,000',
-    status: 'Upcoming',
-    rulesNotes: 'Participants must complete veterinary clearance 48 hours before the first match.',
-    participants: createParticipants('T-001', ['Solar Comet', 'River Monarch', 'Ivory Dash', 'Midnight Vale', 'Cobalt Arrow', 'Lucky Meridian']),
-    schedule: [
-      createMatch('T-001', 1, 'Opening Sprint', 'Qualifiers', '2026-07-10', '09:00', 'Arena A', 'Solar Comet', 'River Monarch', 'Scheduled'),
-      createMatch('T-001', 2, 'Derby Heat', 'Semi Final', '2026-07-11', '14:30', 'Arena A', 'Ivory Dash', 'Midnight Vale', 'Scheduled'),
-      createMatch('T-001', 3, 'Summer Derby Final', 'Final', '2026-07-12', '16:00', 'Main Arena', 'TBD', 'TBD', 'Scheduled'),
-    ],
-  },
-  {
-    tournamentId: 2,
-    id: 'T-002',
-    tournamentName: 'Central Highlands Cup',
-    tournamentType: 'Endurance',
-    description: 'Multi-day endurance tournament designed for consistent pacing and recovery control.',
-    startDate: '2026-06-20',
-    endDate: '2026-06-23',
-    location: 'Da Lat Highland Course',
-    registrationDeadline: '2026-06-12',
-    maximumParticipants: 20,
-    currentParticipants: 20,
-    entryFee: 1800000,
-    prize: 'VND 300,000,000',
-    status: 'Ongoing',
-    rulesNotes: 'Hydration checkpoints are mandatory after every completed lap.',
-    participants: createParticipants('T-002', ['Highland Echo', 'Pine Runner', 'Morning Flint', 'Amber Ridge', 'Cloud Harbor', 'Velvet Hill']),
-    schedule: [
-      createMatch('T-002', 1, 'Highland Opening Run', 'Round 1', '2026-06-20', '08:30', 'North Course', 'Highland Echo', 'Pine Runner', 'Finished'),
-      createMatch('T-002', 2, 'Ridge Distance Trial', 'Round 2', '2026-06-21', '10:00', 'East Course', 'Morning Flint', 'Amber Ridge', 'Ongoing'),
-      createMatch('T-002', 3, 'Cup Championship Run', 'Final', '2026-06-23', '15:00', 'Main Course', 'TBD', 'TBD', 'Scheduled'),
-    ],
-  },
-  {
-    tournamentId: 3,
-    id: 'T-003',
-    tournamentName: 'Mekong Classic',
-    tournamentType: 'Classic',
-    description: 'Traditional classic format with balanced speed, stamina, and point accumulation.',
-    startDate: '2026-05-14',
-    endDate: '2026-05-16',
-    location: 'Can Tho Riverside Arena',
-    registrationDeadline: '2026-05-01',
-    maximumParticipants: 16,
-    currentParticipants: 16,
-    entryFee: 2000000,
-    prize: 'VND 280,000,000',
-    status: 'Completed',
-    rulesNotes: 'Final standings are calculated from official finish times and referee reports.',
-    participants: createParticipants('T-003', ['Delta Queen', 'Copper Stream', 'Eastern Nova', 'Royal Current', 'Meadow Signal', 'Pearl Voltage']),
-    schedule: [
-      createMatch('T-003', 1, 'Riverside Qualifier', 'Qualifiers', '2026-05-14', '09:45', 'Riverside A', 'Delta Queen', 'Copper Stream', 'Finished'),
-      createMatch('T-003', 2, 'Mekong Classic Heat', 'Semi Final', '2026-05-15', '13:30', 'Riverside B', 'Eastern Nova', 'Royal Current', 'Finished'),
-      createMatch('T-003', 3, 'Mekong Classic Final', 'Final', '2026-05-16', '17:00', 'Main Arena', 'Delta Queen', 'Eastern Nova', 'Finished'),
-    ],
-  },
-  {
-    tournamentId: 4,
-    id: 'T-004',
-    tournamentName: 'Northern Sprint Invitational',
-    tournamentType: 'Sprint',
-    description: 'Invitation-only sprint event for top-ranked horses in short-distance groups.',
-    startDate: '2026-08-05',
-    endDate: '2026-08-06',
-    location: 'Ha Noi Capital Track',
-    registrationDeadline: '2026-07-20',
-    maximumParticipants: 12,
-    currentParticipants: 9,
-    entryFee: 3200000,
-    prize: 'VND 520,000,000',
-    status: 'Upcoming',
-    rulesNotes: 'Late substitutions require referee approval and owner confirmation.',
-    participants: createParticipants('T-004', ['Northern Pulse', 'Scarlet Bolt', 'Iron Lantern', 'White Ember', 'Metro Crown', 'Fast Orchard']),
-    schedule: [
-      createMatch('T-004', 1, 'Invitational Heat A', 'Heat A', '2026-08-05', '10:15', 'Sprint Lane 1', 'Northern Pulse', 'Scarlet Bolt', 'Scheduled'),
-      createMatch('T-004', 2, 'Invitational Heat B', 'Heat B', '2026-08-05', '11:30', 'Sprint Lane 2', 'Iron Lantern', 'White Ember', 'Scheduled'),
-      createMatch('T-004', 3, 'Northern Sprint Final', 'Final', '2026-08-06', '15:45', 'Main Sprint Track', 'TBD', 'TBD', 'Scheduled'),
-    ],
-  },
-  {
-    tournamentId: 5,
-    id: 'T-005',
-    tournamentName: 'Coastal Championship',
-    tournamentType: 'Championship',
-    description: 'Coastal championship event with alternating sprint and distance race formats.',
-    startDate: '2026-04-18',
-    endDate: '2026-04-20',
-    location: 'Da Nang Coastal Arena',
-    registrationDeadline: '2026-04-05',
-    maximumParticipants: 18,
-    currentParticipants: 12,
-    entryFee: 1500000,
-    prize: 'VND 220,000,000',
-    status: 'Cancelled',
-    rulesNotes: 'Event cancelled due to venue maintenance window.',
-    participants: createParticipants('T-005', ['Coastal Ray', 'Marble Gale', 'Sapphire Road', 'Coral Knight', 'Golden Wave', 'Ocean Trace']),
-    schedule: [
-      createMatch('T-005', 1, 'Coastal Trial', 'Qualifiers', '2026-04-18', '09:00', 'Coastal Track A', 'Coastal Ray', 'Marble Gale', 'Cancelled'),
-      createMatch('T-005', 2, 'Championship Heat', 'Semi Final', '2026-04-19', '14:00', 'Coastal Track B', 'Sapphire Road', 'Coral Knight', 'Cancelled'),
-      createMatch('T-005', 3, 'Coastal Championship Final', 'Final', '2026-04-20', '16:30', 'Main Arena', 'TBD', 'TBD', 'Cancelled'),
-    ],
-  },
-];
-
-const findMockTournamentIndex = (tournamentId: number | string) =>
-  mockTournaments.findIndex((tournament) =>
-    String(tournament.tournamentId) === String(tournamentId) || tournament.id === String(tournamentId),
-  );
-
-const getMockTournamentById = (tournamentId: number | string) => {
-  const tournament = mockTournaments.find((item) =>
-    String(item.tournamentId) === String(tournamentId) || item.id === String(tournamentId),
-  );
-
-  if (!tournament) {
-    throw new Error('Tournament not found.');
-  }
-
-  return cloneTournament(tournament);
-};
-
-const getMockTournaments = () => mockTournaments.map(cloneTournament);
-
 const buildTournamentFromData = (
   data: TournamentPayloadData,
   tournamentId: number,
@@ -549,44 +372,6 @@ const buildTournamentFromData = (
   };
 };
 
-const createMockTournament = (data: TournamentPayloadData) => {
-  const nextTournamentId = Math.max(0, ...mockTournaments.map((tournament) => tournament.tournamentId)) + 1;
-  const tournament = buildTournamentFromData(data, nextTournamentId);
-  mockTournaments = [tournament, ...mockTournaments];
-
-  return cloneTournament(tournament);
-};
-
-const updateMockTournament = (tournamentId: number | string, data: TournamentPayloadData) => {
-  const index = findMockTournamentIndex(tournamentId);
-
-  if (index === -1) {
-    throw new Error('Tournament not found.');
-  }
-
-  const tournament = buildTournamentFromData(data, mockTournaments[index].tournamentId, mockTournaments[index]);
-  mockTournaments = mockTournaments.map((item, itemIndex) => (itemIndex === index ? tournament : item));
-
-  return cloneTournament(tournament);
-};
-
-const cancelMockTournament = (tournamentId: number | string): Tournament => {
-  const index = findMockTournamentIndex(tournamentId);
-
-  if (index === -1) {
-    throw new Error('Tournament not found.');
-  }
-
-  const tournament = {
-    ...mockTournaments[index],
-    status: 'Cancelled' as TournamentStatus,
-    updatedAt: new Date().toISOString(),
-  };
-  mockTournaments = mockTournaments.map((item, itemIndex) => (itemIndex === index ? tournament : item));
-
-  return cloneTournament(tournament);
-};
-
 export const tournamentService = {
   async getTournaments(status?: string): Promise<TournamentApiItem[]> {
     const response = await apiClient.get('/api/tournaments/get-tournament-list', {
@@ -595,125 +380,67 @@ export const tournamentService = {
     return unwrapApiList<TournamentApiItem>(response);
   },
 
-  async getGlobalTournamentCount(useMockFallback = false): Promise<number> {
-    try {
-      const response = await apiClient.get('/api/tournaments/get-global-tournament-count');
-      const data = unwrapApiData<TournamentCountResponse | number>(response);
+  async getGlobalTournamentCount(_useFallback = false): Promise<number> {
+    const response = await apiClient.get('/api/tournaments/get-global-tournament-count');
+    const data = unwrapApiData<TournamentCountResponse | number>(response);
 
-      if (typeof data === 'number') {
-        return asNumber(data);
-      }
-
-      return asNumber(data.globalTournamentCount ?? data.count ?? data.total);
-    } catch (error) {
-      if (useMockFallback) {
-        return mockTournaments.length;
-      }
-
-      throw error;
+    if (typeof data === 'number') {
+      return asNumber(data);
     }
+
+    return asNumber(data.globalTournamentCount ?? data.count ?? data.total);
   },
+  async getAllTournaments(_useFallback = true): Promise<Tournament[]> {
+    const response = await apiClient.get('/api/tournaments/get-tournament-list');
+    const tournaments = unwrapApiList<RawTournament>(response);
 
-  async getAllTournaments(useMockFallback = true): Promise<Tournament[]> {
-    try {
-      const response = await apiClient.get('/api/tournaments/get-tournament-list');
-      const tournaments = unwrapApiList<RawTournament>(response);
+    return Promise.all(
+      tournaments.map(async (item, index) => {
+        const tournamentId = item.tournamentId ?? item.id;
 
-      return Promise.all(
-        tournaments.map(async (item, index) => {
-          const tournamentId = item.tournamentId ?? item.id;
+        if (!tournamentId) {
+          return mapApiTournament(item, index);
+        }
 
-          if (!tournamentId) {
-            return mapApiTournament(item, index);
-          }
-
-          try {
-            const detailResponse = await apiClient.get(`/api/tournaments/get-tournament/${tournamentId}`);
-            return mapApiTournament({
-              ...item,
-              ...unwrapApiData<RawTournament>(detailResponse),
-            }, index);
-          } catch {
-            return mapApiTournament(item, index);
-          }
-        }),
-      );
-    } catch (error) {
-      if (!useMockFallback) {
-        throw error;
-      }
-
-      return getMockTournaments();
-    }
+        try {
+          const detailResponse = await apiClient.get(`/api/tournaments/get-tournament/${tournamentId}`);
+          return mapApiTournament({
+            ...item,
+            ...unwrapApiData<RawTournament>(detailResponse),
+          }, index);
+        } catch {
+          return mapApiTournament(item, index);
+        }
+      }),
+    );
   },
-
   async getTournamentById(tournamentId: number | string): Promise<Tournament> {
-    try {
-      const response = await apiClient.get(`/api/tournaments/get-tournament/${tournamentId}`);
-      return mapApiTournament(unwrapApiData<RawTournament>(response), 0);
-    } catch {
-      return getMockTournamentById(tournamentId);
-    }
+    const response = await apiClient.get(`/api/tournaments/get-tournament/${tournamentId}`);
+    return mapApiTournament(unwrapApiData<RawTournament>(response), 0);
   },
-
-  async createTournament(data: TournamentPayloadData, useMockFallback = false): Promise<Tournament> {
-    try {
-      const response = await apiClient.post('/api/tournaments/create-tournament', cleanTournamentPayload(data));
-      const apiTournament = mapApiTournament(unwrapApiData<RawTournament>(response), 0);
-      return {
-        ...buildTournamentFromData(data, apiTournament.tournamentId, apiTournament),
-        responseMessage: getApiResponseMessage(response),
-      };
-    } catch (error) {
-      if (!useMockFallback) {
-        throw error;
-      }
-
-      return createMockTournament(data);
-    }
+  async createTournament(data: TournamentPayloadData, _useFallback = false): Promise<Tournament> {
+    const response = await apiClient.post('/api/tournaments/create-tournament', cleanTournamentPayload(data));
+    const apiTournament = mapApiTournament(unwrapApiData<RawTournament>(response), 0);
+    return {
+      ...buildTournamentFromData(data, apiTournament.tournamentId, apiTournament),
+      responseMessage: getApiResponseMessage(response),
+    };
   },
-
-  async updateTournament(tournamentId: number | string, data: TournamentPayloadData, useMockFallback = false): Promise<Tournament> {
-    try {
-      const response = await apiClient.put(`/api/tournaments/update-tournament/${tournamentId}`, cleanTournamentUpdatePayload(data));
-      const apiTournament = mapApiTournament(unwrapApiData<RawTournament>(response), 0);
-      return {
-        ...buildTournamentFromData(data, apiTournament.tournamentId, apiTournament),
-        responseMessage: getApiResponseMessage(response),
-      };
-    } catch (error) {
-      if (!useMockFallback) {
-        throw error;
-      }
-
-      return updateMockTournament(tournamentId, data);
-    }
+  async updateTournament(tournamentId: number | string, data: TournamentPayloadData, _useFallback = false): Promise<Tournament> {
+    const response = await apiClient.put(`/api/tournaments/update-tournament/${tournamentId}`, cleanTournamentUpdatePayload(data));
+    const apiTournament = mapApiTournament(unwrapApiData<RawTournament>(response), 0);
+    return {
+      ...buildTournamentFromData(data, apiTournament.tournamentId, apiTournament),
+      responseMessage: getApiResponseMessage(response),
+    };
   },
-
-  async deleteTournament(tournamentId: number | string): Promise<void> {
-    const index = findMockTournamentIndex(tournamentId);
-
-    if (index !== -1) {
-      mockTournaments = mockTournaments.filter((_, itemIndex) => itemIndex !== index);
-      return;
-    }
-
+  async deleteTournament(_tournamentId: number | string): Promise<void> {
     throw new Error('Delete tournament API is not available in the backend.');
   },
-
-  async cancelTournament(tournamentId: number | string, useMockFallback = false): Promise<Tournament> {
-    try {
-      const response = await apiClient.patch(`/api/tournaments/cancel-tournament/${tournamentId}`);
-      return mapApiTournament(unwrapApiData<RawTournament>(response), 0);
-    } catch (error) {
-      if (!useMockFallback) {
-        throw error;
-      }
-
-      return cancelMockTournament(tournamentId);
-    }
+  async cancelTournament(tournamentId: number | string, _useFallback = false): Promise<Tournament> {
+    const response = await apiClient.patch(`/api/tournaments/cancel-tournament/${tournamentId}`);
+    return mapApiTournament(unwrapApiData<RawTournament>(response), 0);
   },
-
   async openRegistration(
     tournamentId: number | string,
     data: { registrationOpenAt?: string; registrationCloseAt: string },
@@ -772,14 +499,9 @@ export const tournamentService = {
   },
 
   async getTournamentSchedule(tournamentId: number | string): Promise<TournamentMatch[]> {
-    try {
-      const response = await apiClient.get(`/api/v1/admin/tournaments/${tournamentId}/get-schedule-list`);
-      return unwrapApiList<RawRecord>(response).map((item, index) => mapApiMatch(item, index));
-    } catch {
-      return getMockTournamentById(tournamentId).schedule;
-    }
+    const response = await apiClient.get(`/api/v1/admin/tournaments/${tournamentId}/get-schedule-list`);
+    return unwrapApiList<RawRecord>(response).map((item, index) => mapApiMatch(item, index));
   },
-
   async getPrizes(tournamentId: number | string): Promise<PrizeResponse[]> {
     const response = await apiClient.get(`/api/v1/admin/tournaments/${tournamentId}/get-prizes`);
     return unwrapApiList<RawRecord>(response).map((item, index) => mapApiPrize(item, index));

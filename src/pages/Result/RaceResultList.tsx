@@ -19,7 +19,7 @@ import { raceResultService } from '../../services/raceResultService';
 import type { Horse } from '../../types/horse';
 import type { RaceResultEntry, RaceResultStatus, RaceResultSummary } from '../../types/raceResult';
 import type { UserProfile } from '../../types/user';
-import ResultNav from './components/ResultNav';
+import ResultNav from '../../components/Result/ResultNav';
 
 type StatusFilter = RaceResultStatus | 'all';
 

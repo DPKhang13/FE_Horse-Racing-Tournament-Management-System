@@ -54,6 +54,39 @@ export type ChiefRaceParticipantItem = {
   jockeyAvatarUrl?: string;
 };
 
+export type ChiefInspectionRegistrationItem = {
+  id?: number;
+  regId?: number;
+  registrationId?: number;
+  raceId?: number;
+  raceName?: string;
+  raceStatus?: string;
+  tournamentName?: string;
+  raceNumber?: number;
+  scheduledAt?: string;
+  horseId?: number;
+  horseName?: string;
+  horseAvatarUrl?: string;
+  ownerId?: number;
+  ownerFullName?: string;
+  ownerStableName?: string;
+  jockeyId?: number;
+  jockeyFullName?: string;
+  jockeyStatus?: string;
+  gateNumber?: number;
+  status?: string;
+  ownerConfirmationStatus?: string;
+  chiefInspectionStatus?: string;
+  chiefInspectionNote?: string;
+  chiefInspectedByFullName?: string;
+  chiefInspectedAt?: string;
+};
+
+export type ChiefInspectionRequest = {
+  status: 'approved' | 'rejected';
+  note: string;
+};
+
 export type RefereeReportFormData = {
   reportType?: string;
   inspectionNotes?: string;
@@ -242,6 +275,34 @@ const mapChiefParticipant = (raw: RawObject): ChiefRaceParticipantItem => ({
   jockeyAvatarUrl: asString(raw.jockeyAvatarUrl) || undefined,
 });
 
+const mapChiefInspectionRegistration = (raw: RawObject): ChiefInspectionRegistrationItem => ({
+  id: asOptionalNumber(raw.id),
+  regId: asOptionalNumber(raw.regId),
+  registrationId: asOptionalNumber(raw.registrationId ?? raw.regId ?? raw.id),
+  raceId: asOptionalNumber(raw.raceId),
+  raceName: asString(raw.raceName) || undefined,
+  raceStatus: asString(raw.raceStatus ?? raw.statusRace) || undefined,
+  tournamentName: asString(raw.tournamentName) || undefined,
+  raceNumber: asOptionalNumber(raw.raceNumber),
+  scheduledAt: asString(raw.scheduledAt) || undefined,
+  horseId: asOptionalNumber(raw.horseId),
+  horseName: asString(raw.horseName) || undefined,
+  horseAvatarUrl: asString(raw.horseAvatarUrl) || undefined,
+  ownerId: asOptionalNumber(raw.ownerId),
+  ownerFullName: asString(raw.ownerFullName) || undefined,
+  ownerStableName: asString(raw.ownerStableName) || undefined,
+  jockeyId: asOptionalNumber(raw.jockeyId),
+  jockeyFullName: asString(raw.jockeyFullName) || undefined,
+  jockeyStatus: asString(raw.jockeyStatus ?? raw.assignmentStatus) || undefined,
+  gateNumber: asOptionalNumber(raw.gateNumber),
+  status: asString(raw.status) || undefined,
+  ownerConfirmationStatus: asString(raw.ownerConfirmationStatus) || undefined,
+  chiefInspectionStatus: asString(raw.chiefInspectionStatus) || undefined,
+  chiefInspectionNote: asString(raw.chiefInspectionNote) || undefined,
+  chiefInspectedByFullName: asString(raw.chiefInspectedByFullName) || undefined,
+  chiefInspectedAt: asString(raw.chiefInspectedAt) || undefined,
+});
+
 const mapReport = (raw: RawObject): RefereeReportItem => ({
   reportId: asNumber(raw.reportId ?? raw.id),
   raceId: asNumber(raw.raceId),
@@ -394,6 +455,26 @@ export const raceOperationsService = {
   async getChiefParticipants(raceId: number | string): Promise<ChiefRaceParticipantItem[]> {
     const response = await apiClient.get(`/api/v1/referee/chief/races/${raceId}/participants`);
     return unwrapApiList<RawObject>(response).map(mapChiefParticipant);
+  },
+
+  async getChiefInspectionRegistrations(raceId: number | string): Promise<ChiefInspectionRegistrationItem[]> {
+    const response = await apiClient.get(`/api/v1/referee/chief/races/${raceId}/registrations/inspection`);
+    return unwrapApiList<RawObject>(response).map(mapChiefInspectionRegistration);
+  },
+
+  async inspectRegistration(
+    raceId: number | string,
+    registrationId: number | string,
+    data: ChiefInspectionRequest,
+  ): Promise<ChiefInspectionRegistrationItem> {
+    const response = await apiClient.patch(
+      `/api/v1/referee/chief/races/${raceId}/registrations/${registrationId}/inspection`,
+      {
+        status: data.status,
+        note: data.note.trim(),
+      },
+    );
+    return mapChiefInspectionRegistration(unwrapApiData<RawObject>(response));
   },
 
   async createReport(raceId: number | string, data: RefereeReportFormData): Promise<RefereeReportItem> {
