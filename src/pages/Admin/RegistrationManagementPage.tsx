@@ -16,7 +16,6 @@ import {
 import { getApiErrorMessage } from '../../services/apiClient';
 import { registrationService } from '../../services/registrationService';
 import type { RegistrationResponse } from '../../types/registration';
-import { findHorseScheduleConflict, isApprovedRegistration } from '../../utils/raceRegistrationConflicts';
 
 type Notice = {
   tone: 'success' | 'error';
@@ -181,8 +180,10 @@ const RegistrationManagementPage = () => {
     try {
       const data = await registrationService.getPendingApprovalRegistrations();
       setRegistrations(data);
+      return data;
     } catch (error) {
       setNotice({ tone: 'error', text: getApiErrorMessage(error, 'Unable to load race registrations.') });
+      return [];
     } finally {
       setIsLoading(false);
     }
@@ -392,37 +393,24 @@ const RegistrationManagementPage = () => {
     setNotice(null);
 
     try {
-      if (activeAction.type === 'approve') {
-        const allRegistrations = await registrationService.getAllRegistrations();
-        const conflict = findHorseScheduleConflict(
-          activeAction.registration,
-          allRegistrations,
-          isApprovedRegistration,
-        );
-
-        if (conflict) {
-          setActionError(
-            `Ngua bi trung gio dua voi ${conflict.raceName ?? `Race ${conflict.raceId ?? '-'}`} (${formatDateTime(conflict.scheduledAt)}).`,
-          );
-          return;
-        }
-      }
-
       const updatedRegistration = activeAction.type === 'approve'
         ? await registrationService.approveRegistration(registrationId, { note: trimmedNote || undefined })
         : await registrationService.rejectRegistration(registrationId, { reason: trimmedReason || undefined });
+      const latestRegistrations = await loadRegistrations(false);
+      const latestRegistration = latestRegistrations.find(
+        (registration) => String(getRegistrationKey(registration)) === String(registrationId),
+      );
 
       setNotice({
         tone: 'success',
         text: activeAction.type === 'approve' ? 'Registration approved successfully.' : 'Registration rejected successfully.',
       });
-      closeActionModal();
 
       if (selectedRegistration && getRegistrationKey(selectedRegistration) === registrationId) {
-        setSelectedRegistration(updatedRegistration);
+        setSelectedRegistration(latestRegistration ?? updatedRegistration);
       }
 
-      await loadRegistrations(false);
+      closeActionModal();
     } catch (error) {
       setActionError(getApiErrorMessage(error, 'Unable to process registration.'));
     } finally {
